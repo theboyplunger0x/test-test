@@ -1,0 +1,2 @@
+-- Migrations are empty — schema.sql is authoritative for FUD.markets V1
+-- Add future ALTER TABLE migrations here as the project evolves.

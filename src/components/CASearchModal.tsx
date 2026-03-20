@@ -1,0 +1,201 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { searchByCA, searchBySymbol, TokenInfo } from "@/lib/chartData";
+
+function formatPrice(n: number): string {
+  if (n === 0) return "0";
+  if (n >= 1) return n.toFixed(4);
+  const s = n.toFixed(12).replace(/0+$/, "");
+  const match = s.match(/^0\.(0+)/);
+  if (match) {
+    const zeros = match[1].length;
+    if (zeros >= 4) return `0.0{${zeros}}${s.slice(2 + zeros, 2 + zeros + 4)}`;
+  }
+  return n.toPrecision(4);
+}
+
+function formatNum(n: number): string {
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000)     return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)         return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
+}
+
+interface Props {
+  dk: boolean;
+  onClose: () => void;
+  onTrade: (token: TokenInfo) => void;   // open CoinDetail for this token
+}
+
+export default function CASearchModal({ dk, onClose, onTrade }: Props) {
+  const [query, setQuery]       = useState("");
+  const [result, setResult]     = useState<TokenInfo | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const inputRef                = useRef<HTMLInputElement>(null);
+
+  const overlay = dk ? "bg-black/70" : "bg-black/30";
+  const sheet   = dk ? "bg-[#0f0f0f] border-t border-white/8" : "bg-white border-t border-gray-200";
+  const inputCls = dk
+    ? "bg-white/5 border-white/10 text-white placeholder:text-white/25 focus:border-white/25"
+    : "bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-gray-400";
+  const muted = dk ? "text-white/30" : "text-gray-400";
+  const strong = dk ? "text-white" : "text-gray-900";
+
+  async function doSearch() {
+    const q = query.trim();
+    if (!q) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      // Detect CA vs symbol: CA is a long alphanumeric string (>20 chars, no spaces)
+      const isCA = q.length > 20 && !q.includes(" ");
+      const info = isCA ? await searchByCA(q) : await searchBySymbol(q, "SOL");
+
+      if (!info) {
+        setError(isCA
+          ? "No token found for this address. Make sure it's a valid contract address."
+          : `No results for "${q}". Try pasting the contract address instead.`
+        );
+      } else {
+        setResult(info);
+      }
+    } catch {
+      setError("Search failed. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const chainPill = (c: string) => {
+    if (c === "SOL")  return dk ? "text-purple-300 bg-purple-500/20" : "text-purple-700 bg-purple-100";
+    if (c === "BASE") return dk ? "text-blue-300 bg-blue-500/20"     : "text-blue-700 bg-blue-100";
+    if (c === "BSC")  return dk ? "text-yellow-300 bg-yellow-500/20" : "text-yellow-700 bg-yellow-100";
+    return dk ? "text-orange-300 bg-orange-500/20" : "text-orange-700 bg-orange-100";
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className={`absolute inset-0 ${overlay}`} onClick={onClose} />
+
+      <motion.div
+        initial={{ y: 80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 80, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 320, damping: 32 }}
+        className={`relative w-full max-w-lg rounded-t-3xl p-6 space-y-4 ${sheet}`}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <p className={`text-[15px] font-black ${strong}`}>Search Token</p>
+          <button onClick={onClose} className={`text-[11px] font-bold ${muted}`}>✕ close</button>
+        </div>
+
+        {/* Search input */}
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && doSearch()}
+            placeholder="Symbol (PEPE) or contract address (0x… / So1…)"
+            className={`flex-1 border rounded-xl px-4 py-3 text-[13px] font-mono outline-none transition-all ${inputCls}`}
+            autoFocus
+          />
+          <button
+            onClick={doSearch}
+            disabled={loading || !query.trim()}
+            className={`px-5 py-3 rounded-xl text-[12px] font-black transition-all ${
+              loading
+                ? dk ? "bg-white/10 text-white/30" : "bg-gray-100 text-gray-400"
+                : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700"
+            }`}
+          >
+            {loading ? "…" : "Find"}
+          </button>
+        </div>
+
+        <p className={`text-[10px] font-bold ${muted}`}>
+          Supports Solana, Base, Ethereum, BSC · Powered by DexScreener
+        </p>
+
+        {/* Error */}
+        {error && (
+          <p className="text-[12px] font-bold text-red-400">{error}</p>
+        )}
+
+        {/* Result */}
+        <AnimatePresence>
+          {result && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`rounded-2xl border p-4 space-y-3 ${dk ? "border-white/8 bg-white/[0.03]" : "border-gray-200 bg-gray-50"}`}
+            >
+              {/* Token header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[18px] font-black ${strong}`}>${result.symbol}</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${chainPill(result.chainLabel)}`}>
+                      {result.chainLabel}
+                    </span>
+                    <span className={`text-[11px] font-black px-2 py-0.5 rounded-full ${result.change24h >= 0 ? (dk ? "text-emerald-300 bg-emerald-500/20" : "text-emerald-700 bg-emerald-100") : (dk ? "text-red-300 bg-red-500/20" : "text-red-700 bg-red-100")}`}>
+                      {result.change24h >= 0 ? "+" : ""}{result.change24h.toFixed(1)}%
+                    </span>
+                  </div>
+                  <p className={`text-[11px] mt-0.5 ${muted}`}>{result.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-[16px] font-black font-mono ${strong}`}>${formatPrice(result.price)}</p>
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div className={`flex gap-4 text-[10px] font-bold ${muted}`}>
+                <div>
+                  <p className="mb-0.5">Liquidity</p>
+                  <p className={strong}>{formatNum(result.liquidity)}</p>
+                </div>
+                <div>
+                  <p className="mb-0.5">Vol 24h</p>
+                  <p className={strong}>{formatNum(result.volume24h)}</p>
+                </div>
+                {result.marketCap > 0 && (
+                  <div>
+                    <p className="mb-0.5">Mkt Cap</p>
+                    <p className={strong}>{formatNum(result.marketCap)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* CA */}
+              <p className={`text-[9px] font-mono truncate ${muted}`}>{result.address}</p>
+
+              {/* Action button */}
+              <button
+                onClick={() => { onTrade(result!); onClose(); }}
+                className={`w-full py-3.5 rounded-xl text-[13px] font-black transition-all ${
+                  dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700"
+                }`}
+              >
+                View Chart &amp; Trade →
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
+  );
+}

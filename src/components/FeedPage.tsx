@@ -1,0 +1,1587 @@
+"use client";
+
+import { useState, useEffect, useRef, type ReactNode } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Challenge, formatAgo, formatPrice } from "@/lib/mockChallenges";
+import { Coin, formatMarketCap } from "@/lib/mockData";
+import { STATIC_COINS, fetchLiveCoins } from "@/lib/liveCoins";
+import LiveTicker from "./LiveTicker";
+import OrdersView from "./OrdersView";
+import CoinDetail from "./CoinDetail";
+import AuthModal from "./AuthModal";
+import DepositModal from "./DepositModal";
+import OpenMarketModal from "./OpenMarketModal";
+import CASearchModal from "./CASearchModal";
+import NewPairsView from "./NewPairsView";
+import LeaderboardView from "./LeaderboardView";
+import { api, User, AuthResponse, Market } from "@/lib/api";
+import type { TokenInfo } from "@/lib/chartData";
+
+type Filter = "all" | "hot" | "juicy";
+type Theme = "dark" | "light";
+type MainTab = "feed" | "scout" | "ranks";
+type ScoutView = "new" | "trending" | "untouched";
+
+const QUICK_AMOUNTS = [10, 25, 50, 100];
+const FEE = 0.05;
+const TIMEFRAMES = ["5m", "15m", "1h", "4h", "12h", "24h"];
+const TF_ICONS: Record<string, string> = {
+  "5m":  "≡",
+  "15m": "◌",
+  "1h":  "◔",
+  "4h":  "◑",
+  "12h": "⊟",
+  "24h": "↗",
+};
+
+function multiplier(myPool: number, otherPool: number): number {
+  if (myPool === 0) return 0;
+  return 1 + (otherPool * (1 - FEE)) / myPool;
+}
+
+function formatMsLeft(ms: number): string {
+  if (ms <= 0) return "expired";
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (d > 0) return `${d}d ${h % 24}h`;
+  if (h > 0) return `${h}h ${m % 60}m`;
+  if (m > 0) return `${m}m ${s % 60}s`;
+  return `${s}s`;
+}
+
+function marketToChallenge(m: Market): Challenge {
+  const msLeft = Math.max(0, new Date(m.closes_at).getTime() - Date.now());
+  const openedSecsAgo = Math.floor((Date.now() - new Date(m.created_at).getTime()) / 1000);
+  return {
+    id: m.id,
+    user: m.opener_id.slice(0, 8) + "…",
+    symbol: m.symbol,
+    chain: m.chain.toUpperCase() as "SOL" | "ETH" | "BASE",
+    timeframe: m.timeframe,
+    expiresIn: formatMsLeft(msLeft),
+    openedAt: openedSecsAgo,
+    entryPrice: parseFloat(m.entry_price),
+    shortPool: parseFloat(m.short_pool),
+    longPool: parseFloat(m.long_pool),
+    tagline: m.tagline,
+    status: m.status,
+    exitPrice: m.exit_price ? parseFloat(m.exit_price) : null,
+    winnerSide: m.winner_side ?? null,
+  };
+}
+
+export default function FeedPage() {
+  const [markets, setMarkets]           = useState<Market[]>([]);
+  const [filter, setFilter]             = useState<Filter>("all");
+  const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
+  const [mainTab, setMainTab]           = useState<MainTab>("feed");
+  const [ordersOpen, setOrdersOpen]     = useState(false);
+  const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
+  const [selectedTf, setSelectedTf]     = useState<string>("1h");
+  const [theme, setTheme]               = useState<Theme>("dark");
+  const [tapeOpen, setTapeOpen]         = useState(true);
+  const [user, setUser]                 = useState<User | null>(null);
+  const [authOpen, setAuthOpen]         = useState(false);
+  const [depositOpen, setDepositOpen]   = useState(false);
+  const [openMarketCoin, setOpenMarketCoin] = useState<Coin | null>(null);
+  const [caSearchOpen, setCASearchOpen]     = useState(false);
+  const [selectedTokenInfo, setSelectedTokenInfo] = useState<TokenInfo | null>(null);
+  const [marketCapMax, setMarketCapMax]     = useState<number | null>(null);
+  const [minPool, setMinPool]               = useState<number | null>(null);
+  const [poolSortDir, setPoolSortDir]       = useState<"asc" | "desc" | null>(null);
+  const [scoutView, setScoutView]           = useState<ScoutView>("new");
+  const [scoutChain, setScoutChain]         = useState<string | null>(null);
+  const [scoutSort, setScoutSort]           = useState<"mcap-desc" | "mcap-asc" | "newest" | null>(null);
+  const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
+  const [paperMode, setPaperMode]           = useState(false);
+  const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
+  const [paperCreditOpen, setPaperCreditOpen] = useState(false);
+  const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
+  const [paperCreditLoading, setPaperCreditLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen]             = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("notificationsEnabled") === "true";
+  });
+  const dk = theme === "dark";
+
+  async function toggleNotifications() {
+    if (!notificationsEnabled) {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") return;
+      setNotificationsEnabled(true);
+      localStorage.setItem("notificationsEnabled", "true");
+    } else {
+      setNotificationsEnabled(false);
+      localStorage.setItem("notificationsEnabled", "false");
+    }
+  }
+
+  // Restore session + listen for Google OAuth callback setting token in same tab
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) api.me().then(setUser).catch(() => localStorage.removeItem("token"));
+
+    function onStorage(e: StorageEvent) {
+      if (e.key === "token" && e.newValue) {
+        api.me().then(setUser).catch(() => {});
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Fetch markets + poll every 30s; also refresh user balance to capture payouts
+  useEffect(() => {
+    async function fetchMarketsAndBalance() {
+      try { setMarkets(await api.getMarkets()); } catch {}
+      // Refresh balance so settled-market payouts show up immediately
+      if (typeof window !== "undefined" && localStorage.getItem("token")) {
+        try { const fresh = await api.me(); setUser(fresh); } catch {}
+      }
+    }
+    fetchMarketsAndBalance();
+    const i = setInterval(fetchMarketsAndBalance, 30_000);
+    return () => clearInterval(i);
+  }, []);
+
+  // Fetch live coin data from DexScreener (price, mcap, 24h change) — refresh every 5 min
+  useEffect(() => {
+    fetchLiveCoins(setLiveCoins);
+    const i = setInterval(() => fetchLiveCoins(setLiveCoins), 5 * 60_000);
+    return () => clearInterval(i);
+  }, []);
+
+  // Live price SSE stream — connects to backend /prices/live, updates every ~1.5s
+  useEffect(() => {
+    const openMarkets = markets.filter(m => m.status === "open");
+    if (openMarkets.length === 0) return;
+
+    // Deduplicate by symbol:chain
+    const symbolSet = new Set(openMarkets.map(m => `${m.symbol.toUpperCase()}:${m.chain.toUpperCase()}`));
+    const symbolsParam = Array.from(symbolSet).join(",");
+    const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const url  = `${BASE}/prices/live?symbols=${encodeURIComponent(symbolsParam)}`;
+
+    let es: EventSource | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      es = new EventSource(url);
+
+      es.onmessage = (e) => {
+        try {
+          const data: Record<string, number> = JSON.parse(e.data);
+          // data keys are "SYMBOL:CHAIN" — map to our "SYMBOL_CHAIN" key format
+          setLivePrices(prev => {
+            const next = { ...prev };
+            for (const [k, v] of Object.entries(data)) {
+              const [sym, chain] = k.split(":");
+              next[`${sym}_${chain}`] = v;
+            }
+            return next;
+          });
+        } catch {}
+      };
+
+      es.onerror = () => {
+        es?.close();
+        es = null;
+        // Reconnect after 3s on error
+        retryTimeout = setTimeout(connect, 3000);
+      };
+    }
+
+    connect();
+    return () => {
+      es?.close();
+      if (retryTimeout) clearTimeout(retryTimeout);
+    };
+  }, [markets.filter(m => m.status === "open").map(m => `${m.symbol}:${m.chain}`).sort().join(",")]); // re-connect when open market set changes
+
+  function handleAuthSuccess(data: AuthResponse) {
+    localStorage.setItem("token", data.token);
+    setUser(data.user);
+    setAuthOpen(false);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    setUser(null);
+  }
+
+  function handleDeposited(newBalance: string) {
+    if (user) setUser({ ...user, balance_usd: newBalance });
+  }
+
+  function handleMarketCreated(market: Market) {
+    setMarkets(prev => [market, ...prev]);
+    setOpenMarketCoin(null);
+    setMainTab("feed");
+    setSelectedTf(market.timeframe);
+  }
+
+  function handleOpenMarket(coin: Coin) {
+    if (!user) { setAuthOpen(true); return; }
+    if (!paperMode && Number(user.balance_usd) <= 0) {
+      setDepositOpen(true);
+      return;
+    }
+    setOpenMarketCoin(coin);
+  }
+
+  async function handleAdd(id: string, side: "short" | "long", amount: number): Promise<string | null> {
+    if (!user) { setAuthOpen(true); return null; }
+    // Mock challenges have simple numeric IDs; real markets have UUIDs
+    const isRealMarket = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isRealMarket) return "Demo data — open a real market on any coin to trade.";
+    try {
+      const result = await api.placeBet(id, side, amount, paperMode);
+      setMarkets(prev => prev.map(m =>
+        m.id === id ? {
+          ...m,
+          long_pool:  side === "long"  ? String(parseFloat(m.long_pool)  + amount) : m.long_pool,
+          short_pool: side === "short" ? String(parseFloat(m.short_pool) + amount) : m.short_pool,
+        } : m
+      ));
+      setUser(u => u ? {
+        ...u,
+        balance_usd:       result.new_balance,
+        paper_balance_usd: result.new_paper_balance,
+      } : null);
+      return null;
+    } catch (err: any) {
+      return err.message ?? "Bet failed";
+    }
+  }
+
+  // Filter markets by mode: paper markets for Paper tab, real markets for Real tab
+  const modeMarkets   = markets.filter(m => !!m.is_paper === paperMode);
+  const allChallenges = modeMarkets.map(marketToChallenge);
+  const tfFiltered    = allChallenges
+    .filter(c => c.timeframe === selectedTf)
+    .filter(c => statusFilter === "open" ? c.status === "open" : c.status !== "open");
+  let filtered = tfFiltered.filter(c => {
+    const total = c.shortPool + c.longPool;
+    const ratio = Math.max(c.shortPool, c.longPool) / Math.min(c.shortPool || 1, c.longPool || 1);
+    if (filter === "hot"   && total < 400) return false;
+    if (filter === "juicy" && ratio < 3)   return false;
+    if (minPool !== null   && total < minPool) return false;
+    if (marketCapMax !== null) {
+      const coin = liveCoins.find(co => co.symbol === c.symbol);
+      if (coin && coin.marketCap > marketCapMax) return false;
+    }
+    return true;
+  });
+  if (poolSortDir === "asc")  filtered = [...filtered].sort((a, b) => (a.shortPool + a.longPool) - (b.shortPool + b.longPool));
+  if (poolSortDir === "desc") filtered = [...filtered].sort((a, b) => (b.shortPool + b.longPool) - (a.shortPool + a.longPool));
+  const trending = [...allChallenges].sort((a, b) => (b.longPool + b.shortPool) - (a.longPool + a.shortPool));
+
+  const handleCoinClick = (symbol: string) => {
+    setSelectedTokenInfo(null); // clear any CA-search token info
+    setSelectedCoin(symbol);
+  };
+
+  function handleCATradeResult(token: TokenInfo) {
+    setSelectedTokenInfo(token);
+    setSelectedCoin(token.symbol);
+  }
+  const totalAtStake = allChallenges.reduce((s, c) => s + c.shortPool + c.longPool, 0);
+
+  // Derive chain for selected coin (from CA search, open market, or mock data)
+  const selectedChain: string =
+    selectedTokenInfo?.chainLabel ??
+    markets.find(m => m.symbol === selectedCoin)?.chain?.toUpperCase() ??
+    liveCoins.find(c => c.symbol === selectedCoin)?.chain ??
+    "SOL";
+
+  const marketFilters: { key: Filter; label: string }[] = [
+    { key: "all",   label: "All" },
+    { key: "hot",   label: "🔥 Hot" },
+    { key: "juicy", label: "🍋 Juicy" },
+  ];
+  const coinObj = selectedCoin ? liveCoins.find(c => c.symbol === selectedCoin) ?? null : null;
+
+  // ── Theme tokens ──────────────────────────────
+  const T = {
+    root:           dk ? "bg-[#0c0c0c] text-white"             : "bg-gray-50 text-gray-900",
+    topBorder:      dk ? "border-white/8"                       : "border-gray-100",
+    badge:          dk ? "text-white/30 bg-white/6"             : "text-gray-500 bg-gray-100",
+    statMuted:      dk ? "text-white/30"                        : "text-gray-600",
+    statNormal:     dk ? "text-white/60"                        : "text-gray-800",
+    portfolioBtn:   dk ? "bg-white/6 hover:bg-white/10 border-white/8 text-white/60 hover:text-white"
+                       : "bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-600 hover:text-gray-900",
+    navBorder:      dk ? "border-white/6"                       : "border-gray-100",
+    tabGroup:       dk ? "bg-white/5"                           : "bg-gray-100",
+    tabActive:      dk ? "bg-white text-black"                  : "bg-white text-gray-900 shadow-sm",
+    tabInactive:    dk ? "text-white/40 hover:text-white/70"    : "text-gray-500 hover:text-gray-800",
+    filterActive:   dk ? "bg-white/12 text-white"               : "bg-gray-200 text-gray-900",
+    filterInactive: dk ? "text-white/30 hover:text-white/60"    : "text-gray-400 hover:text-gray-700",
+    backBtn:        dk ? "text-white/40 hover:text-white"       : "text-gray-400 hover:text-gray-700",
+    tapeColLabel:   dk ? "text-white/20"                        : "text-gray-300",
+    tapeBorder:     dk ? "border-white/5"                       : "border-gray-100",
+    sidebarBorder:  dk ? "border-white/5"                       : "border-gray-100",
+    sidebarLabel:   dk ? "text-white/25"                        : "text-gray-600",
+    sidebarActive:  dk ? "bg-white text-black"                  : "bg-gray-900 text-white",
+    sidebarInactive:dk ? "text-white/40 hover:bg-white/6 hover:text-white/80"
+                       : "text-gray-500 hover:bg-gray-100 hover:text-gray-900",
+    sidebarCount:   (active: boolean) => active
+      ? dk ? "bg-black/20 text-black/60" : "bg-white/20 text-white/70"
+      : dk ? "text-white/25" : "text-gray-400",
+    emptyIcon:      dk ? "text-white/20"                        : "text-gray-300",
+    drawerBg:       dk ? "bg-[#111] border-white/8"             : "bg-white border-gray-100",
+    drawerHeader:   dk ? "border-white/8"                       : "border-gray-100",
+    drawerClose:    dk ? "text-white/30 hover:text-white"       : "text-gray-400 hover:text-gray-900",
+    mainTabActive:  dk ? "text-white font-black"                : "text-gray-900 font-black",
+    mainTabInactive:dk ? "text-white/30 hover:text-white/60"    : "text-gray-400 hover:text-gray-700",
+    mainTabIndicator: dk ? "bg-white" : "bg-gray-900",
+  };
+
+  const MAIN_TABS: { key: MainTab; label: string }[] = [
+    { key: "feed",  label: "Feed" },
+    { key: "scout", label: "Scout" },
+    { key: "ranks", label: "Ranks" },
+  ];
+
+  // Scout: trending with chain + sort filters
+  let scoutTrending = [...allChallenges];
+  if (scoutChain) scoutTrending = scoutTrending.filter(c => c.chain === scoutChain);
+  if (scoutSort === "mcap-desc") {
+    scoutTrending.sort((a, b) => {
+      const ca = liveCoins.find(co => co.symbol === a.symbol)?.marketCap ?? 0;
+      const cb = liveCoins.find(co => co.symbol === b.symbol)?.marketCap ?? 0;
+      return cb - ca;
+    });
+  } else if (scoutSort === "mcap-asc") {
+    scoutTrending.sort((a, b) => {
+      const ca = liveCoins.find(co => co.symbol === a.symbol)?.marketCap ?? 0;
+      const cb = liveCoins.find(co => co.symbol === b.symbol)?.marketCap ?? 0;
+      return ca - cb;
+    });
+  } else {
+    scoutTrending.sort((a, b) => a.openedAt - b.openedAt); // newest first
+  }
+
+  // Scout: coins with no open markets
+  const touchedSymbols = new Set(markets.map(m => m.symbol));
+  let scoutUntouched = liveCoins.filter(co => !touchedSymbols.has(co.symbol));
+  if (scoutChain) scoutUntouched = scoutUntouched.filter(co => co.chain === scoutChain);
+  if (scoutSort === "mcap-desc") scoutUntouched = [...scoutUntouched].sort((a, b) => b.marketCap - a.marketCap);
+  else if (scoutSort === "mcap-asc") scoutUntouched = [...scoutUntouched].sort((a, b) => a.marketCap - b.marketCap);
+
+  return (
+    <div className={`flex flex-col h-[100dvh] ${T.root}`}>
+
+      {/* Top bar */}
+      <div className={`flex items-center justify-between px-4 md:px-6 py-3 border-b-2 ${T.topBorder} shrink-0`}>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[16px] md:text-[17px] font-black tracking-tight">FUD</span><span className="text-[16px] md:text-[17px] font-black tracking-tight opacity-30 ml-1">Markets</span>
+        </div>
+
+        {/* Live dot — minimal center indicator on desktop */}
+        <div className="hidden md:flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className={`text-[11px] font-bold ${T.statMuted}`}>{allChallenges.length} live</span>
+        </div>
+
+        <div className="flex items-center gap-1.5 md:gap-2">
+          {/* CA search icon */}
+          <motion.button whileTap={{ scale: 0.94 }}
+            onClick={() => setCASearchOpen(true)}
+            className={`text-[14px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
+            ⌕
+          </motion.button>
+
+          {/* Theme toggle */}
+          <motion.button whileTap={{ scale: 0.94 }}
+            onClick={() => setTheme(dk ? "light" : "dark")}
+            className={`text-[13px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
+            {dk ? "☀" : "☽"}
+          </motion.button>
+
+          {user ? (
+            <>
+              {/* Balance — click to deposit/credit */}
+              <motion.button whileTap={{ scale: 0.94 }}
+                onClick={() => paperMode ? setPaperCreditOpen(true) : setDepositOpen(true)}
+                className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
+                {paperMode ? (
+                  <span className="text-yellow-400">${Number(user.paper_balance_usd ?? 0).toFixed(2)} +</span>
+                ) : (
+                  <span className="text-emerald-400">${Number(user.balance_usd).toFixed(2)} +</span>
+                )}
+              </motion.button>
+
+              {/* Portfolio */}
+              <motion.button whileTap={{ scale: 0.94 }} onClick={() => setOrdersOpen(true)}
+                className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
+                <span>⬡</span>
+                <span className="hidden md:inline">{user.username}</span>
+              </motion.button>
+            </>
+          ) : (
+            <motion.button whileTap={{ scale: 0.94 }} onClick={() => setAuthOpen(true)}
+              className={`flex items-center gap-2 border text-[12px] font-black px-4 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
+              <span>→</span>
+              <span>Sign In</span>
+            </motion.button>
+          )}
+
+          {/* Settings — always far right */}
+          <motion.button whileTap={{ scale: 0.94 }}
+            onClick={() => setSettingsOpen(true)}
+            className={`text-[13px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
+            ⚙
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Ticker */}
+      <LiveTicker challenges={allChallenges} dk={dk} />
+
+      {/* Nav bar */}
+      <div className={`flex items-center justify-between px-6 py-2.5 border-b ${T.navBorder} shrink-0`}>
+        <AnimatePresence mode="wait">
+          {!selectedCoin ? (
+            <motion.div key="tabs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1">
+              {/* Main tabs */}
+              {MAIN_TABS.map(t => (
+                <button key={t.key} onClick={() => setMainTab(t.key)}
+                  className={`text-[12px] px-3 py-1.5 rounded-xl transition-all ${mainTab === t.key ? T.filterActive : T.filterInactive}`}>
+                  {t.label}
+                </button>
+              ))}
+            </motion.div>
+          ) : (
+            <motion.button key="back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSelectedCoin(null)}
+              className={`text-[12px] font-bold transition-colors ${T.backBtn}`}>
+              ← Back
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Content */}
+      <AnimatePresence mode="wait">
+
+        {/* COIN DETAIL */}
+        {selectedCoin && (
+          <motion.div key={`coin-${selectedCoin}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex-1 overflow-hidden flex">
+            <CoinDetail
+              symbol={selectedCoin}
+              chain={selectedChain}
+              timeframe={selectedTf}
+              theme={theme}
+              markets={markets}
+              onBet={handleAdd}
+              onOpenMarket={() => {
+                const coin = liveCoins.find(c => c.symbol === selectedCoin);
+                if (coin) {
+                  handleOpenMarket(coin);
+                } else if (selectedTokenInfo) {
+                  handleOpenMarket({
+                    id:        selectedTokenInfo.address,
+                    symbol:    selectedTokenInfo.symbol,
+                    name:      selectedTokenInfo.name,
+                    price:     selectedTokenInfo.price,
+                    change24h: selectedTokenInfo.change24h,
+                    marketCap: selectedTokenInfo.marketCap,
+                    volume24h: selectedTokenInfo.volume24h,
+                    liquidity: selectedTokenInfo.liquidity,
+                    age:       "—",
+                    migrated:  true,
+                    chain:     selectedTokenInfo.chainLabel as Coin["chain"],
+                    ca:        selectedTokenInfo.address,
+                  });
+                }
+              }}
+              loggedIn={!!user}
+              onAuthRequired={() => setAuthOpen(true)}
+              tokenInfo={selectedTokenInfo ?? undefined}
+            />
+          </motion.div>
+        )}
+
+        {/* FEED TAB */}
+        {!selectedCoin && mainTab === "feed" && (
+          <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex overflow-hidden">
+            {/* Timeframe sidebar — desktop only */}
+            <div style={{ width: "220px", minWidth: "220px" }} className={`hidden md:flex border-r ${T.sidebarBorder} flex-col py-4 px-3 shrink-0 overflow-y-auto`}>
+              <p className={`text-[9px] font-black tracking-widest uppercase px-2 mb-3 ${T.sidebarLabel}`}>Timeframe</p>
+              {TIMEFRAMES.map(tf => {
+                const count   = allChallenges.filter(c => c.timeframe === tf && c.status === "open").length;
+                const isActive = selectedTf === tf;
+                return (
+                  <button key={tf} onClick={() => setSelectedTf(tf)}
+                    className={`flex items-center justify-between px-3 py-3 rounded-xl text-left transition-all mb-1 ${isActive ? T.sidebarActive : T.sidebarInactive}`}>
+                    <span className="flex items-center gap-3">
+                      <span className={`text-[17px] leading-none ${isActive ? "" : (dk ? "text-white/35" : "text-gray-400")}`}>{TF_ICONS[tf]}</span>
+                      <span className="text-[14px] font-black">{tf}</span>
+                    </span>
+                    <span className={`text-[11px] font-bold rounded-full px-2 ${T.sidebarCount(isActive)}`}>{count || "—"}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Card grid + filter bar */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Timeframe pills — mobile only */}
+              <div className={`flex md:hidden gap-1.5 overflow-x-auto px-4 py-2 border-b shrink-0 scrollbar-none ${T.navBorder}`}>
+                {TIMEFRAMES.map(tf => {
+                  const count = allChallenges.filter(c => c.timeframe === tf && c.status === "open").length;
+                  const isActive = selectedTf === tf;
+                  return (
+                    <button key={tf} onClick={() => setSelectedTf(tf)}
+                      className={`flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${isActive ? T.filterActive : T.filterInactive}`}>
+                      <span>{TF_ICONS[tf]}</span>
+                      <span>{tf}</span>
+                      {count > 0 && <span className={`text-[10px] font-bold ${isActive ? "opacity-70" : T.sidebarLabel}`}>{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <FilterBar
+                dk={dk} navBorder={T.navBorder}
+                filter={filter} setFilter={setFilter}
+                marketCapMax={marketCapMax} setMarketCapMax={setMarketCapMax}
+                minPool={minPool} setMinPool={setMinPool}
+                poolSortDir={poolSortDir} setPoolSortDir={setPoolSortDir}
+                statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+              />
+              <div className="flex-1 overflow-y-auto px-4 md:px-5 py-5">
+                {filtered.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {filtered.map((c, i) => (
+                      <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => handleCoinClick(c.symbol)} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`flex flex-col items-center justify-center h-full gap-4 px-6 ${T.emptyIcon}`}>
+                    {statusFilter === "closed" ? (
+                      <>
+                        <span className="text-[32px]">✓</span>
+                        <p className="text-[13px] font-bold">No closed markets yet</p>
+                        <p className={`text-[11px] font-bold text-center max-w-[220px] ${dk ? "text-white/30" : "text-gray-400"}`}>
+                          Settled markets appear here and clear after 24h.
+                        </p>
+                      </>
+                    ) : modeMarkets.length === 0 ? (
+                      // Completely empty — first market CTA
+                      <>
+                        <span className="text-[40px]">{paperMode ? "🧪" : "🏁"}</span>
+                        <div className="text-center">
+                          <p className={`text-[15px] font-black ${dk ? "text-white/70" : "text-gray-700"}`}>
+                            {paperMode ? "No paper markets yet" : "No markets yet"}
+                          </p>
+                          <p className={`text-[12px] font-bold mt-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                            {paperMode
+                              ? "Practice with simulated money. Open a paper market and test your strategy."
+                              : "Be the first. Open a market and set the tone."}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setMainTab("scout")}
+                          className={`px-5 py-2.5 rounded-xl text-[12px] font-black tracking-wide transition-all ${
+                            paperMode
+                              ? "bg-yellow-400 text-black hover:bg-yellow-300"
+                              : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700"
+                          }`}
+                        >
+                          {paperMode ? "Open paper market →" : "Open first market →"}
+                        </button>
+                      </>
+                    ) : (
+                      // Markets exist but none match timeframe / filters
+                      <>
+                        <span className="text-[32px]">—</span>
+                        <p className="text-[13px] font-bold">No open {selectedTf} {paperMode ? "paper " : ""}markets</p>
+                        <p className={`text-[11px] font-bold text-center max-w-[220px] ${dk ? "text-white/30" : "text-gray-400"}`}>
+                          {paperMode
+                            ? "Switch timeframe or open a paper market yourself."
+                            : "Switch timeframe or open one yourself."}
+                        </p>
+                        <button onClick={() => setMainTab("scout")}
+                          className={`text-[12px] font-black px-4 py-2 rounded-xl transition-all ${dk ? "bg-white/8 hover:bg-white/15 text-white/50 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-900"}`}>
+                          Scout pairs →
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tape — desktop only */}
+            <div className="hidden md:flex">
+              <TapeSidebar challenges={allChallenges} onViewCoin={handleCoinClick} dk={dk}
+                tapeBorder={T.sidebarBorder} sidebarLabel={T.sidebarLabel} tapeColLabel={T.tapeColLabel}
+                open={tapeOpen} onToggle={() => setTapeOpen(o => !o)} />
+            </div>
+          </motion.div>
+        )}
+
+        {/* SCOUT TAB */}
+        {!selectedCoin && mainTab === "scout" && (
+          <motion.div key="scout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
+
+            {/* Scout sub-nav + filters */}
+            <div className={`flex items-center justify-between px-5 py-2 border-b shrink-0 ${T.navBorder}`}>
+              <div className="flex items-center gap-1">
+                {(["new", "trending", "untouched"] as ScoutView[]).map(v => (
+                  <button key={v} onClick={() => setScoutView(v)}
+                    className={`text-[12px] font-black px-3 py-1.5 rounded-xl transition-all ${scoutView === v ? T.filterActive : T.filterInactive}`}>
+                    {v === "new" ? "New Pairs" : v === "trending" ? "Trending" : "Untouched"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* CA search button */}
+                <button
+                  onClick={() => setCASearchOpen(true)}
+                  className={`text-[11px] font-black px-3 py-1.5 rounded-xl border transition-all ${
+                    dk ? "border-white/8 text-white/40 hover:text-white/80 hover:bg-white/6" : "border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  ⌕ Search / CA
+                </button>
+                {/* Scout filter bar — right aligned */}
+                <ScoutFilterBar dk={dk} navBorder={T.navBorder} chain={scoutChain} setChain={setScoutChain} sort={scoutSort} setSort={setScoutSort} />
+              </div>
+            </div>
+
+            {/* Scout content */}
+            <div className="flex-1 overflow-hidden flex">
+              {scoutView === "new" ? (
+                <NewPairsView
+                  markets={markets}
+                  dk={dk}
+                  onOpenMarket={handleOpenMarket}
+                  onViewCoin={handleCoinClick}
+                  loggedIn={!!user}
+                  onAuthRequired={() => setAuthOpen(true)}
+                  chainFilter={scoutChain}
+                  liveCoins={liveCoins}
+                />
+              ) : scoutView === "trending" ? (
+                <div className="flex-1 overflow-y-auto px-5 py-5">
+                  {scoutTrending.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {scoutTrending.map((c, i) => (
+                        <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => handleCoinClick(c.symbol)} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={`flex flex-col items-center justify-center h-full gap-3 ${T.emptyIcon}`}>
+                      <span className="text-[32px]">—</span>
+                      <p className="text-[13px] font-bold">No markets yet</p>
+                      <button onClick={() => setScoutView("new")}
+                        className={`text-[12px] font-black px-4 py-2 rounded-xl transition-all ${dk ? "bg-white/8 hover:bg-white/15 text-white/50 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}>
+                        Open the first one →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Untouched — coins with zero open markets */
+                <UntouchedView
+                  coins={scoutUntouched}
+                  dk={dk}
+                  onOpenMarket={handleOpenMarket}
+                  onViewCoin={handleCoinClick}
+                  loggedIn={!!user}
+                  onAuthRequired={() => setAuthOpen(true)}
+                />
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* RANKS TAB */}
+        {!selectedCoin && mainTab === "ranks" && (
+          <motion.div key="ranks" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
+            <LeaderboardView dk={dk} />
+          </motion.div>
+        )}
+
+      </AnimatePresence>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {authOpen    && <AuthModal dk={dk} onSuccess={handleAuthSuccess} onClose={() => setAuthOpen(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {depositOpen && <DepositModal dk={dk} onClose={() => setDepositOpen(false)} onDeposited={handleDeposited} />}
+      </AnimatePresence>
+
+      {/* Paper Credit Modal */}
+      <AnimatePresence>
+        {paperCreditOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setPaperCreditOpen(false)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96 }} transition={{ type: "spring", stiffness: 340, damping: 28 }}
+              className={`relative w-[320px] rounded-2xl border p-6 shadow-2xl z-10 ${dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200"}`}>
+              <button onClick={() => setPaperCreditOpen(false)}
+                className={`absolute top-4 right-4 text-[18px] font-bold transition-colors ${dk ? "text-white/20 hover:text-white/50" : "text-gray-300 hover:text-gray-600"}`}>✕</button>
+              <div className="mb-5">
+                <span className="text-[16px] font-black">Add Paper Money</span>
+                <p className={`text-[11px] mt-0.5 ${dk ? "text-white/40" : "text-gray-500"}`}>
+                  Simulated balance for testing. Max $10,000 total.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[100, 500, 1000, 5000].map(a => (
+                    <button key={a} onClick={() => setPaperCreditAmt(String(a))}
+                      className={`py-2 rounded-xl text-[11px] font-black transition-all ${
+                        paperCreditAmt === String(a)
+                          ? "bg-yellow-400 text-black"
+                          : dk ? "bg-white/6 text-white/50 hover:bg-white/12" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}>${a >= 1000 ? `${a/1000}k` : a}</button>
+                  ))}
+                </div>
+                <div className="relative">
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                  <input type="number" value={paperCreditAmt} onChange={e => setPaperCreditAmt(e.target.value)} min={1} max={10000}
+                    className={`w-full pl-6 pr-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${
+                      dk ? "bg-white/6 border border-white/10 text-white placeholder:text-white/20 focus:border-white/30" : "bg-gray-50 border border-gray-200 text-gray-900 focus:border-gray-400"
+                    }`} />
+                </div>
+                <button
+                  disabled={paperCreditLoading || !paperCreditAmt || Number(paperCreditAmt) <= 0}
+                  onClick={async () => {
+                    setPaperCreditLoading(true);
+                    try {
+                      const res = await api.paperCredit(Number(paperCreditAmt));
+                      setUser(u => u ? { ...u, paper_balance_usd: res.paper_balance_usd } : null);
+                      setPaperCreditOpen(false);
+                      setPaperCreditAmt("100");
+                    } catch (err: any) { alert(err.message); }
+                    finally { setPaperCreditLoading(false); }
+                  }}
+                  className="w-full py-3 rounded-xl bg-yellow-400 text-black text-[13px] font-black hover:bg-yellow-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                  {paperCreditLoading ? "Adding…" : `Add $${paperCreditAmt || "0"} paper`}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {openMarketCoin && (
+          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {caSearchOpen && (
+          <CASearchModal
+            dk={dk}
+            onClose={() => setCASearchOpen(false)}
+            onTrade={handleCATradeResult}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Settings drawer */}
+      <AnimatePresence>
+        {settingsOpen && (
+          <>
+            <motion.div key="settings-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSettingsOpen(false)} className="fixed inset-0 bg-black/60 z-40" />
+            <motion.div key="settings-drawer" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className={`fixed right-0 top-0 h-full w-full md:w-[340px] border-l z-50 flex flex-col ${T.drawerBg}`}>
+              <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
+                <span className="text-[15px] font-black">Settings</span>
+                <button onClick={() => setSettingsOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+
+                {/* Notifications */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Notifications</p>
+                  <div className={`flex items-center justify-between p-4 rounded-2xl border ${dk ? "border-white/8 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
+                    <div>
+                      <p className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>Position alerts</p>
+                      <p className={`text-[11px] font-bold mt-0.5 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                        Notify when a market resolves
+                      </p>
+                    </div>
+                    <button
+                      onClick={toggleNotifications}
+                      className={`relative w-11 h-6 rounded-full transition-all duration-200 ${notificationsEnabled ? "bg-emerald-500" : (dk ? "bg-white/10" : "bg-gray-200")}`}
+                    >
+                      <motion.span
+                        animate={{ x: notificationsEnabled ? 20 : 2 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block"
+                      />
+                    </button>
+                  </div>
+                  {typeof window !== "undefined" && Notification.permission === "denied" && (
+                    <p className={`text-[11px] font-bold mt-2 text-amber-400`}>
+                      Notifications blocked in browser. Enable them in your browser settings.
+                    </p>
+                  )}
+                </div>
+
+                {/* Theme */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Appearance</p>
+                  <div className={`flex gap-2`}>
+                    {(["dark", "light"] as Theme[]).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setTheme(t)}
+                        className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${theme === t
+                          ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
+                          : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
+                        }`}
+                      >
+                        {t === "dark" ? "☽ Dark" : "☀ Light"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Trading Mode */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Trading Mode</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPaperMode(false)}
+                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${!paperMode
+                        ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
+                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
+                      }`}
+                    >
+                      Real
+                    </button>
+                    <button
+                      onClick={() => setPaperMode(true)}
+                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${paperMode
+                        ? "bg-yellow-400 text-black border-yellow-400"
+                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
+                      }`}
+                    >
+                      Paper
+                    </button>
+                  </div>
+                </div>
+
+                {/* Account — last, only if logged in */}
+                {user && (
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Account</p>
+                    <div className={`rounded-2xl border ${dk ? "border-white/8 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
+                      <div className={`flex items-center gap-3 px-4 py-3 border-b ${dk ? "border-white/6" : "border-gray-100"}`}>
+                        <span className="text-[16px]">⬡</span>
+                        <div>
+                          <p className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>{user.username}</p>
+                          <p className={`text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>
+                            ${Number(user.balance_usd).toFixed(2)} real · ${Number(user.paper_balance_usd ?? 0).toFixed(2)} paper
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { handleLogout(); setSettingsOpen(false); }}
+                        className={`w-full px-4 py-3 text-left text-[12px] font-black transition-all rounded-b-2xl ${dk ? "text-red-400/70 hover:text-red-400 hover:bg-red-500/8" : "text-red-500 hover:bg-red-50"}`}
+                      >
+                        ↩ Sign out
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Portfolio drawer */}
+      <AnimatePresence>
+        {ordersOpen && (
+          <>
+            <motion.div key="backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setOrdersOpen(false)} className="fixed inset-0 bg-black/60 z-40" />
+            <motion.div key="drawer" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className={`fixed right-0 top-0 h-full w-full md:w-[420px] border-l z-50 flex flex-col ${T.drawerBg}`}>
+              <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
+                <span className="text-[15px] font-black">Portfolio</span>
+                <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled} />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── ChallengeCard ────────────────────────────────────────────────────────────
+
+function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, dk, livePrice, paperMode }: {
+  challenge: Challenge;
+  index: number;
+  onAdd: (id: string, side: "short" | "long", amount: number) => Promise<string | null>;
+  onViewCoin: () => void;
+  dk: boolean;
+  livePrice?: number;
+  paperMode?: boolean;
+}) {
+  const [activeSide, setActiveSide] = useState<"short" | "long" | null>(null);
+  const [customAmt, setCustomAmt]   = useState("");
+  const [betLoading, setBetLoading] = useState(false);
+  const [betError, setBetError]     = useState("");
+
+  const total      = c.shortPool + c.longPool;
+  const shortPct   = total > 0 ? (c.shortPool / total) * 100 : 50;
+  const longPct    = 100 - shortPct;
+  const shortMult  = multiplier(c.shortPool, c.longPool);
+  const longMult   = multiplier(c.longPool, c.shortPool);
+  const shortIsJuicy = c.longPool > c.shortPool * 2;
+  const longIsJuicy  = c.shortPool > c.longPool * 2;
+
+  const handleQuick = async (amount: number) => {
+    if (!activeSide) return;
+    setCustomAmt("");
+    setBetLoading(true);
+    setBetError("");
+    const err = await onAdd(c.id, activeSide, amount);
+    setBetLoading(false);
+    if (err) { setBetError(err); }
+    else { setActiveSide(null); setCustomAmt(""); }
+  };
+
+  const handleCustom = async () => {
+    const amt = parseFloat(customAmt);
+    if (!activeSide || !amt || amt <= 0) return;
+    setBetLoading(true);
+    setBetError("");
+    const err = await onAdd(c.id, activeSide, amt);
+    setBetLoading(false);
+    if (err) { setBetError(err); }
+    else { setActiveSide(null); setCustomAmt(""); }
+  };
+
+  const card      = dk ? "border-white/8 bg-white/[0.03] hover:border-white/14"   : "border-gray-200 bg-white hover:border-gray-300 shadow-sm";
+  const symBtn    = dk ? "text-white hover:text-white/60"                          : "text-gray-900 hover:text-gray-500";
+  const chainPill = (chain: string) => {
+    if (chain === "SOL")  return dk ? "text-purple-300 bg-purple-500/20" : "text-purple-700 bg-purple-100";
+    if (chain === "BASE") return dk ? "text-blue-300 bg-blue-500/20"     : "text-blue-700 bg-blue-100";
+    if (chain === "BSC")  return dk ? "text-yellow-300 bg-yellow-500/20" : "text-yellow-700 bg-yellow-100";
+    return dk ? "text-orange-300 bg-orange-500/20" : "text-orange-700 bg-orange-100";
+  };
+  const priceTxt   = dk ? "text-white/30"  : "text-gray-400";
+  const tfTxt      = dk ? "text-white/50"  : "text-gray-500";
+  const expTxt     = dk ? "text-white/25"  : "text-gray-400";
+  const tagline    = dk ? "text-white/40"  : "text-gray-500";
+  const poolBox    = dk ? "bg-white/4"     : "bg-gray-50";
+  const multTxt    = dk ? "text-white/35"  : "text-gray-400";
+  const metaTxt    = dk ? "text-white/25"  : "text-gray-400";
+  const cancelBtn  = dk ? "text-white/25 hover:text-white/50" : "text-gray-400 hover:text-gray-600";
+  const amtIdle    = dk ? "bg-white/6 text-white/50 hover:bg-white/12 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-100";
+  const inputCls   = dk ? "bg-white/6 text-white placeholder:text-white/20 focus:bg-white/10"
+                        : "bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-300 focus:border-blue-300";
+  const addBtnCls  = (side: "short" | "long") => side === "short"
+    ? dk ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-red-50 text-red-600 hover:bg-red-100"
+    : dk ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100";
+  const sideLabelCls = (side: "short" | "long") => side === "short"
+    ? dk ? "text-red-400" : "text-red-600"
+    : dk ? "text-emerald-400" : "text-emerald-600";
+
+  const isResolved  = c.status === "resolved";
+  const isCancelled = c.status === "cancelled";
+  const isDone      = isResolved || isCancelled;
+
+  // Price change for resolved markets
+  const priceChange = isResolved && c.exitPrice && c.entryPrice
+    ? ((c.exitPrice - c.entryPrice) / c.entryPrice) * 100
+    : null;
+
+  // Resolved card border tint
+  const resolvedCard = c.winnerSide === "long"
+    ? dk ? "border-emerald-500/30 bg-emerald-500/5" : "border-emerald-300 bg-emerald-50"
+    : dk ? "border-red-500/30 bg-red-500/5" : "border-red-300 bg-red-50";
+
+  return (
+    <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}
+      className={`flex flex-col gap-3 rounded-2xl border-2 transition-all p-4 ${isDone ? resolvedCard : card}`}>
+
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <button onClick={onViewCoin} className={`text-[18px] font-black transition-colors leading-none ${symBtn}`}>
+              ${c.symbol}
+            </button>
+            {isResolved && (
+              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                c.winnerSide === "long"
+                  ? dk ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-100 text-emerald-700"
+                  : dk ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700"
+              }`}>
+                {c.winnerSide === "long" ? "LONG WON" : "SHORT WON"}
+              </span>
+            )}
+            {isCancelled && (
+              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${dk ? "bg-white/10 text-white/40" : "bg-gray-100 text-gray-500"}`}>
+                CANCELLED
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${chainPill(c.chain)}`}>{c.chain}</span>
+            <span className={`text-[10px] font-mono ${priceTxt}`}>@ ${formatPrice(c.entryPrice)}</span>
+            {!isDone && livePrice && (() => {
+              const pct = ((livePrice - c.entryPrice) / c.entryPrice) * 100;
+              const up = pct >= 0;
+              return (
+                <span className={`text-[10px] font-mono font-bold ${up ? (dk ? "text-emerald-400" : "text-emerald-600") : (dk ? "text-red-400" : "text-red-600")}`}>
+                  {up ? "▲" : "▼"} ${formatPrice(livePrice)} ({up ? "+" : ""}{pct.toFixed(2)}%)
+                </span>
+              );
+            })()}
+            {isResolved && c.exitPrice && (
+              <>
+                <span className={`text-[10px] ${priceTxt}`}>→</span>
+                <span className={`text-[10px] font-mono font-bold ${
+                  priceChange !== null && priceChange >= 0
+                    ? dk ? "text-emerald-400" : "text-emerald-600"
+                    : dk ? "text-red-400" : "text-red-600"
+                }`}>
+                  ${formatPrice(c.exitPrice)}
+                  {priceChange !== null && ` (${priceChange >= 0 ? "+" : ""}${priceChange.toFixed(2)}%)`}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="text-right">
+          <span className={`text-[12px] font-bold ${tfTxt}`}>{c.timeframe}</span>
+          <p className={`text-[10px] mt-0.5 ${expTxt}`}>
+            {isDone ? "closed" : `${c.expiresIn} left`}
+          </p>
+        </div>
+      </div>
+
+      <p className={`text-[12px] italic ${tagline}`}>"{c.tagline}"</p>
+
+      <div className={`rounded-xl p-3 space-y-2.5 ${poolBox}`}>
+        <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
+          <motion.div animate={{ width: `${shortPct}%` }} transition={{ type: "spring", stiffness: 180, damping: 22 }}
+            className={`h-full rounded-l-full ${isResolved && c.winnerSide === "short" ? "bg-red-500" : isResolved ? "bg-red-500/30" : "bg-red-500"}`} />
+          <motion.div animate={{ width: `${longPct}%` }}  transition={{ type: "spring", stiffness: 180, damping: 22 }}
+            className={`h-full rounded-r-full ${isResolved && c.winnerSide === "long" ? "bg-emerald-500" : isResolved ? "bg-emerald-500/30" : "bg-emerald-500"}`} />
+        </div>
+        <div className="flex justify-between items-end">
+          <div className={isResolved && c.winnerSide === "long" ? "opacity-40" : ""}>
+            <div className="flex items-center gap-1">
+              <span className={`text-[11px] font-black ${isResolved && c.winnerSide === "short" ? "text-red-400" : "text-red-400"}`}>▼ SHORT</span>
+              {!isDone && shortIsJuicy && <span className="text-[9px] font-bold text-yellow-500 bg-yellow-400/15 px-1.5 rounded-full">juicy</span>}
+              {isResolved && c.winnerSide === "short" && <span className="text-[9px] font-bold text-red-400 bg-red-500/15 px-1.5 rounded-full">winner</span>}
+            </div>
+            <span className={`text-[16px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${c.shortPool >= 1000 ? `${(c.shortPool/1000).toFixed(1)}k` : c.shortPool}</span>
+            {!isDone && <p className={`text-[10px] font-bold ${multTxt}`}>→ {shortMult.toFixed(2)}x if right</p>}
+            {isResolved && c.winnerSide === "short" && <p className={`text-[10px] font-bold ${dk ? "text-emerald-400" : "text-emerald-600"}`}>{shortMult.toFixed(2)}x payout</p>}
+          </div>
+          <div className={`text-right ${isResolved && c.winnerSide === "short" ? "opacity-40" : ""}`}>
+            <div className="flex items-center gap-1 justify-end">
+              {!isDone && longIsJuicy && <span className="text-[9px] font-bold text-yellow-500 bg-yellow-400/15 px-1.5 rounded-full">juicy</span>}
+              {isResolved && c.winnerSide === "long" && <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 rounded-full">winner</span>}
+              <span className="text-[11px] font-black text-emerald-400">LONG ▲</span>
+            </div>
+            <span className={`text-[16px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${c.longPool >= 1000 ? `${(c.longPool/1000).toFixed(1)}k` : c.longPool}</span>
+            {!isDone && <p className={`text-[10px] font-bold ${multTxt}`}>{longMult.toFixed(2)}x if right ←</p>}
+            {isResolved && c.winnerSide === "long" && <p className={`text-[10px] font-bold ${dk ? "text-emerald-400" : "text-emerald-600"}`}>{longMult.toFixed(2)}x payout</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className={`flex justify-between text-[10px] font-bold ${metaTxt}`}>
+        <span>{c.user}</span>
+        <span>{formatAgo(c.openedAt)}</span>
+      </div>
+
+      {!isDone && (
+        <AnimatePresence mode="wait">
+          {activeSide === null ? (
+            <motion.div key="btns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1.5">
+              {paperMode && (
+                <div className="flex items-center gap-1.5 px-0.5">
+                  <span className="text-[10px] font-black text-yellow-500 bg-yellow-400/15 px-2 py-0.5 rounded-full">PAPER</span>
+                  <span className={`text-[10px] font-bold ${dk ? "text-white/25" : "text-gray-400"}`}>simulated bet — no real money</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <motion.button whileTap={{ scale: 0.94 }} onClick={() => { setActiveSide("short"); setBetError(""); }}
+                  className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all border ${
+                    dk ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 border-red-500/20"
+                       : "bg-red-50 text-red-600 hover:bg-red-100 border-red-200"
+                  }`}>▼ Short</motion.button>
+                <motion.button whileTap={{ scale: 0.94 }} onClick={() => { setActiveSide("long"); setBetError(""); }}
+                  className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all border ${
+                    dk ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border-emerald-500/20"
+                       : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
+                  }`}>Long ▲</motion.button>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div key="picker" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[12px] font-black ${sideLabelCls(activeSide)}`}>
+                    {activeSide === "short" ? "▼ Short" : "Long ▲"} · {activeSide === "short" ? shortMult.toFixed(2) : longMult.toFixed(2)}x
+                  </span>
+                  {paperMode && <span className="text-[9px] font-black text-yellow-500 bg-yellow-400/15 px-1.5 py-0.5 rounded-full">PAPER</span>}
+                </div>
+                <button onClick={() => { setActiveSide(null); setCustomAmt(""); setBetError(""); }} className={`text-[11px] font-bold ${cancelBtn}`}>✕</button>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {QUICK_AMOUNTS.map(a => (
+                  <button key={a} onClick={() => handleQuick(a)} disabled={betLoading}
+                    className={`py-2 rounded-xl text-[11px] font-black transition-all disabled:opacity-50 ${amtIdle}`}>${a}</button>
+                ))}
+              </div>
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                  <input autoFocus type="number" placeholder="custom" value={customAmt}
+                    onChange={e => setCustomAmt(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleCustom()}
+                    className={`w-full text-[12px] font-bold pl-6 pr-3 py-2 rounded-xl outline-none ${inputCls}`} />
+                </div>
+                <button onClick={handleCustom} disabled={betLoading}
+                  className={`px-4 py-2 rounded-xl text-[12px] font-black transition-all disabled:opacity-50 ${addBtnCls(activeSide)}`}>
+                  {betLoading ? "…" : "Add"}
+                </button>
+              </div>
+              {betError && (
+                <p className={`text-[11px] font-bold px-2 py-1.5 rounded-lg ${dk ? "text-red-400 bg-red-500/10" : "text-red-600 bg-red-50"}`}>
+                  {betError}
+                </p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+
+      {isCancelled && (
+        <p className={`text-[11px] font-bold text-center py-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
+          Market cancelled — all positions refunded
+        </p>
+      )}
+    </motion.div>
+  );
+}
+
+// ─── FilterBar ────────────────────────────────────────────────────────────────
+
+type FilterBarProps = {
+  dk: boolean; navBorder: string;
+  filter: Filter; setFilter: (v: Filter) => void;
+  marketCapMax: number | null; setMarketCapMax: (v: number | null) => void;
+  minPool: number | null; setMinPool: (v: number | null) => void;
+  poolSortDir: "asc" | "desc" | null; setPoolSortDir: (v: "asc" | "desc" | null) => void;
+  statusFilter: "open" | "closed"; setStatusFilter: (v: "open" | "closed") => void;
+};
+
+function FilterBar({ dk, navBorder, filter, setFilter, marketCapMax, setMarketCapMax, minPool, setMinPool, poolSortDir, setPoolSortDir, statusFilter, setStatusFilter }: FilterBarProps) {
+  const [open, setOpen] = useState(false);
+
+  const activeCount = [filter !== "all", marketCapMax !== null, minPool !== null, poolSortDir !== null].filter(Boolean).length;
+
+  const btnBase = dk
+    ? "border border-white/8 text-[11px] font-black px-3 py-1.5 rounded-xl transition-all"
+    : "border border-gray-200 text-[11px] font-black px-3 py-1.5 rounded-xl transition-all";
+  const btnActive   = dk ? "bg-white/14 text-white"              : "bg-gray-200 text-gray-900";
+  const btnInactive = dk ? "bg-transparent text-white/35 hover:text-white/60 hover:bg-white/6" : "bg-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50";
+
+  const chipOn  = dk ? "bg-white text-black"    : "bg-gray-900 text-white";
+  const chipOff = dk ? "bg-white/6 text-white/40 hover:bg-white/10 hover:text-white/70 border border-white/8" : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-700 border border-gray-200";
+
+  function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+    return (
+      <button onClick={onClick} className={`text-[11px] font-black px-3 py-1.5 rounded-xl transition-all ${active ? chipOn : chipOff}`}>
+        {label}
+      </button>
+    );
+  }
+
+  function Row({ label, children }: { label: string; children: ReactNode }) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className={`text-[9px] font-black uppercase tracking-widest w-[62px] shrink-0 ${dk ? "text-white/20" : "text-gray-400"}`}>{label}</span>
+        <div className="flex items-center gap-1.5 flex-wrap">{children}</div>
+      </div>
+    );
+  }
+
+  // Active pill tags
+  const activePills = [
+    filter !== "all"       ? { label: filter === "hot" ? "🔥 Hot" : "🍋 Juicy", clear: () => setFilter("all") }         : null,
+    marketCapMax !== null  ? { label: `Cap <${marketCapMax >= 1_000_000 ? "$1M" : `$${marketCapMax / 1000}K`}`, clear: () => setMarketCapMax(null) } : null,
+    minPool !== null       ? { label: `Pool >$${minPool}`, clear: () => setMinPool(null) }                              : null,
+    poolSortDir !== null   ? { label: poolSortDir === "asc" ? "Pool ↑" : "Pool ↓", clear: () => setPoolSortDir(null) } : null,
+  ].filter(Boolean) as { label: string; clear: () => void }[];
+
+  return (
+    <div className={`shrink-0 border-b ${navBorder}`}>
+      <div className="flex items-center gap-2 px-4 md:px-5 py-2">
+        {/* Open / Closed status toggle */}
+        <div className={`flex items-center rounded-xl p-0.5 border text-[11px] font-black shrink-0 ${dk ? "bg-white/4 border-white/8" : "bg-gray-100 border-gray-200"}`}>
+          <button onClick={() => setStatusFilter("open")}
+            className={`px-3 py-1 rounded-[9px] transition-all ${statusFilter === "open"
+              ? (dk ? "bg-white text-black" : "bg-white text-gray-900 shadow-sm")
+              : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")
+            }`}>
+            Open
+          </button>
+          <button onClick={() => setStatusFilter("closed")}
+            className={`px-3 py-1 rounded-[9px] transition-all ${statusFilter === "closed"
+              ? (dk ? "bg-white text-black" : "bg-white text-gray-900 shadow-sm")
+              : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")
+            }`}>
+            Closed
+          </button>
+        </div>
+
+        {/* Active filter pills */}
+        <div className="flex items-center gap-1.5 flex-1 overflow-x-auto scrollbar-none">
+          {activePills.map(p => (
+            <button key={p.label} onClick={p.clear}
+              className={`flex items-center gap-1 shrink-0 text-[11px] font-black px-2.5 py-1 rounded-xl transition-all ${dk ? "bg-white/10 text-white/70 hover:bg-white/6" : "bg-gray-100 text-gray-600 hover:bg-gray-50"}`}>
+              {p.label} <span className="text-[9px] opacity-50">✕</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Filters popup button — right aligned */}
+        <div className="relative shrink-0">
+          <button onClick={() => setOpen(o => !o)} className={`flex items-center gap-1.5 ${btnBase} ${open || activeCount > 0 ? btnActive : btnInactive}`}>
+            <span>Filters</span>
+            {activeCount > 0 && (
+              <span className={`text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center ${dk ? "bg-white/25 text-white" : "bg-gray-400 text-white"}`}>
+                {activeCount}
+              </span>
+            )}
+            <span className={`text-[9px] transition-transform duration-150 ${open ? "rotate-180" : ""}`}>▾</span>
+          </button>
+
+          {/* Floating bubble — same style as ScoutFilterBar */}
+          <AnimatePresence>
+            {open && (
+              <>
+                {/* click-away overlay */}
+                <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.97, y: -4 }}
+                  transition={{ duration: 0.12 }}
+                  className={`absolute right-0 top-full mt-1 z-20 rounded-2xl border p-3 space-y-2.5 min-w-[260px] ${dk ? "bg-[#161616] border-white/10 shadow-2xl" : "bg-white border-gray-200 shadow-xl"}`}
+                >
+                  {statusFilter === "open" && (
+                    <Row label="Quality">
+                      <Chip label="All"      active={filter === "all"}   onClick={() => setFilter("all")} />
+                      <Chip label="🔥 Hot"   active={filter === "hot"}   onClick={() => setFilter("hot")} />
+                      <Chip label="🍋 Juicy" active={filter === "juicy"} onClick={() => setFilter("juicy")} />
+                    </Row>
+                  )}
+                  <Row label="Mkt Cap">
+                    <Chip label="Any"    active={marketCapMax === null}       onClick={() => setMarketCapMax(null)} />
+                    <Chip label="<$100K" active={marketCapMax === 100_000}    onClick={() => setMarketCapMax(100_000)} />
+                    <Chip label="<$500K" active={marketCapMax === 500_000}    onClick={() => setMarketCapMax(500_000)} />
+                    <Chip label="<$1M"   active={marketCapMax === 1_000_000}  onClick={() => setMarketCapMax(1_000_000)} />
+                  </Row>
+                  {statusFilter === "open" && (
+                    <Row label="Min Pool">
+                      <Chip label="Any"   active={minPool === null} onClick={() => setMinPool(null)} />
+                      <Chip label=">$50"  active={minPool === 50}   onClick={() => setMinPool(50)} />
+                      <Chip label=">$250" active={minPool === 250}  onClick={() => setMinPool(250)} />
+                      <Chip label=">$1K"  active={minPool === 1000} onClick={() => setMinPool(1000)} />
+                    </Row>
+                  )}
+                  <Row label="Sort">
+                    <Chip label="Default" active={poolSortDir === null}   onClick={() => setPoolSortDir(null)} />
+                    <Chip label="Pool ↑"  active={poolSortDir === "asc"}  onClick={() => setPoolSortDir("asc")} />
+                    <Chip label="Pool ↓"  active={poolSortDir === "desc"} onClick={() => setPoolSortDir("desc")} />
+                  </Row>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ScoutFilterBar ───────────────────────────────────────────────────────────
+
+function ScoutFilterBar({ dk, navBorder, chain, setChain, sort, setSort }: {
+  dk: boolean; navBorder: string;
+  chain: string | null; setChain: (v: string | null) => void;
+  sort: "mcap-desc" | "mcap-asc" | "newest" | null; setSort: (v: "mcap-desc" | "mcap-asc" | "newest" | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeCount = [chain !== null, sort !== null].filter(Boolean).length;
+
+  const btnBase = dk
+    ? "border border-white/8 text-[11px] font-black px-3 py-1.5 rounded-xl transition-all"
+    : "border border-gray-200 text-[11px] font-black px-3 py-1.5 rounded-xl transition-all";
+  const btnActive   = dk ? "bg-white/14 text-white" : "bg-gray-200 text-gray-900";
+  const btnInactive = dk ? "bg-transparent text-white/35 hover:text-white/60 hover:bg-white/6" : "bg-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50";
+  const chipOn  = dk ? "bg-white text-black" : "bg-gray-900 text-white";
+  const chipOff = dk ? "bg-white/6 text-white/40 hover:bg-white/10 hover:text-white/70 border border-white/8" : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-700 border border-gray-200";
+
+  function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+    return <button onClick={onClick} className={`text-[11px] font-black px-3 py-1.5 rounded-xl transition-all ${active ? chipOn : chipOff}`}>{label}</button>;
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className={`flex items-center gap-1.5 ${btnBase} ${open || activeCount > 0 ? btnActive : btnInactive}`}>
+        <span>Filters</span>
+        {activeCount > 0 && (
+          <span className={`text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center ${dk ? "bg-white/25 text-white" : "bg-gray-400 text-white"}`}>
+            {activeCount}
+          </span>
+        )}
+        <span className={`text-[9px] transition-transform duration-150 ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className={`absolute right-0 top-full mt-1 z-20 rounded-2xl border p-3 space-y-2.5 min-w-[240px] ${dk ? "bg-[#161616] border-white/10 shadow-2xl" : "bg-white border-gray-200 shadow-xl"}`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] font-black uppercase tracking-widest w-[40px] shrink-0 ${dk ? "text-white/20" : "text-gray-400"}`}>Chain</span>
+              <div className="flex gap-1.5 flex-wrap">
+                <Chip label="All"  active={chain === null}    onClick={() => setChain(null)} />
+                <Chip label="SOL"  active={chain === "SOL"}   onClick={() => setChain("SOL")} />
+                <Chip label="ETH"  active={chain === "ETH"}   onClick={() => setChain("ETH")} />
+                <Chip label="BASE" active={chain === "BASE"}  onClick={() => setChain("BASE")} />
+                <Chip label="BSC"  active={chain === "BSC"}   onClick={() => setChain("BSC")} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] font-black uppercase tracking-widest w-[40px] shrink-0 ${dk ? "text-white/20" : "text-gray-400"}`}>Sort</span>
+              <div className="flex gap-1.5 flex-wrap">
+                <Chip label="Newest"     active={sort === null}         onClick={() => setSort(null)} />
+                <Chip label="Mkt Cap ↓" active={sort === "mcap-desc"}  onClick={() => setSort("mcap-desc")} />
+                <Chip label="Mkt Cap ↑" active={sort === "mcap-asc"}   onClick={() => setSort("mcap-asc")} />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── TapeSidebar ──────────────────────────────────────────────────────────────
+
+const FAKE_USERS = ["0xa3…f1", "moon_bro", "0xc9…22", "ape_lord", "bear_gang", "sol_maxi", "0x77…bc", "degen.sol", "flip_god", "paperhand"];
+
+type TapeEntry = {
+  uid: string; symbol: string; side: "short" | "long";
+  amount: number; message: string; user: string; ts: number;
+  isOpen: boolean;
+};
+
+function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle }: {
+  challenges: Challenge[]; onViewCoin: (symbol: string) => void; dk: boolean;
+  tapeBorder: string; sidebarLabel: string; tapeColLabel: string; open: boolean; onToggle: () => void;
+}) {
+  const [entries, setEntries] = useState<TapeEntry[]>(() =>
+    [...challenges].reverse().slice(0, 20).map(c => ({
+      uid: `init-${c.id}`,
+      symbol: c.symbol,
+      side: Math.random() > 0.5 ? "long" : "short",
+      amount: [10, 25, 50, 100, 250][Math.floor(Math.random() * 5)],
+      message: c.tagline,
+      user: c.user,
+      ts: Date.now() - c.openedAt * 1000,
+      isOpen: c.status === "open",
+    }))
+  );
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (challenges.length === 0) return;
+    const interval = setInterval(() => {
+      const c    = challenges[Math.floor(Math.random() * challenges.length)];
+      const side: "short" | "long" = Math.random() > 0.5 ? "long" : "short";
+      setEntries(prev => [{
+        uid: `${Date.now()}-${Math.random()}`, symbol: c.symbol, side,
+        amount: [10, 25, 50, 100, 250][Math.floor(Math.random() * 5)],
+        message: c.tagline,
+        user: FAKE_USERS[Math.floor(Math.random() * FAKE_USERS.length)],
+        ts: Date.now(),
+        isOpen: c.status === "open",
+      }, ...prev].slice(0, 60));
+    }, 2400);
+    return () => clearInterval(interval);
+  }, [challenges]);
+
+  const rowBg  = dk ? "hover:bg-white/4" : "hover:bg-gray-100";
+  const divider = dk ? "border-white/4" : "border-gray-200";
+  const amtTxt = dk ? "text-white/50" : "text-gray-800 font-black";
+  const msgTxt = dk ? "text-white/30" : "text-gray-700";
+  const userTxt = dk ? "text-white/20" : "text-gray-600";
+
+  return (
+    <div style={{ width: open ? "250px" : "32px", minWidth: open ? "250px" : "32px" }} className={`shrink-0 border-l ${tapeBorder} flex flex-col overflow-hidden transition-all duration-200`}>
+      <div className="px-3 py-2.5 shrink-0 flex items-center justify-between">
+        {open && (
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <p className={`text-[9px] font-black tracking-widest uppercase ${sidebarLabel}`}>Tape</p>
+          </div>
+        )}
+        <button onClick={onToggle}
+          className={`${open ? "ml-auto" : "mx-auto"} flex items-center justify-center w-6 h-6 rounded-lg text-[12px] font-black transition-all ${dk ? "bg-white/6 hover:bg-white/12 text-white/40 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700"}`}>
+          {open ? "›" : "‹"}
+        </button>
+      </div>
+
+      {open && (
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          <AnimatePresence initial={false}>
+            {entries.map(e => (
+              <motion.div key={e.uid} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+                className={`px-4 py-3 border-b ${divider} ${rowBg} transition-colors cursor-pointer`}
+                onClick={() => onViewCoin(e.symbol)}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-[12px] font-black ${e.side === "long" ? "text-emerald-400" : "text-red-400"}`}>{e.side === "long" ? "▲" : "▼"}</span>
+                  <span className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${e.symbol}</span>
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ml-0.5 ${
+                    e.isOpen
+                      ? dk ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-50 text-emerald-600"
+                      : dk ? "bg-white/8 text-white/25"           : "bg-gray-100 text-gray-400"
+                  }`}>{e.isOpen ? "open" : "closed"}</span>
+                  <span className={`text-[12px] font-bold ml-auto ${amtTxt}`}>${e.amount}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className={`text-[11px] italic truncate leading-snug flex-1 ${msgTxt}`}>"{e.message}"</p>
+                  <span className={`text-[10px] font-bold shrink-0 ${userTxt}`}>{e.user}</span>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── UntouchedView ─────────────────────────────────────────────────────────────
+
+function UntouchedView({ coins, dk, onOpenMarket, onViewCoin, loggedIn, onAuthRequired }: {
+  coins: Coin[];
+  dk: boolean;
+  onOpenMarket: (coin: Coin) => void;
+  onViewCoin: (symbol: string) => void;
+  loggedIn: boolean;
+  onAuthRequired: () => void;
+}) {
+  const T = {
+    card:    dk ? "border-white/8 bg-white/[0.03] hover:border-white/14" : "border-gray-200 bg-white hover:border-gray-300 shadow-sm",
+    label:   dk ? "text-white/25" : "text-gray-400",
+    strong:  dk ? "text-white" : "text-gray-900",
+    muted:   dk ? "text-white/40" : "text-gray-500",
+    poolBox: dk ? "bg-white/4" : "bg-gray-50",
+    pos:     "text-emerald-400",
+    neg:     "text-red-400",
+    openBtn: dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-black",
+    emptyIcon: dk ? "text-white/20" : "text-gray-300",
+  };
+
+  function chainPill(chain: string) {
+    if (chain === "SOL")  return dk ? "text-purple-300 bg-purple-500/20" : "text-purple-700 bg-purple-100";
+    if (chain === "BASE") return dk ? "text-blue-300 bg-blue-500/20"     : "text-blue-700 bg-blue-100";
+    if (chain === "BSC")  return dk ? "text-yellow-300 bg-yellow-500/20" : "text-yellow-700 bg-yellow-100";
+    return dk ? "text-orange-300 bg-orange-500/20" : "text-orange-700 bg-orange-100";
+  }
+
+  if (coins.length === 0) {
+    return (
+      <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${T.emptyIcon}`}>
+        <span className="text-[32px]">—</span>
+        <p className="text-[13px] font-bold">All pairs have open markets</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto px-5 py-5">
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        {coins.map((coin, i) => (
+          <motion.div
+            key={coin.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.03 }}
+            className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-all ${T.card}`}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <button onClick={() => onViewCoin(coin.symbol)}
+                  className={`text-[18px] font-black leading-none transition-colors hover:opacity-70 ${T.strong}`}>
+                  ${coin.symbol}
+                </button>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${chainPill(coin.chain)}`}>{coin.chain}</span>
+                  <span className={`text-[10px] font-mono ${T.muted}`}>${formatPrice(coin.price)}</span>
+                </div>
+              </div>
+              <span className={`text-[13px] font-black ${coin.change24h >= 0 ? T.pos : T.neg}`}>
+                {coin.change24h >= 0 ? "+" : ""}{coin.change24h.toFixed(1)}%
+              </span>
+            </div>
+
+            <div className={`rounded-xl px-3 py-2.5 flex justify-between ${T.poolBox}`}>
+              <div>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${T.label}`}>Mkt cap</p>
+                <p className={`text-[12px] font-black ${T.muted}`}>{formatMarketCap(coin.marketCap)}</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${T.label}`}>Age</p>
+                <p className={`text-[12px] font-black ${T.muted}`}>{coin.age}</p>
+              </div>
+              <div className="text-right">
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${T.label}`}>Markets</p>
+                <p className={`text-[12px] font-black ${T.label}`}>none yet</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { if (!loggedIn) { onAuthRequired(); return; } onOpenMarket(coin); }}
+              className={`w-full py-2.5 rounded-xl text-[12px] font-black transition-all ${T.openBtn}`}
+            >
+              Be first — Open Market
+            </button>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
