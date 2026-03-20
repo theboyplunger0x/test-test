@@ -14,6 +14,7 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.1",
+    "genlayer-js": "^0.23.0",
     "nodemailer": "^8.0.1",
     "pg": "^8.20.0"
   },

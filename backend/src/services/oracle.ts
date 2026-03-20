@@ -1,5 +1,12 @@
-// Price oracle — DexScreener (free, no API key, covers all meme coins)
+// Price oracle — GenLayer (primary) + DexScreener (fallback)
+//
+// GenLayer: validators reach independent consensus on the price.
+//   Nobody — not even us — can manipulate the result.
+// DexScreener: direct API call (centralized fallback if GenLayer is not configured).
+//
 // Docs: https://docs.dexscreener.com/api/reference
+
+import { getPriceFromGenLayer, isGenLayerConfigured } from "./genLayerOracle.js";
 
 const CHAIN_MAP: Record<string, string> = {
   SOL:  "solana",
@@ -11,6 +18,17 @@ const CHAIN_MAP: Record<string, string> = {
 const DEXSCREENER = "https://api.dexscreener.com/latest/dex/search";
 
 export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
+  // Try GenLayer consensus oracle first
+  if (isGenLayerConfigured()) {
+    try {
+      return await getPriceFromGenLayer(symbol, chain);
+    } catch (err) {
+      console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
+    }
+  }
+
+  // Fallback: direct DexScreener call (centralized)
+  console.log(`[oracle] Using DexScreener for ${symbol}/${chain}`);
   const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
 
   const res = await fetch(`${DEXSCREENER}?q=${encodeURIComponent(symbol)}`, {
