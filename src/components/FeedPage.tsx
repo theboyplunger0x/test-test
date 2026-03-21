@@ -791,7 +791,7 @@ export default function FeedPage() {
                         token={token}
                         rank={i + 1}
                         dk={dk}
-                        onOpenMarket={() => handleOpenMarket({ symbol: token.symbol, chain: token.chainLabel, marketCap: token.marketCap, ca: token.address } as any)}
+                        onOpenMarket={() => handleOpenMarket({ symbol: token.symbol, chain: token.chainLabel, marketCap: token.marketCap, ca: token.address, price: token.price } as any)}
                         onViewCoin={() => handleCoinClick(token.symbol)}
                       />
                     ))}
