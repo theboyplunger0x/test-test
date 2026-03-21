@@ -656,9 +656,9 @@ export async function startBot() {
       return;
     }
 
-    // Detect CA (>20 chars, no spaces) or short token symbol (2–10 alphanumeric chars)
+    // Detect CA (>20 chars, no spaces) or token symbol (all-uppercase, 2–10 chars, e.g. PEPE BTC WIF)
     const isCA     = text.length > 20 && !/\s/.test(text);
-    const isSymbol = /^[A-Za-z0-9]{2,10}$/.test(text);
+    const isSymbol = /^[A-Z0-9]{2,10}$/.test(text);
 
     if (isCA || isSymbol) {
       console.log(`[bot] Searching token: "${text}" (isCA=${isCA})`);
