@@ -532,8 +532,8 @@ export default function FeedPage() {
               {/* Portfolio */}
               <motion.button whileTap={{ scale: 0.94 }} onClick={() => setOrdersOpen(true)}
                 className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
-                <span>⬡</span>
-                <span className="hidden md:flex items-center gap-1">{user.username}{tierBadge(user.tier)}</span>
+                {tierBadge(user.tier) ?? <span>⬡</span>}
+                <span className="hidden md:inline">{user.username}</span>
               </motion.button>
 
               {/* Referral button */}
