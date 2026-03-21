@@ -300,6 +300,7 @@ function amtKeyboard(tgId: number) {
 // ─── Bot ──────────────────────────────────────────────────────────────────────
 
 export async function startBot() {
+  console.log("[bot] startBot() called — BOT_TOKEN present:", !!BOT_TOKEN);
   if (!BOT_TOKEN) {
     console.warn("⚠️  BOT_TOKEN not set — Telegram bot disabled");
     return;
