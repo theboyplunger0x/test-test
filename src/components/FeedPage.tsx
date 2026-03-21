@@ -24,14 +24,13 @@ type MainTab = "feed" | "trending" | "ranks";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
-const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
+const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 const TF_ICONS: Record<string, string> = {
   "1m":  "·",
   "5m":  "≡",
   "15m": "◌",
   "1h":  "◔",
   "4h":  "◑",
-  "12h": "⊟",
   "24h": "↗",
 };
 

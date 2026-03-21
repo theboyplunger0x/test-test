@@ -17,7 +17,6 @@ const TIMEFRAMES: Timeframe[] = [
   { label: "15m", softClose: "last 3m",  hot: true  },
   { label: "1h",  softClose: "last 10m", hot: false },
   { label: "4h",  softClose: "last 30m", hot: false },
-  { label: "12h", softClose: "last 1h",  hot: false },
   { label: "24h", softClose: "last 2h",  hot: false },
 ];
 

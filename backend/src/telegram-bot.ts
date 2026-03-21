@@ -15,7 +15,7 @@ const CHAIN_MAP: Record<string, string> = {
   bsc:      "BSC",
 };
 
-const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
+const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 
 // In-memory sessions: tgId → { token, userId, username }
 const sessions = new Map<number, { token: string; userId: string; username: string }>();
