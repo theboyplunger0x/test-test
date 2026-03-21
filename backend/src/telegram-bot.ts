@@ -2,6 +2,7 @@ import { Telegraf, Markup } from "telegraf";
 import { message } from "telegraf/filters";
 import { db } from "./db/client.js";
 import { createHmac, randomBytes } from "node:crypto";
+import Anthropic from "@anthropic-ai/sdk";
 
 const API = process.env.BACKEND_URL || "http://localhost:3001";
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -162,6 +163,138 @@ function formatNum(n: number): string {
   if (n >= 1_000_000)     return `$${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000)         return `$${(n / 1_000).toFixed(0)}K`;
   return `$${n.toFixed(0)}`;
+}
+
+// ─── AI Agent ─────────────────────────────────────────────────────────────────
+
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
+
+// Conversation history per user (last 20 turns)
+const chatHistory = new Map<number, Anthropic.MessageParam[]>();
+
+function pushHistory(tgId: number, role: "user" | "assistant", content: string) {
+  const h = chatHistory.get(tgId) ?? [];
+  h.push({ role, content });
+  if (h.length > 20) h.splice(0, h.length - 20);
+  chatHistory.set(tgId, h);
+}
+
+const AI_SYSTEM = `You are FUD — the AI mascot of FUD.markets, a prediction markets platform where degens bet LONG or SHORT on meme coin prices in real time.
+
+PERSONALITY:
+- Street-smart crypto degen. You've seen every rug, every pump, every 100x.
+- Sarcastic, picaresque, but never mean. You genuinely vibe with the community.
+- Short & punchy — you're on Telegram, not writing a whitepaper.
+- Mix in crypto slang naturally: ser, fren, ngmi, wagmi, aping, rekt, based, gm, anon, degen, wen, kek.
+- Understands Spanish — switch to it if the user writes in Spanish.
+- You NEVER give financial advice. "Not financial advice ser" is your shield.
+- You LOVE meme coins and prediction markets.
+
+PLATFORM:
+- Users open prediction markets on any token (meme coins, majors, etc.)
+- They bet LONG or SHORT with a timeframe: 1m, 5m, 15m, 1h, 4h, 24h
+- Real money (USDC) or paper trading (free fake money to practice)
+- To search a token: just type its symbol (e.g. "PEPE") or paste a CA
+- To see open markets: /markets
+- To check balance: /me
+
+Keep replies SHORT (1-4 sentences max). Be fun, hype the platform, roast bad takes gently.`;
+
+async function getAIReply(
+  tgId: number,
+  userMessage: string,
+  session: { token: string; userId: string; username: string } | null,
+): Promise<string> {
+  if (!anthropic) return "gm ser 🫡 (ANTHROPIC_API_KEY not configured)";
+
+  pushHistory(tgId, "user", userMessage);
+
+  const tools: Anthropic.Tool[] = [
+    {
+      name: "get_open_markets",
+      description: "Fetch the currently open prediction markets on FUD.markets",
+      input_schema: { type: "object" as const, properties: {}, required: [] },
+    },
+    {
+      name: "search_token",
+      description: "Search for a crypto token by symbol or contract address to get its price, market cap, and liquidity",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          query: { type: "string", description: "Token symbol (e.g. PEPE) or contract address" },
+        },
+        required: ["query"],
+      },
+    },
+  ];
+
+  if (session) {
+    tools.push({
+      name: "get_user_balance",
+      description: "Get the current user's real USDC balance and paper balance",
+      input_schema: { type: "object" as const, properties: {}, required: [] },
+    });
+  }
+
+  const messages: Anthropic.MessageParam[] = chatHistory.get(tgId) ?? [];
+
+  // Agentic loop: keep going while Claude wants to use tools
+  let currentMessages = [...messages];
+  for (let turn = 0; turn < 5; turn++) {
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 400,
+      system: AI_SYSTEM,
+      tools,
+      messages: currentMessages,
+    });
+
+    if (response.stop_reason !== "tool_use") {
+      const text = response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "gm ser 🫡";
+      pushHistory(tgId, "assistant", text);
+      return text;
+    }
+
+    // Execute all requested tools
+    const assistantMsg: Anthropic.MessageParam = { role: "assistant", content: response.content };
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+    for (const block of response.content) {
+      if (block.type !== "tool_use") continue;
+
+      let result = "";
+      try {
+        if (block.name === "get_open_markets") {
+          const markets = await apiFetch("/markets");
+          const open = (markets as any[]).filter((m) => m.status === "open").slice(0, 6);
+          result = open.length === 0
+            ? "No open markets right now."
+            : open.map((m) => `• ${m.symbol} ${m.timeframe} ${m.is_paper ? "📄" : "💵"} — pool $${(parseFloat(m.long_pool) + parseFloat(m.short_pool)).toFixed(0)}`).join("\n");
+        } else if (block.name === "search_token") {
+          const q = (block.input as any).query as string;
+          const token = await searchToken(q);
+          result = token
+            ? `${token.symbol} on ${token.chain} | price $${formatPrice(token.price)} | mcap ${token.marketCap > 0 ? formatNum(token.marketCap) : "?"} | liq ${formatNum(token.liquidity)}`
+            : `Token "${q}" not found on DexScreener.`;
+        } else if (block.name === "get_user_balance" && session) {
+          const { rows: [u] } = await db.query(
+            `SELECT balance_usd, paper_balance_usd FROM users WHERE id = $1`, [session.userId]
+          );
+          result = `Real: $${parseFloat(u.balance_usd).toFixed(2)} | Paper: $${parseFloat(u.paper_balance_usd).toFixed(2)}`;
+        }
+      } catch (e: any) {
+        result = `Error: ${e.message}`;
+      }
+
+      toolResults.push({ type: "tool_result", tool_use_id: block.id, content: result });
+    }
+
+    currentMessages = [...currentMessages, assistantMsg, { role: "user", content: toolResults }];
+  }
+
+  return "ngmi ser, something broke 😅";
 }
 
 async function searchToken(query: string): Promise<PendingTrade | null> {
@@ -523,28 +656,36 @@ export async function startBot() {
       return;
     }
 
-    // Detect CA (>20 chars, no spaces) or short token symbol (2–10 uppercase chars)
+    // Detect CA (>20 chars, no spaces) or short token symbol (2–10 alphanumeric chars)
     const isCA     = text.length > 20 && !/\s/.test(text);
     const isSymbol = /^[A-Za-z0-9]{2,10}$/.test(text);
-    if (!isCA && !isSymbol) return;
 
-    console.log(`[bot] Searching token: "${text}" (isCA=${isCA})`);
-
-    const msg = await ctx.reply("🔍 Searching…");
-    try {
-      const token = await searchToken(text);
-      await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
-
-      if (!token) {
-        return ctx.reply(`❌ "${text.slice(0, 20)}…" not found. Check the CA or symbol.`);
+    if (isCA || isSymbol) {
+      console.log(`[bot] Searching token: "${text}" (isCA=${isCA})`);
+      const msg = await ctx.reply("🔍 Searching…");
+      try {
+        const token = await searchToken(text);
+        await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
+        if (!token) {
+          return ctx.reply(`❌ "${text.slice(0, 20)}…" not found. Check the CA or symbol.`);
+        }
+        pendingTrades.set(ctx.from.id, token);
+        await ctx.reply(tokenMessage(token), { parse_mode: "Markdown", ...modeKeyboard(ctx.from.id) });
+      } catch (e: any) {
+        console.error("[bot] searchToken error:", e.message);
+        await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
+        await ctx.reply(`❌ Error searching token: ${e.message}`);
       }
+      return;
+    }
 
-      pendingTrades.set(ctx.from.id, token);
-      await ctx.reply(tokenMessage(token), { parse_mode: "Markdown", ...modeKeyboard(ctx.from.id) });
+    // Everything else → AI agent
+    if (!anthropic) return;
+    try {
+      const reply = await getAIReply(ctx.from.id, text, session);
+      await ctx.reply(reply, { parse_mode: "Markdown" });
     } catch (e: any) {
-      console.error("[bot] searchToken error:", e.message);
-      await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
-      await ctx.reply(`❌ Error searching token: ${e.message}`);
+      console.error("[bot] AI error:", e.message);
     }
   });
 
