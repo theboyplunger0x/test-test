@@ -123,6 +123,11 @@ export default function Chart({ candles, livePrice, entryPrice, direction, dk = 
     const data = deduped.map((c) => ({ time: c.time, value: c.close }));
     seriesRef.current.setData(data as any);
 
+    // Seed lastPriceRef so interpolation has a real "from" on first live update
+    if (lastPriceRef.current === null && deduped.length > 0) {
+      lastPriceRef.current = deduped[deduped.length - 1].close;
+    }
+
     // Zoom so movement fills the chart instead of looking like a worm
     chartRef.current.timeScale().setVisibleLogicalRange({
       from: Math.max(0, data.length - VISIBLE_CANDLES),

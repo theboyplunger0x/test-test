@@ -115,6 +115,21 @@ export async function getLivePrice(symbol: string, chain: string): Promise<numbe
   return info ? info.price : null;
 }
 
+/** Get live price directly by pair address — faster + works for new pairs not yet indexed by symbol */
+export async function getPriceByPair(chainId: string, pairAddress: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${chainId}/${pairAddress}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const pairs: any[] = data.pairs ?? [];
+    if (pairs.length === 0) return null;
+    const p = pairs[0];
+    return p.priceUsd ? parseFloat(p.priceUsd) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── GeckoTerminal OHLCV ─────────────────────────────────────────────────────
 
 export type OHLCVResolution = "minute" | "hour" | "day";

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import type { Candle, TokenInfo } from "@/lib/chartData";
-import { searchBySymbol, getOHLCV, resolutionForTf } from "@/lib/chartData";
+import { searchBySymbol, getOHLCV, resolutionForTf, getPriceByPair } from "@/lib/chartData";
 import { api, Market } from "@/lib/api";
 
 const Chart = dynamic(() => import("./Chart"), { ssr: false });
@@ -113,17 +113,18 @@ export default function CoinDetail({
     return () => clearInterval(i);
   }, [tokenInfo, chartTf, fetchCandles]);
 
-  // Fast price poll every 5s — updates just the last chart point via livePrice prop
+  // Fast price poll every 3s — uses pairAddress directly (works for new pairs too)
   useEffect(() => {
-    if (!tokenInfo) return;
+    if (!tokenInfo?.pairAddress) return;
+    const { pairAddress, chainId } = tokenInfo;
     const poll = async () => {
-      const info = await searchBySymbol(symbol, chain);
-      if (info) { setLivePrice(info.price); setTokenInfo(info); }
+      const price = await getPriceByPair(chainId, pairAddress);
+      if (price) setLivePrice(price);
     };
     poll();
-    const i = setInterval(poll, 5_000);
+    const i = setInterval(poll, 3_000);
     return () => clearInterval(i);
-  }, [tokenInfo?.pairAddress, symbol, chain]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tokenInfo?.pairAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Transform candles for market cap view: multiply price values by circulating supply
   // Supply approximated as currentMcap / currentPrice (constant supply assumption)
