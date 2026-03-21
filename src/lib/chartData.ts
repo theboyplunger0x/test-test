@@ -78,7 +78,14 @@ export async function searchByCA(address: string): Promise<TokenInfo | null> {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address.trim()}`);
     if (!res.ok) return null;
     const data = await res.json();
-    return pairsToTokenInfo(data.pairs ?? []);
+    const allPairs: any[] = data.pairs ?? [];
+    // Prefer pairs where baseToken.address exactly matches — this pins the result
+    // to the correct chain (e.g. Solana address won't resolve to a Base bridged version)
+    const addr = address.trim().toLowerCase();
+    const matchingPairs = allPairs.filter((p) =>
+      p.baseToken?.address?.toLowerCase() === addr
+    );
+    return pairsToTokenInfo(matchingPairs.length > 0 ? matchingPairs : allPairs);
   } catch {
     return null;
   }
