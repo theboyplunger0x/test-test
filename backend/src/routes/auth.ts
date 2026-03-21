@@ -264,4 +264,86 @@ export async function authRoutes(app: FastifyInstance) {
 
     return { ok: true };
   });
+
+  // POST /auth/wallet — find-or-create user by wallet address
+  app.post("/auth/wallet", { config: { rateLimit: { max: 30, timeWindow: "5 minutes" } } }, async (req, reply) => {
+    const { walletAddress, email } = req.body as { walletAddress: string; email?: string };
+
+    const isEvm    = /^0x[0-9a-fA-F]{40}$/.test(walletAddress);
+    const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(walletAddress);
+    if (!walletAddress || (!isEvm && !isSolana)) {
+      return reply.status(400).send({ error: "Invalid wallet address" });
+    }
+
+    const addr = isEvm ? walletAddress.toLowerCase() : walletAddress;
+
+    let { rows: [user] } = await db.query(
+      `SELECT id, username, balance_usd, paper_balance_usd, tier FROM users WHERE wallet = $1`,
+      [addr]
+    );
+
+    if (!user && email) {
+      const { rows: [byEmail] } = await db.query(
+        `SELECT id, username, balance_usd, paper_balance_usd, tier FROM users WHERE email = $1`,
+        [email.toLowerCase()]
+      );
+      if (byEmail) {
+        await db.query(`UPDATE users SET wallet = $1 WHERE id = $2`, [addr, byEmail.id]);
+        user = byEmail;
+      }
+    }
+
+    if (!user) {
+      const shortAddr  = isEvm ? addr.slice(2, 8) : addr.slice(0, 6);
+      const baseUsername = `w_${shortAddr}`;
+      let username     = baseUsername;
+      let suffix       = 1;
+      while (true) {
+        const { rows } = await db.query(`SELECT id FROM users WHERE username = $1`, [username]);
+        if (rows.length === 0) break;
+        username = `${baseUsername}_${suffix++}`;
+      }
+      const refCode = crypto.randomBytes(4).toString("hex").toUpperCase();
+      const { rows: [newUser] } = await db.query(
+        `INSERT INTO users (username, wallet, email, referral_code)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, username, balance_usd, paper_balance_usd, tier`,
+        [username, addr, email ? email.toLowerCase() : null, refCode]
+      );
+      user = newUser;
+    }
+
+    const token = await (app as any).jwt.sign({ userId: user.id, username: user.username });
+    return { token, user: { id: user.id, username: user.username, balance_usd: user.balance_usd, paper_balance_usd: user.paper_balance_usd, tier: user.tier ?? "" } };
+  });
+
+  // POST /auth/link-telegram  { token }
+  app.post("/auth/link-telegram", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const { token } = req.body as any;
+    if (!token) return reply.status(400).send({ error: "token required" });
+
+    const { rows: [entry] } = await db.query(
+      `DELETE FROM tg_link_tokens WHERE token = $1 AND expires_at > NOW() RETURNING tg_id`,
+      [token]
+    );
+    if (!entry) return reply.status(400).send({ error: "Token expired or invalid. Open /start in the bot again." });
+
+    const userId = (req as any).user.userId;
+    await db.query(`UPDATE users SET telegram_id = NULL WHERE telegram_id = $1`, [entry.tg_id]);
+    await db.query(`UPDATE users SET telegram_id = $1 WHERE id = $2`, [entry.tg_id, userId]);
+
+    const botToken = process.env.BOT_TOKEN;
+    if (botToken) {
+      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: entry.tg_id,
+          text: "✅ Telegram connected! You can now trade directly from the bot.",
+        }),
+      }).catch(() => {});
+    }
+
+    return { ok: true };
+  });
 }

@@ -104,6 +104,7 @@ const alterations = `
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_index        INT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_evm  TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_sol  TEXT UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id           BIGINT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code        TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by          UUID REFERENCES users(id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tier                 TEXT NOT NULL DEFAULT '';
