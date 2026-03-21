@@ -25,9 +25,11 @@ function fmtPrice(n: number): string {
 const VISIBLE_CANDLES = 40;
 
 export default function Chart({ candles, livePrice, entryPrice, direction, dk = true }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef     = useRef<IChartApi | null>(null);
-  const seriesRef    = useRef<ISeriesApi<SeriesType> | null>(null);
+  const containerRef    = useRef<HTMLDivElement>(null);
+  const chartRef        = useRef<IChartApi | null>(null);
+  const seriesRef       = useRef<ISeriesApi<SeriesType> | null>(null);
+  const lastPriceRef    = useRef<number | null>(null);
+  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Create chart once
   useEffect(() => {
@@ -128,12 +130,34 @@ export default function Chart({ candles, livePrice, entryPrice, direction, dk = 
     });
   }, [candles]);
 
-  // Live price — update only the last data point (no full re-render, no flicker)
+  // Live price — smooth interpolation from previous price to new price
+  // 45 steps × 100ms = 4.5s of continuous movement between each 5s poll
   useEffect(() => {
     if (!seriesRef.current || !livePrice || candles.length === 0) return;
     const lastCandle = candles[candles.length - 1];
-    seriesRef.current.update({ time: lastCandle.time, value: livePrice } as any);
-  }, [livePrice, candles]);
+    const from = lastPriceRef.current ?? livePrice;
+    const to   = livePrice;
+
+    // Cancel previous animation
+    if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+
+    const STEPS = 45;
+    const delta = (to - from) / STEPS;
+    let step = 0;
+
+    animIntervalRef.current = setInterval(() => {
+      step++;
+      if (step >= STEPS) {
+        clearInterval(animIntervalRef.current!);
+        seriesRef.current?.update({ time: lastCandle.time, value: to } as any);
+        lastPriceRef.current = to;
+        return;
+      }
+      seriesRef.current?.update({ time: lastCandle.time, value: from + delta * step } as any);
+    }, 100);
+
+    return () => { if (animIntervalRef.current) clearInterval(animIntervalRef.current); };
+  }, [livePrice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Entry price dashed horizontal line ("Price to beat")
   useEffect(() => {
