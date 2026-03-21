@@ -324,6 +324,23 @@ export async function startBot() {
   bot.start(async (ctx) => {
     const payload = (ctx as any).startPayload as string | undefined;
 
+    // Frontend-initiated link: start=link_{token}
+    if (payload?.startsWith("link_")) {
+      const linkToken = payload.slice("link_".length);
+      const { rows: [entry] } = await db.query(
+        `DELETE FROM tg_link_tokens WHERE token = $1 AND expires_at > NOW() AND user_id IS NOT NULL RETURNING user_id`,
+        [linkToken]
+      ).catch(() => ({ rows: [] }));
+      if (!entry) {
+        return ctx.reply("❌ Link expired or invalid. Try again from the app.");
+      }
+      await db.query(`UPDATE users SET telegram_id = NULL WHERE telegram_id = $1 AND id != $2`, [ctx.from.id, entry.user_id]);
+      await db.query(`UPDATE users SET telegram_id = $1 WHERE id = $2`, [ctx.from.id, entry.user_id]);
+      sessions.delete(ctx.from.id);
+      const { rows: [user] } = await db.query(`SELECT username FROM users WHERE id = $1`, [entry.user_id]);
+      return ctx.reply(`✅ Telegram connected to *${user?.username ?? "your account"}*!\n\nYou can now trade directly from here.`, { parse_mode: "Markdown" });
+    }
+
     // Accept Challenge deep link: start=challenge_{marketId}
     if (payload?.startsWith("challenge_")) {
       const marketId = payload.slice("challenge_".length);

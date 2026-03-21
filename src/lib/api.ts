@@ -196,4 +196,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
+
+  tgInitLink: () =>
+    req<{ token: string }>("/auth/tg-init-link", { method: "POST", body: "{}" }),
 };

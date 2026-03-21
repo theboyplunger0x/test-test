@@ -441,10 +441,15 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         </button>
 
         {/* Connect Telegram */}
-        <a
-          href="https://t.me/testingagent13223bot"
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={async () => {
+            try {
+              const { token } = await api.tgInitLink();
+              window.open(`https://t.me/testingagent13223bot?start=link_${token}`, "_blank");
+            } catch (e: any) {
+              alert(e.message ?? "Error connecting Telegram");
+            }
+          }}
           className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
             dk
               ? "border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20"
@@ -455,7 +460,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
             <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
           </svg>
           Connect Telegram
-        </a>
+        </button>
 
         {/* Open positions */}
         <div>

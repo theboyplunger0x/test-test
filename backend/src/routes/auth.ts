@@ -346,4 +346,15 @@ export async function authRoutes(app: FastifyInstance) {
 
     return { ok: true };
   });
+
+  // POST /auth/tg-init-link — frontend generates a token so user can link via bot deep link
+  app.post("/auth/tg-init-link", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const userId = (req as any).user.userId;
+    const token = crypto.randomBytes(16).toString("hex");
+    await db.query(
+      `INSERT INTO tg_link_tokens (token, user_id, expires_at) VALUES ($1, $2, NOW() + INTERVAL '10 minutes')`,
+      [token, userId]
+    );
+    return { token };
+  });
 }

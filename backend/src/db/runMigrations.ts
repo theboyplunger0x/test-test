@@ -133,9 +133,11 @@ CREATE INDEX IF NOT EXISTS idx_cashback_rewards_user ON cashback_rewards(user_id
 
 CREATE TABLE IF NOT EXISTS tg_link_tokens (
   token       TEXT PRIMARY KEY,
-  tg_id       BIGINT NOT NULL,
+  tg_id       BIGINT,
+  user_id     UUID,
   expires_at  TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE tg_link_tokens ADD COLUMN IF NOT EXISTS user_id UUID;
 `;
 
 export async function runMigrations() {
