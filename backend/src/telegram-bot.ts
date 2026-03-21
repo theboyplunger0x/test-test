@@ -199,6 +199,7 @@ PLATFORM:
 
 IMPORTANT — TOKEN LOOKUPS:
 Whenever the user mentions a crypto token by name or ticker (e.g. "pepe", "doge", "what about wif", "wen pump bonk"), ALWAYS call the search_token tool first to get live price data before responding. Use the ticker or name as the query. Don't make up prices.
+When sharing token info, just mention price and market cap — nothing else unless asked. Don't explain the numbers, just state them naturally in the sentence.
 
 Keep replies to 1-3 sentences. Be real, not performative.`;
 
@@ -276,7 +277,7 @@ async function getAIReply(
           const q = (block.input as any).query as string;
           const token = await searchToken(q);
           result = token
-            ? `${token.symbol} on ${token.chain} | price $${formatPrice(token.price)} | mcap ${token.marketCap > 0 ? formatNum(token.marketCap) : "?"} | liq ${formatNum(token.liquidity)}`
+            ? `${token.symbol} on ${token.chain} | price $${formatPrice(token.price)} | mcap ${token.marketCap > 0 ? formatNum(token.marketCap) : "unknown"}`
             : `Token "${q}" not found on DexScreener.`;
         } else if (block.name === "get_user_balance" && session) {
           const { rows: [u] } = await db.query(
