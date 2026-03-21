@@ -12,6 +12,7 @@ import AuthModal from "./AuthModal";
 import DepositModal from "./DepositModal";
 import OpenMarketModal from "./OpenMarketModal";
 import CASearchModal from "./CASearchModal";
+import ReferralModal from "./ReferralModal";
 import NewPairsView from "./NewPairsView";
 import LeaderboardView from "./LeaderboardView";
 import { api, User, AuthResponse, Market } from "@/lib/api";
@@ -87,6 +88,7 @@ export default function FeedPage() {
   const [depositOpen, setDepositOpen]   = useState(false);
   const [openMarketCoin, setOpenMarketCoin] = useState<Coin | null>(null);
   const [caSearchOpen, setCASearchOpen]     = useState(false);
+  const [referralOpen, setReferralOpen]     = useState(false);
   const [selectedTokenInfo, setSelectedTokenInfo] = useState<TokenInfo | null>(null);
   const [marketCapMax, setMarketCapMax]     = useState<number | null>(null);
   const [minPool, setMinPool]               = useState<number | null>(null);
@@ -288,6 +290,31 @@ export default function FeedPage() {
     setSelectedTokenInfo(token);
     setSelectedCoin(token.symbol);
   }
+
+  async function handleCAQuickTrade(token: TokenInfo, side: "long" | "short", timeframe: string, amount: number): Promise<string | null> {
+    if (!user) { setAuthOpen(true); return "Please log in first."; }
+    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    setSelectedTokenInfo(token);
+    setSelectedCoin(token.symbol);
+    let market = markets.find(m =>
+      m.symbol.toUpperCase() === token.symbol.toUpperCase() &&
+      m.timeframe === timeframe && m.status === "open" &&
+      (m.is_paper === true) === paperMode
+    );
+    if (!market) {
+      try {
+        const tagline = `Will ${token.symbol} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
+        const created = await api.createMarket(token.symbol, token.chainLabel, timeframe, tagline, paperMode, token.address);
+        if (!created) return "Failed to create market";
+        market = created;
+        setMarkets(prev => [created, ...prev]);
+      } catch (err) {
+        return err instanceof Error ? err.message : "Failed to create market";
+      }
+    }
+    return handleAdd(market.id, side, amount);
+  }
+
   const totalAtStake = allChallenges.reduce((s, c) => s + c.shortPool + c.longPool, 0);
 
   // Derive chain for selected coin (from CA search, open market, or mock data)
@@ -451,6 +478,13 @@ export default function FeedPage() {
                 className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
                 <span>⬡</span>
                 <span className="hidden md:inline">{user.username}</span>
+              </motion.button>
+
+              {/* Referral button */}
+              <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
+                title="Referrals & Cashback"
+                className={`flex items-center gap-1 border text-[12px] font-black px-2.5 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
+                <span>🔗</span>
               </motion.button>
             </>
           ) : (
@@ -819,8 +853,13 @@ export default function FeedPage() {
             dk={dk}
             onClose={() => setCASearchOpen(false)}
             onTrade={handleCATradeResult}
+            onQuickTrade={handleCAQuickTrade}
+            presets={[5, 25, 100, 500]}
           />
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {referralOpen && <ReferralModal dk={dk} isLoggedIn={!!user} onClose={() => setReferralOpen(false)} onSignIn={() => setAuthOpen(true)} />}
       </AnimatePresence>
 
       {/* Settings drawer */}

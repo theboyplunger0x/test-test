@@ -139,9 +139,9 @@ export default function CoinDetail({
     }));
   })();
 
-  // Active market for this symbol (most recent, open)
+  // Active market for this symbol + selected trade timeframe (most recent, open)
   const activeMarket = markets
-    .filter((m) => m.symbol === symbol && m.status === "open")
+    .filter((m) => m.symbol === symbol && m.status === "open" && m.timeframe === timeframe)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
 
   const msLeft    = activeMarket ? Math.max(0, new Date(activeMarket.closes_at).getTime() - Date.now()) : 0;
