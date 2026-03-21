@@ -857,7 +857,7 @@ export async function startBot() {
   } catch (e) {
     console.warn("[bot] deleteWebhook failed (ignored):", e);
   }
-  bot.launch();
+  bot.launch().catch((e: any) => console.error("[bot] launch error:", e?.message ?? e));
   console.log("🤖 Telegram bot iniciado");
 
   process.once("SIGINT", () => bot.stop("SIGINT"));
