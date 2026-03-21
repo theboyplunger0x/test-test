@@ -10,7 +10,7 @@ import { api, Market } from "@/lib/api";
 const Chart = dynamic(() => import("./Chart"), { ssr: false });
 
 const FEE = 0.05;
-const AMOUNTS = [5, 25, 100, 500];
+const DEFAULT_AMOUNTS = [5, 25, 100, 500];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 
 function mult(mine: number, other: number) {
@@ -58,12 +58,14 @@ interface Props {
   loggedIn: boolean;
   onAuthRequired: () => void;
   tokenInfo?: TokenInfo;    // pre-fetched (from CA search); skips symbol lookup
+  presets?: number[];
 }
 
 export default function CoinDetail({
   symbol, chain, timeframe: initialTf, theme,
   markets, onBet, onAutoTrade, onOpenMarket, loggedIn, onAuthRequired,
   tokenInfo: tokenInfoProp,
+  presets = DEFAULT_AMOUNTS,
 }: Props) {
   const dk = theme === "dark";
   const [timeframe, setTimeframe] = useState(initialTf);
@@ -371,10 +373,10 @@ export default function CoinDetail({
         <div className="px-4 pb-4">
           <p className={`text-[9px] font-black uppercase tracking-widest mb-2.5 ${T.sectionLbl}`}>Amount</p>
           <div className="grid grid-cols-4 gap-2 mb-2.5">
-            {AMOUNTS.map((a) => {
-              const isActive = amount === a && !customAmt;
+            {presets.map((a) => {
+              const isActive = amount === a && customAmt === String(a);
               return (
-                <button key={a} onClick={() => { setAmount(a); setCustomAmt(""); }}
+                <button key={a} onClick={() => { setAmount(a); setCustomAmt(String(a)); }}
                   className={`py-2.5 rounded-xl text-[13px] font-black transition-all ${
                     isActive
                       ? side === "long"  ? "bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.3)]"

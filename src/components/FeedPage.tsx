@@ -106,6 +106,7 @@ export default function FeedPage() {
   const [openMarketCoin, setOpenMarketCoin] = useState<Coin | null>(null);
   const [caSearchOpen, setCASearchOpen]     = useState(false);
   const [referralOpen, setReferralOpen]     = useState(false);
+  const [tradePresets, setTradePresets]     = useState([5, 25, 100, 500]);
   const [selectedTokenInfo, setSelectedTokenInfo] = useState<TokenInfo | null>(null);
   const [marketCapMax, setMarketCapMax]     = useState<number | null>(null);
   const [minPool, setMinPool]               = useState<number | null>(null);
@@ -585,6 +586,7 @@ export default function FeedPage() {
               loggedIn={!!user}
               onAuthRequired={() => setAuthOpen(true)}
               tokenInfo={selectedTokenInfo ?? undefined}
+              presets={tradePresets}
             />
           </motion.div>
         )}
@@ -871,7 +873,7 @@ export default function FeedPage() {
             onClose={() => setCASearchOpen(false)}
             onTrade={handleCATradeResult}
             onQuickTrade={handleCAQuickTrade}
-            presets={[5, 25, 100, 500]}
+            presets={tradePresets}
           />
         )}
       </AnimatePresence>
@@ -964,6 +966,30 @@ export default function FeedPage() {
                       Paper
                     </button>
                   </div>
+                </div>
+
+                {/* Trade Presets */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Quick Bet Amounts</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {tradePresets.map((v, i) => (
+                      <div key={i} className="relative">
+                        <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                        <input
+                          type="number"
+                          value={v}
+                          onChange={(e) => {
+                            const n = parseFloat(e.target.value);
+                            if (!isNaN(n) && n > 0) setTradePresets(prev => prev.map((p, j) => j === i ? n : p));
+                          }}
+                          className={`w-full pl-5 pr-2 py-2.5 rounded-2xl text-[12px] font-black text-center border outline-none transition-all ${
+                            dk ? "bg-white/[0.03] border-white/8 text-white focus:border-white/20" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-gray-400"
+                          }`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className={`text-[10px] font-bold mt-2 ${dk ? "text-white/20" : "text-gray-400"}`}>These appear as preset buttons when placing trades.</p>
                 </div>
 
                 {/* Account — last, only if logged in */}
