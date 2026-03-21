@@ -23,6 +23,9 @@ const sessions = new Map<number, { token: string; userId: string; username: stri
 // Users waiting to pick a username on first registration
 const pendingRegistration = new Set<number>();
 
+// Pending custom bet on existing market: tgId → { marketId, side }
+const pendingMarketBets = new Map<number, { marketId: string; side: string }>();
+
 // Pending trade state: tgId → token info waiting for mode/TF/side/amount selection
 interface PendingTrade {
   symbol: string;
@@ -248,19 +251,20 @@ function marketCard(m: any): string {
   );
 }
 
-function marketKeyboard(marketId: string) {
+function marketSideKeyboard(marketId: string) {
+  return Markup.inlineKeyboard([[
+    Markup.button.callback("📈 LONG", `marketside:${marketId}:long`),
+    Markup.button.callback("📉 SHORT", `marketside:${marketId}:short`),
+  ]]);
+}
+
+function marketAmtKeyboard(marketId: string, side: string, tgId: number) {
+  const presets = getPresets(tgId);
   return Markup.inlineKeyboard([
+    presets.map(a => Markup.button.callback(`$${a}`, `marketamt:${marketId}:${side}:${a}`)),
     [
-      Markup.button.callback("📈 LONG  $10", `bet:${marketId}:long:10`),
-      Markup.button.callback("📉 SHORT $10", `bet:${marketId}:short:10`),
-    ],
-    [
-      Markup.button.callback("📈 LONG  $25", `bet:${marketId}:long:25`),
-      Markup.button.callback("📉 SHORT $25", `bet:${marketId}:short:25`),
-    ],
-    [
-      Markup.button.callback("📈 LONG  $50", `bet:${marketId}:long:50`),
-      Markup.button.callback("📉 SHORT $50", `bet:${marketId}:short:50`),
+      Markup.button.callback("✏️ Custom", `marketcustom:${marketId}:${side}`),
+      Markup.button.callback("↩️ Volver", `marketback:${marketId}`),
     ],
   ]);
 }
@@ -293,7 +297,10 @@ function amtKeyboard(tgId: number) {
   const presets = getPresets(tgId);
   return Markup.inlineKeyboard([
     presets.map(a => Markup.button.callback(`$${a}`, `amt:${tgId}:${a}`)),
-    [Markup.button.callback("↩️ Cambiar lado", `changeside:${tgId}`)],
+    [
+      Markup.button.callback("✏️ Custom", `amtcustom:${tgId}`),
+      Markup.button.callback("↩️ Cambiar lado", `changeside:${tgId}`),
+    ],
   ]);
 }
 
@@ -346,7 +353,7 @@ export async function startBot() {
       const marketId = payload.slice("challenge_".length);
       const { rows: [market] } = await db.query(`SELECT * FROM markets WHERE id = $1`, [marketId]).catch(() => ({ rows: [] }));
       if (market) {
-        return ctx.reply(marketCard(market), { parse_mode: "Markdown", ...marketKeyboard(marketId) });
+        return ctx.reply(marketCard(market), { parse_mode: "Markdown", ...marketSideKeyboard(marketId) });
       }
     }
 
@@ -468,6 +475,43 @@ export async function startBot() {
         `🔗 *Link your Telegram first\\!*\n\nCreate your account at [fud\\.markets](${FRONTEND_URL}) or use /start to register here\\.`,
         { parse_mode: "MarkdownV2" }
       );
+    }
+
+    // Custom amount for existing market bet
+    const pendingMarket = pendingMarketBets.get(ctx.from.id);
+    if (pendingMarket) {
+      const amount = parseFloat(text.replace(",", "."));
+      if (isNaN(amount) || amount <= 0) {
+        return ctx.reply("❌ Monto inválido. Escribí un número, ej: 37.5");
+      }
+      pendingMarketBets.delete(ctx.from.id);
+      const emoji = pendingMarket.side === "long" ? "📈" : "📉";
+      let betData: any;
+      try {
+        betData = await placeBet(session, pendingMarket.marketId, pendingMarket.side, amount);
+      } catch (e: any) {
+        return ctx.reply(`❌ ${e.message}`);
+      }
+      const paperBal = parseFloat(String(betData.new_paper_balance)).toFixed(2);
+      await ctx.reply(`${emoji} *${pendingMarket.side.toUpperCase()} $${amount}* colocado! Paper: $${paperBal}`, { parse_mode: "Markdown" });
+      return;
+    }
+
+    // Custom amount for new market flow (amount === -1 means waiting for custom input)
+    const pendingForCustomAmt = pendingTrades.get(ctx.from.id);
+    if (pendingForCustomAmt?.amount === -1 && pendingForCustomAmt.side && !pendingForCustomAmt.awaitingMsg) {
+      const amount = parseFloat(text.replace(",", "."));
+      if (isNaN(amount) || amount <= 0) {
+        return ctx.reply("❌ Monto inválido. Escribí un número, ej: 37.5");
+      }
+      pendingForCustomAmt.amount = amount;
+      pendingForCustomAmt.awaitingMsg = true;
+      pendingTrades.set(ctx.from.id, pendingForCustomAmt);
+      await ctx.reply(
+        tokenMessage(pendingForCustomAmt) + `\n\n💬 *Say something!*`,
+        { parse_mode: "Markdown", ...Markup.inlineKeyboard([[Markup.button.callback("⏭ Skip", `skipmsg:${ctx.from.id}`)]]) }
+      );
+      return;
     }
 
     // If user is writing a message/challenge for a pending trade, capture it
@@ -639,6 +683,19 @@ export async function startBot() {
     await executeBet(ctx, tgId, "");
   });
 
+  // Custom amount for new market flow
+  bot.action(/^amtcustom:(\d+)$/, async (ctx) => {
+    const tgId = parseInt(ctx.match[1]);
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    const trade = pendingTrades.get(tgId);
+    if (!trade || !trade.side) return ctx.answerCbQuery("Sesión expirada.");
+    trade.awaitingMsg = false;
+    trade.amount = -1; // flag: awaiting custom amount
+    pendingTrades.set(tgId, trade);
+    await ctx.answerCbQuery();
+    await ctx.reply("✏️ Escribí el monto a apostar (ej: 37.5):");
+  });
+
   // ─── Helper: open market + place bet ─────────────────────────────────────────
   async function executeBet(ctx: any, tgId: number, tagline: string) {
     const trade = pendingTrades.get(tgId);
@@ -731,49 +788,61 @@ export async function startBot() {
     for (const m of open.slice(0, 5)) {
       await ctx.reply(marketCard(m), {
         parse_mode: "Markdown",
-        ...marketKeyboard(m.id),
+        ...marketSideKeyboard(m.id),
       });
     }
   });
 
-  // Bet on existing market (from market card or /markets list)
-  bot.action(/^bet:(.+):(long|short):(\d+)$/, async (ctx) => {
+  // Step 1: Side selected on existing market → show amount keyboard
+  bot.action(/^marketside:(.+):(long|short)$/, async (ctx) => {
+    const [, marketId, side] = ctx.match;
+    const session = await getSession(ctx.from.id).catch(() => null);
+    if (!session) return ctx.answerCbQuery(`🔗 Link your Telegram first! DM the bot and use /start.`, { show_alert: true });
+    const { rows: [market] } = await db.query(`SELECT * FROM markets WHERE id = $1`, [marketId]);
+    if (!market) return ctx.answerCbQuery("Mercado no encontrado.", { show_alert: true });
+    const emoji = side === "long" ? "📈" : "📉";
+    await ctx.editMessageText(
+      marketCard(market) + `\n\n${emoji} *${side.toUpperCase()}* — ¿Cuánto apostás?`,
+      { parse_mode: "Markdown", ...marketAmtKeyboard(marketId, side, ctx.from.id) }
+    );
+    await ctx.answerCbQuery();
+  });
+
+  // Step 2a: Amount selected → place bet
+  bot.action(/^marketamt:(.+):(long|short):(\d+(?:\.\d+)?)$/, async (ctx) => {
     const [, marketId, side, amountStr] = ctx.match;
     const amount = parseFloat(amountStr);
     const emoji  = side === "long" ? "📈" : "📉";
-
-    let session: any;
-    try {
-      session = await getSession(ctx.from.id);
-    } catch (e: any) {
-      return ctx.answerCbQuery(`❌ Error: ${e.message}`, { show_alert: true });
-    }
-    if (!session) {
-      const isGroup = ctx.chat?.type !== "private";
-      const msg = isGroup
-        ? `Your username isn't linked to any account. Register at ${FRONTEND_URL} or DM the bot and use /start.`
-        : `🔗 Link your Telegram first! Create your account at ${FRONTEND_URL} or use /start.`;
-      return ctx.answerCbQuery(msg, { show_alert: true });
-    }
-
+    const session = await getSession(ctx.from.id).catch(() => null);
+    if (!session) return ctx.answerCbQuery(`🔗 Link your Telegram first!`, { show_alert: true });
     let betData: any;
     try {
       betData = await placeBet(session, marketId, side, amount);
     } catch (e: any) {
       return ctx.answerCbQuery(`❌ ${e.message}`, { show_alert: true });
     }
-
     const paperBal = parseFloat(String(betData.new_paper_balance)).toFixed(2);
     await ctx.answerCbQuery(`${emoji} ${side.toUpperCase()} $${amount} colocado! Paper: $${paperBal}`);
-
-    // Refresh the card with updated pools
     const { rows: [market] } = await db.query(`SELECT * FROM markets WHERE id = $1`, [marketId]);
-    if (market) {
-      await ctx.editMessageText(
-        marketCard(market),
-        { parse_mode: "Markdown", ...marketKeyboard(marketId) }
-      ).catch(() => {});
-    }
+    if (market) await ctx.editMessageText(marketCard(market), { parse_mode: "Markdown", ...marketSideKeyboard(marketId) }).catch(() => {});
+  });
+
+  // Step 2b: Custom amount → ask user to type
+  bot.action(/^marketcustom:(.+):(long|short)$/, async (ctx) => {
+    const [, marketId, side] = ctx.match;
+    pendingMarketBets.set(ctx.from.id, { marketId, side });
+    const emoji = side === "long" ? "📈" : "📉";
+    await ctx.answerCbQuery();
+    await ctx.reply(`${emoji} *${side.toUpperCase()}* — Escribí el monto a apostar (ej: 37.5):`, { parse_mode: "Markdown" });
+  });
+
+  // Back to side selection
+  bot.action(/^marketback:(.+)$/, async (ctx) => {
+    const [, marketId] = ctx.match;
+    const { rows: [market] } = await db.query(`SELECT * FROM markets WHERE id = $1`, [marketId]);
+    if (!market) return ctx.answerCbQuery("Mercado no encontrado.", { show_alert: true });
+    await ctx.editMessageText(marketCard(market), { parse_mode: "Markdown", ...marketSideKeyboard(marketId) });
+    await ctx.answerCbQuery();
   });
 
   // /link <username> <password> — connect existing web account to this Telegram identity
