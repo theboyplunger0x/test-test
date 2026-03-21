@@ -68,4 +68,4 @@ await app.listen({ port, host: "0.0.0.0" });
 console.log(`FUD.markets backend running on :${port}`);
 
 // Start Telegram bot (non-blocking)
-startBot();
+startBot().catch(e => console.error("[bot] startup error:", e));

@@ -852,7 +852,11 @@ export async function startBot() {
   ]).catch((e) => console.error("[bot] setMyCommands error:", e.message));
 
   // Clear any webhook that might be blocking long-polling
-  await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+  try {
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+  } catch (e) {
+    console.warn("[bot] deleteWebhook failed (ignored):", e);
+  }
   bot.launch();
   console.log("🤖 Telegram bot iniciado");
 
