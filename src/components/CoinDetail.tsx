@@ -202,7 +202,7 @@ export default function CoinDetail({
     chartBg:     dk ? "" : "bg-gray-50",
     panelBg:     dk ? "bg-[#0e0e0e]" : "bg-white",
     textPrimary: dk ? "text-white"    : "text-gray-900",
-    textMuted:   dk ? "text-white/30" : "text-gray-400",
+    textMuted:   dk ? "text-white/45" : "text-gray-400",
     priceLbl:    dk ? "text-white/35" : "text-gray-400",
     priceVal:    dk ? "text-white/80 font-mono" : "text-gray-700 font-mono",
     changePill:  (up: boolean) => up
@@ -223,12 +223,12 @@ export default function CoinDetail({
                     : "bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-300 focus:border-blue-300",
     toggleBase:  dk ? "bg-white/5" : "bg-gray-100",
     toggleActive:dk ? "bg-white text-black" : "bg-gray-900 text-white",
-    toggleInact: dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700",
-    durIdle:     dk ? "border-white/8 text-white/30 hover:border-white/20 hover:text-white/60"
-                    : "border-blue-100 text-blue-400 hover:text-blue-600 hover:border-blue-300",
-    durActive:   dk ? "border-white/30 bg-white/12 text-white" : "border-blue-400 bg-blue-50 text-blue-700",
-    sectionLbl:  dk ? "text-white/25" : "text-gray-400",
-    poolLabel:   dk ? "text-white/25" : "text-gray-400",
+    toggleInact: dk ? "text-white/50 hover:text-white/80" : "text-gray-400 hover:text-gray-700",
+    durIdle:     dk ? "border-white/20 text-white/50 hover:border-white/40 hover:text-white/80"
+                    : "border-blue-200 text-blue-500 hover:text-blue-600 hover:border-blue-300",
+    durActive:   dk ? "border-white/50 bg-white/15 text-white" : "border-blue-400 bg-blue-50 text-blue-700",
+    sectionLbl:  dk ? "text-white/40" : "text-gray-400",
+    poolLabel:   dk ? "text-white/40" : "text-gray-400",
   };
 
   return (
@@ -426,7 +426,7 @@ export default function CoinDetail({
                 ? side === "long"
                   ? "bg-emerald-500 text-white hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
                   : "bg-red-500 text-white hover:bg-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
-                : dk ? "bg-white/5 text-white/15 cursor-not-allowed" : "bg-gray-100 text-gray-300 cursor-not-allowed"
+                : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}>
             {betLoading ? "Placing…" : activeMarket ? "Trade" : "Open Market →"}
           </motion.button>
