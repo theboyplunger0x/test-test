@@ -146,7 +146,7 @@ export default function CoinDetail({
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
 
   const msLeft    = activeMarket ? Math.max(0, new Date(activeMarket.closes_at).getTime() - Date.now()) : 0;
-  const tfMs      = { "5m": 5*60000, "15m": 15*60000, "1h": 3600000, "4h": 14400000, "24h": 86400000 }[activeMarket?.timeframe ?? "1h"] ?? 3600000;
+  const tfMs      = { "1m": 60000, "5m": 5*60000, "15m": 15*60000, "1h": 3600000, "4h": 14400000, "12h": 43200000, "24h": 86400000 }[activeMarket?.timeframe ?? "1h"] ?? 3600000;
   const progress  = activeMarket ? Math.max(0, Math.min(100, ((tfMs - msLeft) / tfMs) * 100)) : 0;
 
   const longPool  = activeMarket ? parseFloat(activeMarket.long_pool)  : 0;
