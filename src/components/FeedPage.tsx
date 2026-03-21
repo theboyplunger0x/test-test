@@ -153,6 +153,35 @@ export default function FeedPage() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // Handle ?tg_link= param: link Telegram account after login
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tgToken = params.get("tg_link");
+    if (!tgToken) return;
+    // Clean URL immediately
+    window.history.replaceState({}, "", window.location.pathname);
+    const jwt = localStorage.getItem("token");
+    if (jwt) {
+      api.linkTelegram(tgToken)
+        .then(() => alert("✅ Telegram vinculado a tu cuenta!"))
+        .catch((e: any) => alert("❌ " + (e.message ?? "Error al vincular Telegram")));
+    } else {
+      localStorage.setItem("pending_tg_link", tgToken);
+      setAuthOpen(true);
+    }
+  }, []);
+
+  // After login, complete pending Telegram link
+  useEffect(() => {
+    if (!user) return;
+    const tgToken = localStorage.getItem("pending_tg_link");
+    if (!tgToken) return;
+    localStorage.removeItem("pending_tg_link");
+    api.linkTelegram(tgToken)
+      .then(() => alert("✅ Telegram vinculado a tu cuenta!"))
+      .catch((e: any) => alert("❌ " + (e.message ?? "Error al vincular Telegram")));
+  }, [user]);
+
   // Fetch markets + poll every 30s; also refresh user balance to capture payouts
   useEffect(() => {
     async function fetchMarketsAndBalance() {

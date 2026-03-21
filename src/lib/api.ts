@@ -190,4 +190,10 @@ export const api = {
 
   leaderboard: (period: "week" | "month" | "all" = "week") =>
     req<LeaderboardEntry[]>(`/leaderboard?period=${period}`),
+
+  linkTelegram: (token: string) =>
+    req<{ ok: true }>("/auth/link-telegram", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
 };
