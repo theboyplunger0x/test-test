@@ -14,6 +14,7 @@ import { depositRoutes }     from "./routes/deposits.js";
 import { activityRoutes }    from "./routes/activity.js";
 import { scheduleAllPendingMarkets } from "./workers/resolver.js";
 import { runMigrations }             from "./db/runMigrations.js";
+import { startBot }                  from "./telegram-bot.js";
 
 const app = Fastify({ logger: true });
 
@@ -65,3 +66,6 @@ await scheduleAllPendingMarkets();
 const port = parseInt(process.env.PORT ?? "3001");
 await app.listen({ port, host: "0.0.0.0" });
 console.log(`FUD.markets backend running on :${port}`);
+
+// Start Telegram bot (non-blocking)
+startBot();
