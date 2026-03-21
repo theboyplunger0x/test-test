@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { api, Market } from "@/lib/api";
 import { Coin, formatPrice } from "@/lib/mockData";
 
-const TIMEFRAMES = ["5m", "15m", "1h", "4h", "12h", "24h"];
+const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 
 export default function OpenMarketModal({
