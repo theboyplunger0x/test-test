@@ -74,6 +74,22 @@ function marketToChallenge(m: Market): Challenge {
   };
 }
 
+function tierBadge(tier?: string) {
+  const sealPath  = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.266.14-1.897-.131-.63-.437-1.208-.882-1.671-.445-.464-1.011-.79-1.638-.944-.627-.155-1.284-.127-1.895.082-.274-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.61-.209-1.265-.237-1.892-.082-.627.155-1.193.48-1.639.944-.445.463-.749 1.04-.878 1.671-.13.63-.083 1.29.141 1.897-.587.274-1.086.706-1.44 1.246-.354.54-.551 1.17-.569 1.816.018.647.215 1.276.57 1.817.354.54.852.972 1.438 1.245-.224.607-.27 1.266-.14 1.897.13.63.436 1.208.882 1.671.445.464 1.011.79 1.638.944.627.155 1.284.127 1.895-.082.274.587.704 1.086 1.245 1.44.54.354 1.17.551 1.816.569.647-.016 1.275-.213 1.815-.567s.969-.854 1.24-1.44c.61.21 1.266.238 1.893.083.626-.155 1.192-.48 1.637-.944.445-.463.749-1.041.879-1.672.13-.63.083-1.29-.141-1.896.587-.274 1.086-.706 1.44-1.246.354-.54.551-1.17.569-1.816z";
+  const checkPath = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
+  if (tier === "top") return (
+    <svg aria-label="Top tier" width="17" height="17" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block align-middle flex-shrink-0">
+      <path d={sealPath} fill="#F4C43B"/><path d={checkPath} fill="white"/>
+    </svg>
+  );
+  if (tier === "normal") return (
+    <svg aria-label="Normal tier" width="17" height="17" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block align-middle flex-shrink-0">
+      <path d={sealPath} fill="#1D9BF0"/><path d={checkPath} fill="white"/>
+    </svg>
+  );
+  return null;
+}
+
 export default function FeedPage() {
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [filter, setFilter]             = useState<Filter>("all");
@@ -478,7 +494,7 @@ export default function FeedPage() {
               <motion.button whileTap={{ scale: 0.94 }} onClick={() => setOrdersOpen(true)}
                 className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
                 <span>⬡</span>
-                <span className="hidden md:inline">{user.username}</span>
+                <span className="hidden md:inline flex items-center gap-1">{user.username}{tierBadge(user.tier)}</span>
               </motion.button>
 
               {/* Referral button */}
@@ -958,7 +974,7 @@ export default function FeedPage() {
                       <div className={`flex items-center gap-3 px-4 py-3 border-b ${dk ? "border-white/6" : "border-gray-100"}`}>
                         <span className="text-[16px]">⬡</span>
                         <div>
-                          <p className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>{user.username}</p>
+                          <p className={`text-[13px] font-black flex items-center gap-1.5 ${dk ? "text-white" : "text-gray-900"}`}>{user.username}{tierBadge(user.tier)}</p>
                           <p className={`text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>
                             ${Number(user.balance_usd).toFixed(2)} real · ${Number(user.paper_balance_usd ?? 0).toFixed(2)} paper
                           </p>

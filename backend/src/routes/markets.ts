@@ -3,6 +3,7 @@ import { db } from "../db/client.js";
 import { getPrice, screenToken } from "../services/oracle.js";
 import { nextWindowClose, calcPayout, calcHouseFee, type Timeframe } from "../lib/market.js";
 import { scheduleResolution } from "../workers/resolver.js";
+import { checkAndUpgradeTier } from "../lib/tier.js";
 
 const VALID_TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
 
@@ -115,6 +116,10 @@ export async function marketRoutes(app: FastifyInstance) {
       );
 
       await client.query("COMMIT");
+
+      // Fire-and-forget tier check for real bets
+      if (!isPaper) checkAndUpgradeTier(user.userId).catch(() => {});
+
       return reply.status(201).send({
         position,
         new_balance:       userRow.balance_usd,
