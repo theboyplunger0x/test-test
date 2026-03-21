@@ -59,7 +59,8 @@ export default function DepositModal({
     setLoading(true);
     try {
       const result = await api.confirmDeposit(txHash.trim(), chain);
-      const prev = result.deposit?.amount_usd ?? null;
+      const dep = result.deposit as any;
+      const prev = dep?.amount_usd ?? null;
       setCredited(prev ? String(Number(prev).toFixed(2)) : null);
       setNewBalance(String(result.new_balance));
       setStep("done");
