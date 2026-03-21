@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS tg_link_tokens (
   expires_at  TIMESTAMPTZ NOT NULL
 );
 ALTER TABLE tg_link_tokens ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE tg_link_tokens ALTER COLUMN tg_id DROP NOT NULL;
 `;
 
 export async function runMigrations() {
