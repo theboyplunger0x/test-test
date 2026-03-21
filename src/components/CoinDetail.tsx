@@ -53,6 +53,7 @@ interface Props {
   theme: "dark" | "light";
   markets: Market[];        // live markets for this symbol
   onBet: (marketId: string, side: "long" | "short", amount: number) => Promise<string | null>;
+  onAutoTrade?: (side: "long" | "short", amount: number, timeframe: string) => Promise<string | null>;
   onOpenMarket: () => void;
   loggedIn: boolean;
   onAuthRequired: () => void;
@@ -61,11 +62,12 @@ interface Props {
 
 export default function CoinDetail({
   symbol, chain, timeframe: initialTf, theme,
-  markets, onBet, onOpenMarket, loggedIn, onAuthRequired,
+  markets, onBet, onAutoTrade, onOpenMarket, loggedIn, onAuthRequired,
   tokenInfo: tokenInfoProp,
 }: Props) {
   const dk = theme === "dark";
   const [timeframe, setTimeframe] = useState(initialTf);
+  const [chartTf, setChartTf]     = useState(initialTf);   // independent chart timeframe
   const [chartView, setChartView] = useState<"price" | "mcap">("price");
 
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(tokenInfoProp ?? null);
@@ -87,7 +89,10 @@ export default function CoinDetail({
     searchBySymbol(symbol, chain).then(setTokenInfo);
   }, [symbol, chain, tokenInfoProp]);
 
-  // Fetch OHLCV candles when pair address or timeframe changes
+  // When trade duration changes, sync chart to show same timeframe
+  useEffect(() => { setChartTf(timeframe); }, [timeframe]);
+
+  // Fetch OHLCV candles when pair address or chartTf changes
   const fetchCandles = useCallback(async (pairAddr: string, tf: string) => {
     const { resolution, limit } = resolutionForTf(tf);
     const data = await getOHLCV(pairAddr, chain, resolution, limit);
@@ -98,15 +103,15 @@ export default function CoinDetail({
   useEffect(() => {
     if (!tokenInfo?.pairAddress) return;
     setLoading(true);
-    fetchCandles(tokenInfo.pairAddress, timeframe);
-  }, [tokenInfo, timeframe, fetchCandles]);
+    fetchCandles(tokenInfo.pairAddress, chartTf);
+  }, [tokenInfo, chartTf, fetchCandles]);
 
   // Full OHLCV refresh every 30s (historical shape)
   useEffect(() => {
     if (!tokenInfo?.pairAddress) return;
-    const i = setInterval(() => fetchCandles(tokenInfo!.pairAddress, timeframe), 30_000);
+    const i = setInterval(() => fetchCandles(tokenInfo!.pairAddress, chartTf), 30_000);
     return () => clearInterval(i);
-  }, [tokenInfo, timeframe, fetchCandles]);
+  }, [tokenInfo, chartTf, fetchCandles]);
 
   // Fast price poll every 5s — updates just the last chart point via livePrice prop
   useEffect(() => {
@@ -172,10 +177,20 @@ export default function CoinDetail({
   async function handleTrade() {
     if (!isReady) return;
     if (!loggedIn) { onAuthRequired(); return; }
-    if (!activeMarket) { onOpenMarket(); return; }
     setBetLoading(true);
     setBetError("");
-    const err = await onBet(activeMarket.id, side!, finalAmount!);
+    let err: string | null;
+    if (!activeMarket) {
+      if (onAutoTrade) {
+        err = await onAutoTrade(side!, finalAmount!, timeframe);
+      } else {
+        onOpenMarket();
+        setBetLoading(false);
+        return;
+      }
+    } else {
+      err = await onBet(activeMarket.id, side!, finalAmount!);
+    }
     setBetLoading(false);
     if (err) setBetError(err);
     else { setSide(null); setAmount(null); setCustomAmt(""); }
@@ -249,6 +264,15 @@ export default function CoinDetail({
 
           {/* Chart control toggles */}
           <div className="flex items-center gap-1.5">
+            {/* Chart TF — independent from trade TF */}
+            <div className={`flex rounded-xl overflow-hidden text-[11px] font-black shrink-0 ${T.toggleBase}`}>
+              {["5m","15m","1h","4h","24h"].map((tf) => (
+                <button key={tf} onClick={() => setChartTf(tf)}
+                  className={`w-9 py-2 text-center transition-all ${chartTf === tf ? T.toggleActive : T.toggleInact}`}>
+                  {tf}
+                </button>
+              ))}
+            </div>
             {/* Price / MCap */}
             <div className={`flex rounded-xl overflow-hidden text-[10px] font-black ${T.toggleBase}`}>
               {(["price", "mcap"] as const).map((v) => (

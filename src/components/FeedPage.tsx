@@ -339,6 +339,38 @@ export default function FeedPage() {
     mainTabIndicator: dk ? "bg-white" : "bg-gray-900",
   };
 
+  async function handleAutoTrade(
+    side: "long" | "short",
+    amount: number,
+    timeframe: string,
+  ): Promise<string | null> {
+    if (!user) { setAuthOpen(true); return "Please log in first."; }
+    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    if (!selectedCoin) return "No coin selected.";
+
+    let market = markets.find(m =>
+      m.symbol.toUpperCase() === selectedCoin.toUpperCase() &&
+      m.timeframe === timeframe &&
+      m.status === "open" &&
+      (m.is_paper === true) === paperMode
+    );
+
+    if (!market) {
+      try {
+        const tagline = `Will $${selectedCoin} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
+        const ca = selectedTokenInfo?.address;
+        const created = await api.createMarket(selectedCoin, selectedChain, timeframe, tagline, paperMode, ca);
+        if (!created) return "Failed to create market";
+        market = created;
+        setMarkets(prev => [created, ...prev]);
+      } catch (err) {
+        return err instanceof Error ? err.message : "Failed to create market";
+      }
+    }
+
+    return handleAdd(market.id, side, amount);
+  }
+
   const MAIN_TABS: { key: MainTab; label: string }[] = [
     { key: "feed",  label: "Feed" },
     { key: "scout", label: "Scout" },
@@ -477,6 +509,7 @@ export default function FeedPage() {
               theme={theme}
               markets={markets}
               onBet={handleAdd}
+              onAutoTrade={handleAutoTrade}
               onOpenMarket={() => {
                 const coin = liveCoins.find(c => c.symbol === selectedCoin);
                 if (coin) {
