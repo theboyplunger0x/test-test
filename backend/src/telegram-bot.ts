@@ -91,10 +91,10 @@ async function getSession(tgId: number): Promise<{ token: string; userId: string
 /** Create account with chosen username, returns error string or null on success */
 async function registerUser(tgId: number, username: string): Promise<{ session: { token: string; userId: string; username: string } } | { error: string }> {
   if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-    return { error: "Username inválido. Solo letras, números y _ (3-20 caracteres)." };
+    return { error: "Invalid username. Only letters, numbers and _ (3-20 chars)." };
   }
   const { rows: [taken] } = await db.query(`SELECT 1 FROM users WHERE username = $1`, [username.toLowerCase()]);
-  if (taken) return { error: `❌ "${username}" ya está en uso. Elegí otro.` };
+  if (taken) return { error: `❌ "${username}" is already taken. Try another.` };
 
   const { rows: [newUser] } = await db.query(
     `INSERT INTO users (username, telegram_id, paper_balance_usd)
@@ -123,13 +123,13 @@ async function placeBet(session: any, marketId: string, side: string, amount: nu
     const { rows: [market] } = await client.query(
       `SELECT * FROM markets WHERE id = $1 AND status = 'open' FOR UPDATE`, [marketId]
     );
-    if (!market) throw new Error("Mercado cerrado");
+    if (!market) throw new Error("Market closed");
     const balCol = market.is_paper ? "paper_balance_usd" : "balance_usd";
     const { rows: [u] } = await client.query(
       `UPDATE users SET ${balCol} = ${balCol} - $1 WHERE id = $2 AND ${balCol} >= $1 RETURNING balance_usd, paper_balance_usd`,
       [amount, session.userId]
     );
-    if (!u) throw new Error("Balance insuficiente");
+    if (!u) throw new Error("Insufficient balance");
     const poolCol = side === "long" ? "long_pool" : "short_pool";
     await client.query(`UPDATE markets SET ${poolCol} = ${poolCol} + $1 WHERE id = $2`, [amount, marketId]);
     await client.query(
@@ -175,7 +175,7 @@ async function searchToken(query: string): Promise<PendingTrade | null> {
   if (!res.ok) throw new Error(`DexScreener ${res.status}`);
   const data = await res.json() as any;
   let pairs: any[] = data.pairs ?? [];
-  console.log(`[bot] Pairs encontrados: ${pairs.length}`);
+  console.log(`[bot] Pairs found: ${pairs.length}`);
   if (pairs.length === 0) return null;
 
   // If CA search, filter to exact address match to avoid cross-chain confusion
@@ -224,12 +224,12 @@ function tokenMessage(t: PendingTrade): string {
     `💧 Liq: ${formatNum(t.liquidity)}\n` +
     `📊 Vol 24h: ${formatNum(t.volume24h)}`;
 
-  if (!t.mode)      return base + "\n\n¿Real money o Paper?";
+  if (!t.mode)      return base + "\n\nReal money or Paper?";
   const modeLabel   = t.mode === "real" ? "💵 Real" : "📄 Paper";
-  if (!t.timeframe) return base + `\n\n${modeLabel} — Elegí el timeframe:`;
+  if (!t.timeframe) return base + `\n\n${modeLabel} — Pick a timeframe:`;
   const sideLabel   = t.side === "long" ? "📈 Long" : "📉 Short";
-  if (!t.side)      return base + `\n\n${modeLabel} · ⏱ ${t.timeframe} — ¿Long o Short?`;
-  return base + `\n\n${modeLabel} · ⏱ ${t.timeframe} · ${sideLabel} — ¿Cuánto apostás?`;
+  if (!t.side)      return base + `\n\n${modeLabel} · ⏱ ${t.timeframe} — Long or Short?`;
+  return base + `\n\n${modeLabel} · ⏱ ${t.timeframe} · ${sideLabel} — How much?`;
 }
 
 function marketCard(m: any): string {
@@ -238,14 +238,14 @@ function marketCard(m: any): string {
   const total     = longPool + shortPool;
   const longPct   = total > 0 ? Math.round(longPool  / total * 100) : 50;
   const shortPct  = 100 - longPct;
-  const closes    = new Date(m.closes_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  const closes    = new Date(m.closes_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const longMult  = longPool  > 0 ? (1 + shortPool * 0.95 / longPool).toFixed(2)  + "x" : "—";
   const shortMult = shortPool > 0 ? (1 + longPool  * 0.95 / shortPool).toFixed(2) + "x" : "—";
   return (
     `🔥 *${m.symbol}* · ${m.timeframe} · ${m.chain} · 📄 Paper\n` +
     `💰 Entry: $${formatPrice(parseFloat(m.entry_price))}\n` +
-    `⏰ Cierra: ${closes}\n\n` +
-    `🏊 Pool total: $${total.toFixed(0)}\n` +
+    `⏰ Closes: ${closes}\n\n` +
+    `🏊 Total pool: $${total.toFixed(0)}\n` +
     `  📈 Long: $${longPool.toFixed(0)} (${longPct}%) → ${longMult}\n` +
     `  📉 Short: $${shortPool.toFixed(0)} (${shortPct}%) → ${shortMult}`
   );
@@ -264,7 +264,7 @@ function marketAmtKeyboard(marketId: string, side: string, tgId: number) {
     presets.map(a => Markup.button.callback(`$${a}`, `marketamt:${marketId}:${side}:${a}`)),
     [
       Markup.button.callback("✏️ Custom", `marketcustom:${marketId}:${side}`),
-      Markup.button.callback("↩️ Volver", `marketback:${marketId}`),
+      Markup.button.callback("↩️ Back", `marketback:${marketId}`),
     ],
   ]);
 }
@@ -279,7 +279,7 @@ function modeKeyboard(tgId: number) {
 function tfKeyboard(tgId: number) {
   return Markup.inlineKeyboard([
     TIMEFRAMES.map(tf => Markup.button.callback(tf, `tf:${tgId}:${tf}`)),
-    [Markup.button.callback("↩️ Modo", `changemode:${tgId}`)],
+    [Markup.button.callback("↩️ Mode", `changemode:${tgId}`)],
   ]);
 }
 
@@ -289,7 +289,7 @@ function sideKeyboard(tgId: number) {
       Markup.button.callback("📈 LONG",  `side:${tgId}:long`),
       Markup.button.callback("📉 SHORT", `side:${tgId}:short`),
     ],
-    [Markup.button.callback("↩️ Cambiar TF", `changetf:${tgId}`)],
+    [Markup.button.callback("↩️ Change TF", `changetf:${tgId}`)],
   ]);
 }
 
@@ -299,7 +299,7 @@ function amtKeyboard(tgId: number) {
     presets.map(a => Markup.button.callback(`$${a}`, `amt:${tgId}:${a}`)),
     [
       Markup.button.callback("✏️ Custom", `amtcustom:${tgId}`),
-      Markup.button.callback("↩️ Cambiar lado", `changeside:${tgId}`),
+      Markup.button.callback("↩️ Change side", `changeside:${tgId}`),
     ],
   ]);
 }
@@ -385,14 +385,14 @@ export async function startBot() {
         console.log(`[bot:/start] Token inserted OK`);
       } catch (e: any) {
         console.error(`[bot:/start] DB insert failed:`, e.message);
-        return ctx.reply("Error interno — intenta de nuevo en un momento.");
+        return ctx.reply("Internal error — please try again in a moment.");
       }
 
       const linkUrl = `${FRONTEND_URL}?tg_link=${token}`;
       await ctx.reply(
         `👋 *FUD\\.markets*\n\n` +
-          `Tu Telegram no está vinculado a ninguna cuenta\\.\n\n` +
-          `Tocá el botón para registrarte o iniciar sesión y conectar automáticamente\\.`,
+          `Your Telegram is not linked to any account\\.\n\n` +
+          `Tap the button below to register or sign in and connect automatically\\.`,
         {
           parse_mode: "MarkdownV2",
           ...Markup.inlineKeyboard([[
@@ -406,20 +406,20 @@ export async function startBot() {
   // /search <query>
   bot.command("search", async (ctx) => {
     const query = ctx.message.text.replace(/^\/search\s*/i, "").trim();
-    if (!query) return ctx.reply("Uso: /search <SYMBOL> o pegá un CA\nEjemplo: /search PEPE");
+    if (!query) return ctx.reply("Usage: /search <SYMBOL> or paste a CA\nExample: /search PEPE");
 
     const isGroup = ctx.chat.type !== "private";
-    const msg = await ctx.reply("🔍 Buscando…");
+    const msg = await ctx.reply("🔍 Searching…");
     let token: PendingTrade | null;
     try {
       token = await searchToken(query);
     } catch {
       await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
-      return ctx.reply("❌ Error buscando el token.");
+      return ctx.reply("❌ Error searching for token.");
     }
     await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
 
-    if (!token) return ctx.reply(`❌ No se encontró "${query}". Probá pegando el contract address.`);
+    if (!token) return ctx.reply(`❌ "${query}" not found. Try pasting the contract address.`);
 
     if (isGroup) {
       // Store group chatId so the market card gets posted back here after opening
@@ -482,7 +482,7 @@ export async function startBot() {
     if (pendingMarket) {
       const amount = parseFloat(text.replace(",", "."));
       if (isNaN(amount) || amount <= 0) {
-        return ctx.reply("❌ Monto inválido. Escribí un número, ej: 37.5");
+        return ctx.reply("❌ Invalid amount. Enter a number, e.g. 37.5");
       }
       pendingMarketBets.delete(ctx.from.id);
       const emoji = pendingMarket.side === "long" ? "📈" : "📉";
@@ -493,7 +493,7 @@ export async function startBot() {
         return ctx.reply(`❌ ${e.message}`);
       }
       const paperBal = parseFloat(String(betData.new_paper_balance)).toFixed(2);
-      await ctx.reply(`${emoji} *${pendingMarket.side.toUpperCase()} $${amount}* colocado! Paper: $${paperBal}`, { parse_mode: "Markdown" });
+      await ctx.reply(`${emoji} *${pendingMarket.side.toUpperCase()} $${amount}* placed! Paper: $${paperBal}`, { parse_mode: "Markdown" });
       return;
     }
 
@@ -502,7 +502,7 @@ export async function startBot() {
     if (pendingForCustomAmt?.amount === -1 && pendingForCustomAmt.side && !pendingForCustomAmt.awaitingMsg) {
       const amount = parseFloat(text.replace(",", "."));
       if (isNaN(amount) || amount <= 0) {
-        return ctx.reply("❌ Monto inválido. Escribí un número, ej: 37.5");
+        return ctx.reply("❌ Invalid amount. Enter a number, e.g. 37.5");
       }
       pendingForCustomAmt.amount = amount;
       pendingForCustomAmt.awaitingMsg = true;
@@ -528,15 +528,15 @@ export async function startBot() {
     const isSymbol = /^[A-Za-z0-9]{2,10}$/.test(text);
     if (!isCA && !isSymbol) return;
 
-    console.log(`[bot] Buscando token: "${text}" (isCA=${isCA})`);
+    console.log(`[bot] Searching token: "${text}" (isCA=${isCA})`);
 
-    const msg = await ctx.reply("🔍 Buscando…");
+    const msg = await ctx.reply("🔍 Searching…");
     try {
       const token = await searchToken(text);
       await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
 
       if (!token) {
-        return ctx.reply(`❌ No se encontró "${text.slice(0, 20)}…". Verificá el CA o símbolo.`);
+        return ctx.reply(`❌ "${text.slice(0, 20)}…" not found. Check the CA or symbol.`);
       }
 
       pendingTrades.set(ctx.from.id, token);
@@ -544,7 +544,7 @@ export async function startBot() {
     } catch (e: any) {
       console.error("[bot] searchToken error:", e.message);
       await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
-      await ctx.reply(`❌ Error buscando el token: ${e.message}`);
+      await ctx.reply(`❌ Error searching token: ${e.message}`);
     }
   });
 
@@ -553,10 +553,10 @@ export async function startBot() {
     const tgId = parseInt(ctx.match[1]);
     const mode = ctx.match[2] as "real" | "paper";
 
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
 
     const trade = pendingTrades.get(tgId);
-    if (!trade) return ctx.answerCbQuery("Sesión expirada. Buscá el token de nuevo.");
+    if (!trade) return ctx.answerCbQuery("Session expired. Search the token again.");
 
     trade.mode = mode;
     trade.timeframe = undefined;
@@ -567,13 +567,13 @@ export async function startBot() {
     await ctx.answerCbQuery();
   });
 
-  // Cambiar modo (back to Real/Paper selection)
+  // Change mode (back to Real/Paper selection)
   bot.action(/^changemode:(\d+)$/, async (ctx) => {
     const tgId = parseInt(ctx.match[1]);
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
 
     const trade = pendingTrades.get(tgId);
-    if (!trade) return ctx.answerCbQuery("Sesión expirada.");
+    if (!trade) return ctx.answerCbQuery("Session expired.");
 
     trade.mode = undefined;
     trade.timeframe = undefined;
@@ -588,10 +588,10 @@ export async function startBot() {
     const tgId = parseInt(ctx.match[1]);
     const tf   = ctx.match[2];
 
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
 
     const trade = pendingTrades.get(tgId);
-    if (!trade) return ctx.answerCbQuery("Sesión expirada. Buscá el token de nuevo.");
+    if (!trade) return ctx.answerCbQuery("Session expired. Search the token again.");
 
     trade.timeframe = tf;
     trade.side = undefined;
@@ -601,13 +601,13 @@ export async function startBot() {
     await ctx.answerCbQuery();
   });
 
-  // Cambiar TF (back to timeframe selection)
+  // Change TF (back to timeframe selection)
   bot.action(/^changetf:(\d+)$/, async (ctx) => {
     const tgId = parseInt(ctx.match[1]);
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
 
     const trade = pendingTrades.get(tgId);
-    if (!trade) return ctx.answerCbQuery("Sesión expirada.");
+    if (!trade) return ctx.answerCbQuery("Session expired.");
 
     trade.timeframe = undefined;
     trade.side = undefined;
@@ -621,10 +621,10 @@ export async function startBot() {
     const tgId = parseInt(ctx.match[1]);
     const side = ctx.match[2];
 
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
 
     const trade = pendingTrades.get(tgId);
-    if (!trade || !trade.timeframe) return ctx.answerCbQuery("Sesión expirada.");
+    if (!trade || !trade.timeframe) return ctx.answerCbQuery("Session expired.");
 
     trade.side = side;
     pendingTrades.set(tgId, trade);
@@ -633,13 +633,13 @@ export async function startBot() {
     await ctx.answerCbQuery();
   });
 
-  // Cambiar lado (back to Long/Short selection)
+  // Change side (back to Long/Short selection)
   bot.action(/^changeside:(\d+)$/, async (ctx) => {
     const tgId = parseInt(ctx.match[1]);
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
 
     const trade = pendingTrades.get(tgId);
-    if (!trade) return ctx.answerCbQuery("Sesión expirada.");
+    if (!trade) return ctx.answerCbQuery("Session expired.");
 
     trade.side = undefined;
     pendingTrades.set(tgId, trade);
@@ -652,11 +652,11 @@ export async function startBot() {
     const tgId   = parseInt(ctx.match[1]);
     const amount = parseFloat(ctx.match[2]);
 
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
 
     const trade = pendingTrades.get(tgId);
     if (!trade || !trade.mode || !trade.timeframe || !trade.side) {
-      return ctx.answerCbQuery("Sesión expirada. Buscá el token de nuevo.");
+      return ctx.answerCbQuery("Session expired. Search the token again.");
     }
 
     trade.amount = amount;
@@ -678,22 +678,22 @@ export async function startBot() {
   // Skip message → place bet immediately
   bot.action(/^skipmsg:(\d+)$/, async (ctx) => {
     const tgId = parseInt(ctx.match[1]);
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
-    await ctx.answerCbQuery("⏳ Abriendo mercado…");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
+    await ctx.answerCbQuery("⏳ Opening market…");
     await executeBet(ctx, tgId, "");
   });
 
   // Custom amount for new market flow
   bot.action(/^amtcustom:(\d+)$/, async (ctx) => {
     const tgId = parseInt(ctx.match[1]);
-    if (tgId !== ctx.from.id) return ctx.answerCbQuery("No es tuyo.");
+    if (tgId !== ctx.from.id) return ctx.answerCbQuery("Not yours.");
     const trade = pendingTrades.get(tgId);
-    if (!trade || !trade.side) return ctx.answerCbQuery("Sesión expirada.");
+    if (!trade || !trade.side) return ctx.answerCbQuery("Session expired.");
     trade.awaitingMsg = false;
     trade.amount = -1; // flag: awaiting custom amount
     pendingTrades.set(tgId, trade);
     await ctx.answerCbQuery();
-    await ctx.reply("✏️ Escribí el monto a apostar (ej: 37.5):");
+    await ctx.reply("✏️ Enter the amount to bet (e.g. 37.5):");
   });
 
   // ─── Helper: open market + place bet ─────────────────────────────────────────
@@ -703,7 +703,7 @@ export async function startBot() {
 
     const session = await getSession(tgId);
     if (!session) {
-      await ctx.reply("🔗 Vinculá tu Telegram primero. Usá /start.");
+      await ctx.reply("🔗 Link your Telegram first. Use /start.");
       return;
     }
 
@@ -722,7 +722,7 @@ export async function startBot() {
         headers: { Authorization: `Bearer ${session.token}` },
       });
     } catch (e: any) {
-      await ctx.reply(`❌ Error al abrir mercado: ${e.message}`);
+      await ctx.reply(`❌ Error opening market: ${e.message}`);
       return;
     }
 
@@ -730,7 +730,7 @@ export async function startBot() {
     try {
       betResult = await placeBet(session, market.id, trade.side, trade.amount);
     } catch (e: any) {
-      await ctx.reply(`✅ Mercado abierto, pero error al apostar: ${e.message}\nUsá /markets para apostar.`);
+      await ctx.reply(`✅ Market opened, but error placing bet: ${e.message}\nUse /markets to bet.`);
       return;
     }
 
@@ -738,7 +738,7 @@ export async function startBot() {
     const isPaper = trade.mode === "paper";
     const bal     = isPaper
       ? `🎭 Paper balance: $${parseFloat(betResult.new_paper_balance).toFixed(2)}`
-      : `💵 Balance real: $${parseFloat(betResult.new_balance).toFixed(2)}`;
+      : `💵 Real balance: $${parseFloat(betResult.new_balance).toFixed(2)}`;
 
     const confirmation =
       `${emoji} *${trade.side.toUpperCase()} $${trade.amount}* on *${trade.symbol}* · ${trade.timeframe} · ${isPaper ? "📄 Paper" : "💵 Real"}\n` +
@@ -783,7 +783,7 @@ export async function startBot() {
   bot.command("markets", async (ctx) => {
     const markets: any[] = await apiFetch("/markets").catch(() => []);
     const open = markets.filter((m: any) => m.status === "open");
-    if (open.length === 0) return ctx.reply("No hay mercados abiertos.");
+    if (open.length === 0) return ctx.reply("No open markets right now.");
 
     for (const m of open.slice(0, 5)) {
       await ctx.reply(marketCard(m), {
@@ -799,10 +799,10 @@ export async function startBot() {
     const session = await getSession(ctx.from.id).catch(() => null);
     if (!session) return ctx.answerCbQuery(`🔗 Link your Telegram first! DM the bot and use /start.`, { show_alert: true });
     const { rows: [market] } = await db.query(`SELECT * FROM markets WHERE id = $1`, [marketId]);
-    if (!market) return ctx.answerCbQuery("Mercado no encontrado.", { show_alert: true });
+    if (!market) return ctx.answerCbQuery("Market not found.", { show_alert: true });
     const emoji = side === "long" ? "📈" : "📉";
     await ctx.editMessageText(
-      marketCard(market) + `\n\n${emoji} *${side.toUpperCase()}* — ¿Cuánto apostás?`,
+      marketCard(market) + `\n\n${emoji} *${side.toUpperCase()}* — How much?`,
       { parse_mode: "Markdown", ...marketAmtKeyboard(marketId, side, ctx.from.id) }
     );
     await ctx.answerCbQuery();
@@ -822,7 +822,7 @@ export async function startBot() {
       return ctx.answerCbQuery(`❌ ${e.message}`, { show_alert: true });
     }
     const paperBal = parseFloat(String(betData.new_paper_balance)).toFixed(2);
-    await ctx.answerCbQuery(`${emoji} ${side.toUpperCase()} $${amount} colocado! Paper: $${paperBal}`);
+    await ctx.answerCbQuery(`${emoji} ${side.toUpperCase()} $${amount} placed! Paper: $${paperBal}`);
     const { rows: [market] } = await db.query(`SELECT * FROM markets WHERE id = $1`, [marketId]);
     if (market) await ctx.editMessageText(marketCard(market), { parse_mode: "Markdown", ...marketSideKeyboard(marketId) }).catch(() => {});
   });
@@ -833,14 +833,14 @@ export async function startBot() {
     pendingMarketBets.set(ctx.from.id, { marketId, side });
     const emoji = side === "long" ? "📈" : "📉";
     await ctx.answerCbQuery();
-    await ctx.reply(`${emoji} *${side.toUpperCase()}* — Escribí el monto a apostar (ej: 37.5):`, { parse_mode: "Markdown" });
+    await ctx.reply(`${emoji} *${side.toUpperCase()}* — Enter the amount to bet (e.g. 37.5):`, { parse_mode: "Markdown" });
   });
 
   // Back to side selection
   bot.action(/^marketback:(.+)$/, async (ctx) => {
     const [, marketId] = ctx.match;
     const { rows: [market] } = await db.query(`SELECT * FROM markets WHERE id = $1`, [marketId]);
-    if (!market) return ctx.answerCbQuery("Mercado no encontrado.", { show_alert: true });
+    if (!market) return ctx.answerCbQuery("Market not found.", { show_alert: true });
     await ctx.editMessageText(marketCard(market), { parse_mode: "Markdown", ...marketSideKeyboard(marketId) });
     await ctx.answerCbQuery();
   });
@@ -849,14 +849,14 @@ export async function startBot() {
   bot.command("link", async (ctx) => {
     ctx.deleteMessage().catch(() => {});
     const parts = ctx.message.text.trim().split(/\s+/);
-    if (parts.length < 3) return ctx.reply("Uso: /link <usuario> <contraseña>\nConecta tu cuenta web existente a este Telegram.");
+    if (parts.length < 3) return ctx.reply("Usage: /link <username> <password>\nLinks your existing web account to this Telegram.");
     const [, username, password] = parts;
 
     let data: any;
     try {
       data = await apiFetch("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
     } catch (e: any) {
-      return ctx.reply(`❌ Login fallido: ${e.message}`);
+      return ctx.reply(`❌ Login failed: ${e.message}`);
     }
 
     // Remove telegram_id from the auto-created account (if any), assign to web account
@@ -865,8 +865,8 @@ export async function startBot() {
     sessions.set(ctx.from.id, { token: data.token, userId: data.user.id, username: data.user.username });
 
     await ctx.reply(
-      `✅ Cuenta web *${data.user.username}* conectada a este Telegram\n\n` +
-        `💵 Balance real: $${parseFloat(data.user.balance_usd ?? 0).toFixed(2)}\n` +
+      `✅ Web account *${data.user.username}* linked to this Telegram\n\n` +
+        `💵 Real balance: $${parseFloat(data.user.balance_usd ?? 0).toFixed(2)}\n` +
         `🎭 Paper balance: $${parseFloat(data.user.paper_balance_usd ?? 0).toFixed(2)}`,
       { parse_mode: "Markdown" }
     );
@@ -877,8 +877,8 @@ export async function startBot() {
     const { rowCount } = await db.query(`UPDATE users SET telegram_id = NULL WHERE telegram_id = $1`, [ctx.from.id]);
     sessions.delete(ctx.from.id);
     await ctx.reply(rowCount && rowCount > 0
-      ? "✅ Cuenta desvinculada."
-      : "No tenías ninguna cuenta vinculada."
+      ? "✅ Account unlinked."
+      : "You had no linked account."
     );
   });
 
@@ -888,16 +888,16 @@ export async function startBot() {
     const session = await getSession(ctx.from.id);
     console.log(`[/me] session=${session ? session.username : "null"}`);
     if (!session) {
-      return ctx.reply("No tenés cuenta. Usá /start para registrarte.");
+      return ctx.reply("No account found. Use /start to register.");
     }
     const { rows: [user] } = await db.query(
       `SELECT username, balance_usd, paper_balance_usd FROM users WHERE id = $1`, [session.userId]
     );
     console.log(`[/me] user=${user ? user.username : "null"}`);
-    if (!user) return ctx.reply("No se encontró tu cuenta.");
+    if (!user) return ctx.reply("Account not found.");
     await ctx.reply(
       `👤 ${user.username}\n\n` +
-        `💵 Balance real: $${parseFloat(user.balance_usd).toFixed(2)}\n` +
+        `💵 Real balance: $${parseFloat(user.balance_usd).toFixed(2)}\n` +
         `🎭 Paper balance: $${parseFloat(user.paper_balance_usd).toFixed(2)}`
     );
     console.log(`[/me] replied OK`);
@@ -909,16 +909,16 @@ export async function startBot() {
     if (parts.length === 0) {
       const presets = getPresets(ctx.from.id);
       return ctx.reply(
-        `⚙️ *Tus presets de apuesta:* $${presets.join(" · $")}\n\n` +
-        `Para cambiarlos: /settings 5 25 100 500`
+        `⚙️ *Your bet presets:* $${presets.join(" · $")}\n\n` +
+        `To change them: /settings 5 25 100 500`
       , { parse_mode: "Markdown" });
     }
     const nums = parts.map(Number).filter(n => !isNaN(n) && n > 0);
     if (nums.length !== 4) {
-      return ctx.reply("Necesitás exactamente 4 montos. Ej: /settings 5 25 100 500");
+      return ctx.reply("You need exactly 4 amounts. E.g. /settings 5 25 100 500");
     }
     userPresets.set(ctx.from.id, nums);
-    await ctx.reply(`✅ Presets actualizados: $${nums.join(" · $")}`);
+    await ctx.reply(`✅ Presets updated: $${nums.join(" · $")}`);
   });
 
   // Catch all unhandled bot errors so they don't crash the process
@@ -929,13 +929,13 @@ export async function startBot() {
 
   // Register commands so they appear in the / menu
   bot.telegram.setMyCommands([
-    { command: "start",    description: "Registrarte o ver tu cuenta" },
-    { command: "search",   description: "Buscar un token: /search PEPE" },
-    { command: "markets",  description: "Ver mercados abiertos ahora" },
-    { command: "me",       description: "Ver tu balance y username" },
-    { command: "settings", description: "Ver/cambiar presets: /settings 5 25 100 500" },
-    { command: "link",     description: "Conectar tu cuenta web: /link usuario contraseña" },
-    { command: "unlink",   description: "Desconectar tu cuenta de Telegram" },
+    { command: "start",    description: "Register or view your account" },
+    { command: "search",   description: "Search a token: /search PEPE" },
+    { command: "markets",  description: "View currently open markets" },
+    { command: "me",       description: "View your balance and username" },
+    { command: "settings", description: "View/change presets: /settings 5 25 100 500" },
+    { command: "link",     description: "Link your web account: /link username password" },
+    { command: "unlink",   description: "Unlink your Telegram account" },
   ]).catch((e) => console.error("[bot] setMyCommands error:", e.message));
 
   // Clear any webhook that might be blocking long-polling
@@ -945,7 +945,7 @@ export async function startBot() {
     console.warn("[bot] deleteWebhook failed (ignored):", e);
   }
   bot.launch().catch((e: any) => console.error("[bot] launch error:", e?.message ?? e));
-  console.log("🤖 Telegram bot iniciado");
+  console.log("🤖 Telegram bot started");
 
   process.once("SIGINT", () => bot.stop("SIGINT"));
   process.once("SIGTERM", () => bot.stop("SIGTERM"));
