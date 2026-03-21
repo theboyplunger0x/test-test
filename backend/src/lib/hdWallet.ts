@@ -4,7 +4,7 @@
 
 import { HDKey }              from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { publicKeyToAddress } from "viem/accounts";
+import { privateKeyToAddress } from "viem/accounts";
 import { Keypair }            from "@solana/web3.js";
 import { derivePath }         from "ed25519-hd-key";
 
@@ -27,8 +27,8 @@ function getHDKey(): HDKey {
 
 export function deriveEvmAddress(index: number): string {
   const child = getHDKey().derive(`m/44'/60'/0'/0/${index}`);
-  if (!child.publicKey) throw new Error("Failed to derive EVM key");
-  return publicKeyToAddress(`0x${Buffer.from(child.publicKey).toString("hex")}`);
+  if (!child.privateKey) throw new Error("Failed to derive EVM key");
+  return privateKeyToAddress(`0x${Buffer.from(child.privateKey).toString("hex")}`);
 }
 
 export function deriveEvmPrivateKey(index: number): `0x${string}` {
