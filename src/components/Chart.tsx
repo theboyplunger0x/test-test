@@ -1,27 +1,32 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import {
-  createChart, IChartApi,
-  CandlestickSeries, LineSeries,
-  ISeriesApi, SeriesType,
-} from "lightweight-charts";
+import { createChart, IChartApi, AreaSeries, ISeriesApi, SeriesType } from "lightweight-charts";
 import type { Candle } from "@/lib/chartData";
 
 interface Props {
   candles: Candle[];
-  type?: "candles" | "line";
   entryPrice?: number;
   direction?: "long" | "short" | null;
   dk?: boolean;
 }
 
-export default function Chart({ candles, type = "candles", entryPrice, direction, dk = true }: Props) {
+// Handles meme coin prices like 0.000000042 correctly
+function fmtPrice(n: number): string {
+  if (n === 0) return "0";
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (n >= 1) return n.toFixed(4);
+  if (n >= 0.0001) return n.toFixed(6);
+  return n.toPrecision(4);
+}
+
+// How many candles to keep visible (fills chart without cramming all history)
+const VISIBLE_CANDLES = 40;
+
+export default function Chart({ candles, entryPrice, direction, dk = true }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
   const seriesRef    = useRef<ISeriesApi<SeriesType> | null>(null);
-  const candlesRef   = useRef<Candle[]>(candles);
-  candlesRef.current = candles;
 
   // Create chart once
   useEffect(() => {
@@ -35,99 +40,94 @@ export default function Chart({ candles, type = "candles", entryPrice, direction
         fontFamily: "'SF Mono', 'Fira Code', monospace",
       },
       grid: {
-        vertLines: { color: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.05)" },
-        horzLines: { color: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.05)" },
+        vertLines: { visible: false },
+        horzLines: { color: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" },
       },
       crosshair: {
-        vertLine: { color: dk ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)", labelBackgroundColor: dk ? "#1a1a1a" : "#f5f5f5" },
-        horzLine: { color: dk ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)", labelBackgroundColor: dk ? "#1a1a1a" : "#f5f5f5" },
+        vertLine: {
+          color: dk ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)",
+          labelBackgroundColor: dk ? "#1a1a1a" : "#f0f0f0",
+        },
+        horzLine: {
+          color: dk ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)",
+          labelBackgroundColor: dk ? "#1a1a1a" : "#f0f0f0",
+        },
       },
       rightPriceScale: {
-        borderColor: dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.08)",
-        scaleMargins: { top: 0.1, bottom: 0.1 },
+        borderVisible: false,
+        scaleMargins: { top: 0.15, bottom: 0.1 },
       },
       timeScale: {
-        borderColor: dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.08)",
+        borderVisible: false,
         timeVisible: true,
         secondsVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+        lockVisibleTimeRangeOnResize: true,
       },
+      // Locked — no zoom, no scroll (Polymarket style)
+      handleScroll: false,
+      handleScale: false,
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
+      localization: {
+        priceFormatter: fmtPrice,
+      },
     });
 
     chartRef.current = chart;
 
+    const series = chart.addSeries(AreaSeries, {
+      lineColor: "#f97316",
+      topColor: "rgba(249,115,22,0.18)",
+      bottomColor: "rgba(249,115,22,0)",
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: true,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      crosshairMarkerBackgroundColor: "#f97316",
+    });
+    seriesRef.current = series;
+
     const ro = new ResizeObserver(() => {
-      if (containerRef.current) {
-        chart.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
+      if (!containerRef.current) return;
+      chart.applyOptions({
+        width: containerRef.current.clientWidth,
+        height: containerRef.current.clientHeight,
+      });
     });
     ro.observe(containerRef.current);
 
-    return () => { ro.disconnect(); chart.remove(); chartRef.current = null; seriesRef.current = null; };
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dk]);
 
-  // Swap series when type changes, re-apply current candles
+  // Set data and zoom to the most recent VISIBLE_CANDLES
   useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
+    if (!seriesRef.current || !chartRef.current || candles.length === 0) return;
 
-    if (seriesRef.current) {
-      chart.removeSeries(seriesRef.current);
-      seriesRef.current = null;
-    }
-
-    if (type === "candles") {
-      seriesRef.current = chart.addSeries(CandlestickSeries, {
-        upColor:        "#22c55e",
-        downColor:      "#ef4444",
-        borderUpColor:  "#22c55e",
-        borderDownColor:"#ef4444",
-        wickUpColor:    "#22c55e",
-        wickDownColor:  "#ef4444",
-      });
-    } else {
-      seriesRef.current = chart.addSeries(LineSeries, {
-        color:            "#22c55e",
-        lineWidth:        2,
-        priceLineVisible: false,
-        lastValueVisible: true,
-      });
-    }
-
-    if (candlesRef.current.length > 0) {
-      const deduped = candlesRef.current
-        .slice()
-        .sort((a, b) => a.time - b.time)
-        .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
-      const data = type === "line"
-        ? deduped.map((c) => ({ time: c.time, value: c.close }))
-        : deduped;
-      seriesRef.current.setData(data as any);
-      chart.timeScale().fitContent();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
-
-  // Update data when candles change (no series recreation)
-  useEffect(() => {
-    if (!seriesRef.current || candles.length === 0) return;
     const deduped = candles
       .slice()
-      .sort((a, b) => a.time - b.time)
+      .sort((a, b) => (a.time as number) - (b.time as number))
       .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
-    const data = type === "line"
-      ? deduped.map((c) => ({ time: c.time, value: c.close }))
-      : deduped;
-    seriesRef.current.setData(data as any);
-    chartRef.current?.timeScale().fitContent();
-  }, [candles, type]);
 
-  // Entry price horizontal line
+    const data = deduped.map((c) => ({ time: c.time, value: c.close }));
+    seriesRef.current.setData(data as any);
+
+    // Zoom so movement fills the chart instead of looking like a worm
+    chartRef.current.timeScale().setVisibleLogicalRange({
+      from: Math.max(0, data.length - VISIBLE_CANDLES),
+      to: data.length,
+    });
+  }, [candles]);
+
+  // Entry price dashed horizontal line ("Price to beat")
   useEffect(() => {
     if (!seriesRef.current || !entryPrice) return;
     const color = direction === "short" ? "#ef4444" : "#22c55e";
@@ -137,7 +137,7 @@ export default function Chart({ candles, type = "candles", entryPrice, direction
       lineWidth: 1,
       lineStyle: 2,
       axisLabelVisible: true,
-      title: direction === "short" ? "▼ ENTRY" : "▲ ENTRY",
+      title: "Price to beat",
     });
     return () => { try { seriesRef.current?.removePriceLine(priceLine); } catch {} };
   }, [entryPrice, direction]);

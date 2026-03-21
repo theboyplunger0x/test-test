@@ -66,7 +66,6 @@ export default function CoinDetail({
 }: Props) {
   const dk = theme === "dark";
   const [timeframe, setTimeframe] = useState(initialTf);
-  const [chartType, setChartType] = useState<"candles" | "line">("candles");
   const [chartView, setChartView] = useState<"price" | "mcap">("price");
 
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(tokenInfoProp ?? null);
@@ -246,15 +245,6 @@ export default function CoinDetail({
                 </button>
               ))}
             </div>
-            {/* Candle / Line */}
-            <div className={`flex rounded-xl overflow-hidden text-[10px] font-black ${T.toggleBase}`}>
-              {(["candles", "line"] as const).map((t) => (
-                <button key={t} onClick={() => setChartType(t)}
-                  className={`px-3 py-1.5 transition-all ${chartType === t ? T.toggleActive : T.toggleInact}`}>
-                  {t === "candles" ? "⊞" : "⌇"}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -288,7 +278,6 @@ export default function CoinDetail({
           )}
           <Chart
             candles={displayCandles}
-            type={chartType}
             entryPrice={chartView === "price" ? entryPrice : undefined}
             direction={side}
             dk={dk}
