@@ -29,7 +29,7 @@ interface Props {
   dk: boolean;
   onClose: () => void;
   onTrade: (token: TokenInfo) => void;
-  onQuickTrade: (token: TokenInfo, side: "long" | "short", timeframe: string, amount: number) => Promise<string | null>;
+  onQuickTrade: (token: TokenInfo, side: "long" | "short", timeframe: string, amount: number, message?: string) => Promise<string | null>;
   presets: number[];
 }
 
@@ -46,6 +46,7 @@ export default function CASearchModal({ dk, onClose, onTrade, onQuickTrade, pres
   const [tradeTf, setTradeTf]         = useState("1h");
   const [tradeAmt, setTradeAmt]       = useState<number | null>(null);
   const [tradeCustom, setTradeCustom] = useState("");
+  const [tradeMsg, setTradeMsg]       = useState("");
   const [tradeLoading, setTradeLoading] = useState(false);
   const [tradeError, setTradeError]   = useState<string | null>(null);
   const [tradeDone, setTradeDone]     = useState(false);
@@ -91,7 +92,7 @@ export default function CASearchModal({ dk, onClose, onTrade, onQuickTrade, pres
     if (!result || !tradeSide || !finalTradeAmt) return;
     setTradeError(null);
     setTradeLoading(true);
-    const err = await onQuickTrade(result, tradeSide, tradeTf, finalTradeAmt);
+    const err = await onQuickTrade(result, tradeSide, tradeTf, finalTradeAmt, tradeMsg.trim() || undefined);
     setTradeLoading(false);
     if (err) {
       setTradeError(err);
@@ -301,6 +302,18 @@ export default function CASearchModal({ dk, onClose, onTrade, onQuickTrade, pres
                         />
                       </div>
                     </div>
+
+                    {/* Message */}
+                    <textarea
+                      value={tradeMsg}
+                      onChange={(e) => setTradeMsg(e.target.value)}
+                      maxLength={80}
+                      placeholder={`${result?.symbol ?? "Token"} to the moon!`}
+                      rows={2}
+                      className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${
+                        dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20 focus:border-white/20" : "bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-300 focus:border-gray-400"
+                      }`}
+                    />
 
                     {tradeError && (
                       <p className={`text-[11px] font-bold px-2 py-1.5 rounded-lg ${dk ? "text-red-400 bg-red-500/10 border border-red-500/20" : "text-red-600 bg-red-50 border border-red-200"}`}>

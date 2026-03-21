@@ -309,11 +309,12 @@ export default function FeedPage() {
     setSelectedCoin(token.symbol);
   }
 
-  async function handleCAQuickTrade(token: TokenInfo, side: "long" | "short", timeframe: string, amount: number): Promise<string | null> {
+  async function handleCAQuickTrade(token: TokenInfo, side: "long" | "short", timeframe: string, amount: number, message?: string): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
     if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
     setSelectedTokenInfo(token);
     setSelectedCoin(token.symbol);
+    const autoTagline = message?.trim() || `Will ${token.symbol} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
     let market = markets.find(m =>
       m.symbol.toUpperCase() === token.symbol.toUpperCase() &&
       m.timeframe === timeframe && m.status === "open" &&
@@ -321,8 +322,7 @@ export default function FeedPage() {
     );
     if (!market) {
       try {
-        const tagline = `Will ${token.symbol} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
-        const created = await api.createMarket(token.symbol, token.chainLabel, timeframe, tagline, paperMode, token.address);
+        const created = await api.createMarket(token.symbol, token.chainLabel, timeframe, autoTagline, paperMode, token.address);
         if (!created) return "Failed to create market";
         market = created;
         setMarkets(prev => [created, ...prev]);
@@ -388,10 +388,21 @@ export default function FeedPage() {
     side: "long" | "short",
     amount: number,
     timeframe: string,
+    taglineInput?: string,
   ): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
     if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
     if (!selectedCoin) return "No coin selected.";
+
+    const autoTagline = taglineInput || `Will $${selectedCoin} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
+
+    async function createFreshMarket() {
+      const ca = selectedTokenInfo?.address;
+      const created = await api.createMarket(selectedCoin!, selectedChain, timeframe, autoTagline, paperMode, ca);
+      if (!created) throw new Error("Failed to create market");
+      setMarkets(prev => [created, ...prev]);
+      return created;
+    }
 
     let market = markets.find(m =>
       m.symbol.toUpperCase() === selectedCoin.toUpperCase() &&
@@ -401,19 +412,25 @@ export default function FeedPage() {
     );
 
     if (!market) {
+      try { market = await createFreshMarket(); }
+      catch (err) { return err instanceof Error ? err.message : "Failed to create market"; }
+    }
+
+    let err = await handleAdd(market.id, side, amount);
+
+    // If market expired in the DB (race condition — common for short timeframes like 1m),
+    // mark it resolved locally and create a fresh one
+    if (err && (err.toLowerCase().includes("expired") || err.toLowerCase().includes("closed") || err.toLowerCase().includes("not found"))) {
+      setMarkets(prev => prev.map(m => m.id === market!.id ? { ...m, status: "resolved" as const } : m));
       try {
-        const tagline = `Will $${selectedCoin} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
-        const ca = selectedTokenInfo?.address;
-        const created = await api.createMarket(selectedCoin, selectedChain, timeframe, tagline, paperMode, ca);
-        if (!created) return "Failed to create market";
-        market = created;
-        setMarkets(prev => [created, ...prev]);
-      } catch (err) {
-        return err instanceof Error ? err.message : "Failed to create market";
+        const fresh = await createFreshMarket();
+        err = await handleAdd(fresh.id, side, amount);
+      } catch (retryErr) {
+        return retryErr instanceof Error ? retryErr.message : "Failed to create market";
       }
     }
 
-    return handleAdd(market.id, side, amount);
+    return err;
   }
 
   const MAIN_TABS: { key: MainTab; label: string }[] = [

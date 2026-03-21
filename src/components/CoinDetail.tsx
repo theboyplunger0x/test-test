@@ -53,7 +53,7 @@ interface Props {
   theme: "dark" | "light";
   markets: Market[];        // live markets for this symbol
   onBet: (marketId: string, side: "long" | "short", amount: number) => Promise<string | null>;
-  onAutoTrade?: (side: "long" | "short", amount: number, timeframe: string) => Promise<string | null>;
+  onAutoTrade?: (side: "long" | "short", amount: number, timeframe: string, tagline?: string) => Promise<string | null>;
   onOpenMarket: () => void;
   loggedIn: boolean;
   onAuthRequired: () => void;
@@ -164,6 +164,7 @@ export default function CoinDetail({
   const [side, setSide]         = useState<"long" | "short" | null>(null);
   const [amount, setAmount]     = useState<number | null>(null);
   const [customAmt, setCustomAmt] = useState("");
+  const [tagline, setTagline]   = useState("");
   const [betError, setBetError] = useState("");
   const [betLoading, setBetLoading] = useState(false);
 
@@ -185,7 +186,7 @@ export default function CoinDetail({
     let err: string | null;
     if (!activeMarket) {
       if (onAutoTrade) {
-        err = await onAutoTrade(side!, finalAmount!, timeframe);
+        err = await onAutoTrade(side!, finalAmount!, timeframe, tagline.trim() || undefined);
       } else {
         onOpenMarket();
         setBetLoading(false);
@@ -196,7 +197,7 @@ export default function CoinDetail({
     }
     setBetLoading(false);
     if (err) setBetError(err);
-    else { setSide(null); setAmount(null); setCustomAmt(""); }
+    else { setSide(null); setAmount(null); setCustomAmt(""); setTagline(""); }
   }
 
   // ── Theme ──────────────────────────────────────────────────────────────────
@@ -396,6 +397,21 @@ export default function CoinDetail({
               className={`w-full border text-[13px] font-bold pl-7 pr-3 py-2.5 rounded-xl outline-none transition-all ${T.input}`} />
           </div>
         </div>
+
+        {/* Message / tagline (only for new markets) */}
+        {!activeMarket && (
+          <div className="px-4 pb-4">
+            <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${T.sectionLbl}`}>Your message</p>
+            <textarea
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              maxLength={80}
+              placeholder={`${symbol} to the moon!`}
+              rows={2}
+              className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${T.input} placeholder:opacity-30`}
+            />
+          </div>
+        )}
 
         {/* To win */}
         <div className="px-4 pb-4">
