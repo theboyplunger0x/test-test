@@ -603,10 +603,11 @@ export async function startBot() {
         return;
       }
 
-      // @mention → strip mention and reply with AI
+      // @mention or name reference → reply with AI
       const mentionRegex = new RegExp(`@${botUsername}\\b`, "i");
-      const isMentioned = mentionRegex.test(text)
-        || (ctx.message as any).reply_to_message?.from?.username?.toLowerCase() === botUsername.toLowerCase();
+      const nameRegex    = /\bfud\b/i;  // catches "fud", "fud bot", "hey fud", etc.
+      const isRepliedTo  = (ctx.message as any).reply_to_message?.from?.username?.toLowerCase() === botUsername.toLowerCase();
+      const isMentioned  = mentionRegex.test(text) || nameRegex.test(text) || isRepliedTo;
 
       if (!isMentioned) return;
 
