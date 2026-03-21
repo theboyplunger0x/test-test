@@ -112,6 +112,8 @@ export default function FeedPage() {
   const [poolSortDir, setPoolSortDir]       = useState<"asc" | "desc" | null>(null);
   const [trendingTokens, setTrendingTokens] = useState<TokenInfo[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
+  const [trendingChain, setTrendingChain] = useState<string | null>(null);
+  const [trendingSort, setTrendingSort]   = useState<"mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null>(null);
   const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
   const [paperMode, setPaperMode]           = useState(false);
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
@@ -720,52 +722,57 @@ export default function FeedPage() {
         )}
 
         {/* TRENDING TAB */}
-        {!selectedCoin && mainTab === "trending" && (
-          <motion.div key="trending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
+        {!selectedCoin && mainTab === "trending" && (() => {
+          let displayed = trendingTokens;
+          if (trendingChain) displayed = displayed.filter(t => t.chainLabel === trendingChain);
+          if (trendingSort === "mcap-desc") displayed = [...displayed].sort((a, b) => b.marketCap - a.marketCap);
+          else if (trendingSort === "mcap-asc")  displayed = [...displayed].sort((a, b) => a.marketCap - b.marketCap);
+          else if (trendingSort === "vol-desc")  displayed = [...displayed].sort((a, b) => b.volume24h - a.volume24h);
+          else if (trendingSort === "vol-asc")   displayed = [...displayed].sort((a, b) => a.volume24h - b.volume24h);
+          return (
+            <motion.div key="trending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
 
-            {/* Header */}
-            <div className={`flex items-center justify-between px-5 py-2 border-b shrink-0 ${T.navBorder}`}>
-              <span className={`text-[11px] font-black uppercase tracking-widest ${dk ? "text-white/30" : "text-gray-400"}`}>
-                🔥 Trending on DexScreener
-              </span>
-              <button
-                onClick={() => setCASearchOpen(true)}
-                className={`text-[11px] font-black px-3 py-1.5 rounded-xl border transition-all ${
-                  dk ? "border-white/8 text-white/40 hover:text-white/80 hover:bg-white/6" : "border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                ⌕ Search / CA
-              </button>
-            </div>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-5 py-2 border-b shrink-0 ${T.navBorder}`}>
+                <span className={`text-[11px] font-black uppercase tracking-widest ${dk ? "text-white/30" : "text-gray-400"}`}>
+                  🔥 Trending on DexScreener
+                </span>
+                <TrendingFilterBar
+                  dk={dk}
+                  chain={trendingChain} setChain={setTrendingChain}
+                  sort={trendingSort}   setSort={setTrendingSort}
+                />
+              </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-5 py-5">
-              {trendingLoading && trendingTokens.length === 0 ? (
-                <div className={`flex items-center justify-center h-full ${dk ? "text-white/30" : "text-gray-400"}`}>
-                  <span className="text-[13px] font-bold">Loading…</span>
-                </div>
-              ) : trendingTokens.length === 0 ? (
-                <div className={`flex flex-col items-center justify-center h-full gap-3 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                  <span className="text-[32px]">—</span>
-                  <p className="text-[13px] font-bold">No trending data</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {trendingTokens.map((token, i) => (
-                    <TrendingTokenCard
-                      key={token.address}
-                      token={token}
-                      rank={i + 1}
-                      dk={dk}
-                      onOpenMarket={() => handleOpenMarket({ symbol: token.symbol, chain: token.chainLabel, marketCap: token.marketCap, ca: token.address } as any)}
-                      onViewCoin={() => handleCoinClick(token.symbol)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                {trendingLoading && trendingTokens.length === 0 ? (
+                  <div className={`flex items-center justify-center h-full ${dk ? "text-white/30" : "text-gray-400"}`}>
+                    <span className="text-[13px] font-bold">Loading…</span>
+                  </div>
+                ) : displayed.length === 0 ? (
+                  <div className={`flex flex-col items-center justify-center h-full gap-3 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                    <span className="text-[32px]">—</span>
+                    <p className="text-[13px] font-bold">{trendingTokens.length === 0 ? "No trending data" : "No results for this filter"}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {displayed.map((token, i) => (
+                      <TrendingTokenCard
+                        key={token.address}
+                        token={token}
+                        rank={i + 1}
+                        dk={dk}
+                        onOpenMarket={() => handleOpenMarket({ symbol: token.symbol, chain: token.chainLabel, marketCap: token.marketCap, ca: token.address } as any)}
+                        onViewCoin={() => handleCoinClick(token.symbol)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {/* RANKS TAB */}
         {!selectedCoin && mainTab === "ranks" && (
@@ -1419,6 +1426,75 @@ function FilterBar({ dk, navBorder, filter, setFilter, marketCapMax, setMarketCa
           </AnimatePresence>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── TrendingFilterBar ────────────────────────────────────────────────────────
+
+function TrendingFilterBar({ dk, chain, setChain, sort, setSort }: {
+  dk: boolean;
+  chain: string | null; setChain: (v: string | null) => void;
+  sort: "mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null;
+  setSort: (v: "mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeCount = [chain !== null, sort !== null].filter(Boolean).length;
+
+  const btnBase = `border text-[11px] font-black px-3 py-1.5 rounded-xl transition-all ${dk ? "border-white/8" : "border-gray-200"}`;
+  const btnOn  = dk ? "bg-white/14 text-white" : "bg-gray-200 text-gray-900";
+  const btnOff = dk ? "bg-transparent text-white/35 hover:text-white/60 hover:bg-white/6" : "bg-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50";
+  const chipOn  = dk ? "bg-white text-black" : "bg-gray-900 text-white";
+  const chipOff = dk ? "bg-white/6 text-white/40 hover:bg-white/10 hover:text-white/70 border border-white/8" : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-700 border border-gray-200";
+
+  function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+    return <button onClick={onClick} className={`text-[11px] font-black px-3 py-1.5 rounded-xl transition-all ${active ? chipOn : chipOff}`}>{label}</button>;
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className={`flex items-center gap-1.5 ${btnBase} ${open || activeCount > 0 ? btnOn : btnOff}`}>
+        <span>Filters</span>
+        {activeCount > 0 && (
+          <span className={`text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center ${dk ? "bg-white/25 text-white" : "bg-gray-400 text-white"}`}>
+            {activeCount}
+          </span>
+        )}
+        <span className={`text-[9px] transition-transform duration-150 ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className={`absolute right-0 top-full mt-1 z-20 rounded-2xl border p-3 space-y-2.5 min-w-[260px] ${dk ? "bg-[#161616] border-white/10 shadow-2xl" : "bg-white border-gray-200 shadow-xl"}`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] font-black uppercase tracking-widest w-[40px] shrink-0 ${dk ? "text-white/20" : "text-gray-400"}`}>Chain</span>
+              <div className="flex gap-1.5 flex-wrap">
+                <Chip label="All"  active={chain === null}    onClick={() => setChain(null)} />
+                <Chip label="SOL"  active={chain === "SOL"}   onClick={() => setChain("SOL")} />
+                <Chip label="ETH"  active={chain === "ETH"}   onClick={() => setChain("ETH")} />
+                <Chip label="BASE" active={chain === "BASE"}  onClick={() => setChain("BASE")} />
+                <Chip label="BSC"  active={chain === "BSC"}   onClick={() => setChain("BSC")} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] font-black uppercase tracking-widest w-[40px] shrink-0 ${dk ? "text-white/20" : "text-gray-400"}`}>Sort</span>
+              <div className="flex gap-1.5 flex-wrap">
+                <Chip label="Trend ↑"   active={sort === null}         onClick={() => setSort(null)} />
+                <Chip label="MCap ↓"    active={sort === "mcap-desc"}  onClick={() => setSort("mcap-desc")} />
+                <Chip label="MCap ↑"    active={sort === "mcap-asc"}   onClick={() => setSort("mcap-asc")} />
+                <Chip label="Vol 24h ↓" active={sort === "vol-desc"}   onClick={() => setSort("vol-desc")} />
+                <Chip label="Vol 24h ↑" active={sort === "vol-asc"}    onClick={() => setSort("vol-asc")} />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
