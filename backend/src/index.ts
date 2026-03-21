@@ -14,6 +14,7 @@ import { depositRoutes }     from "./routes/deposits.js";
 import { activityRoutes }    from "./routes/activity.js";
 import { scheduleAllPendingMarkets } from "./workers/resolver.js";
 import { pollDeposits }              from "./workers/depositPoller.js";
+import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
 import { runMigrations }             from "./db/runMigrations.js";
 import { startBot }                  from "./telegram-bot.js";
 
@@ -66,6 +67,10 @@ await scheduleAllPendingMarkets();
 // Poll for incoming deposits every 30s
 setInterval(pollDeposits, 30_000);
 pollDeposits();
+
+// Process pending withdrawals every 60s
+setInterval(processPendingWithdrawals, 60_000);
+processPendingWithdrawals();
 
 // Start server
 const port = parseInt(process.env.PORT ?? "3001");

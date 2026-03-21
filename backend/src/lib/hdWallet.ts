@@ -31,8 +31,20 @@ export function deriveEvmAddress(index: number): string {
   return publicKeyToAddress(`0x${Buffer.from(child.publicKey).toString("hex")}`);
 }
 
+export function deriveEvmPrivateKey(index: number): `0x${string}` {
+  const child = getHDKey().derive(`m/44'/60'/0'/0/${index}`);
+  if (!child.privateKey) throw new Error("Failed to derive EVM private key");
+  return `0x${Buffer.from(child.privateKey).toString("hex")}`;
+}
+
 export function deriveSolAddress(index: number): string {
   const path = `m/44'/501'/${index}'/0'`;
   const { key } = derivePath(path, getSeed().toString("hex"));
   return Keypair.fromSeed(key).publicKey.toBase58();
+}
+
+export function deriveSolKeypair(index: number): Keypair {
+  const path = `m/44'/501'/${index}'/0'`;
+  const { key } = derivePath(path, getSeed().toString("hex"));
+  return Keypair.fromSeed(key);
 }
