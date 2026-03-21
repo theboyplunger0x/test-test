@@ -5,7 +5,7 @@ import { createHmac, randomBytes } from "node:crypto";
 
 const API = process.env.BACKEND_URL || "http://localhost:3001";
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const FRONTEND_URL = process.env.FRONTEND_URL ?? "https://fudmarkets.vercel.app";
+const FRONTEND_URL = process.env.FRONTEND_URL ?? "https://fud-markets.vercel.app";
 
 // Chain map: dexscreener chainId → our backend chain label
 const CHAIN_MAP: Record<string, string> = {
