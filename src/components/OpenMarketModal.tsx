@@ -136,9 +136,9 @@ export default function OpenMarketModal({
 
           <div className="grid grid-cols-4 gap-1.5 mb-2">
             {QUICK_AMOUNTS.map((a) => (
-              <button key={a} onClick={() => { setAmount(a); setCustomAmt(""); }}
+              <button key={a} onClick={() => { setAmount(a); setCustomAmt(String(a)); }}
                 className={`py-2 rounded-xl text-[11px] font-black transition-all ${
-                  amount === a && !customAmt
+                  amount === a && customAmt === String(a)
                     ? dk ? "bg-white text-black" : "bg-gray-900 text-white"
                     : dk ? "bg-white/6 text-white/50 hover:bg-white/12 hover:text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                 }`}>${a}</button>
