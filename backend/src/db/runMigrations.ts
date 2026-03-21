@@ -104,6 +104,31 @@ const alterations = `
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_index        INT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_evm  TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_sol  TEXT UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code        TEXT UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by          UUID REFERENCES users(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tier                 TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS referral_rewards (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id   UUID NOT NULL REFERENCES users(id),
+  referred_id   UUID NOT NULL REFERENCES users(id),
+  reward_usd    NUMERIC(18, 6) NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  claimed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_referral_rewards_referrer ON referral_rewards(referrer_id);
+
+CREATE TABLE IF NOT EXISTS cashback_rewards (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL REFERENCES users(id),
+  market_id     UUID REFERENCES markets(id),
+  reward_usd    NUMERIC(18, 6) NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  claimed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_cashback_rewards_user ON cashback_rewards(user_id);
 `;
 
 export async function runMigrations() {
