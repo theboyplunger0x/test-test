@@ -13,15 +13,14 @@ import DepositModal from "./DepositModal";
 import OpenMarketModal from "./OpenMarketModal";
 import CASearchModal from "./CASearchModal";
 import ReferralModal from "./ReferralModal";
-import NewPairsView from "./NewPairsView";
 import LeaderboardView from "./LeaderboardView";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
+import { fetchTrending } from "@/lib/chartData";
 
 type Filter = "all" | "hot" | "juicy";
 type Theme = "dark" | "light";
-type MainTab = "feed" | "scout" | "ranks";
-type ScoutView = "new" | "trending" | "untouched";
+type MainTab = "feed" | "trending" | "ranks";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
@@ -111,9 +110,8 @@ export default function FeedPage() {
   const [marketCapMax, setMarketCapMax]     = useState<number | null>(null);
   const [minPool, setMinPool]               = useState<number | null>(null);
   const [poolSortDir, setPoolSortDir]       = useState<"asc" | "desc" | null>(null);
-  const [scoutView, setScoutView]           = useState<ScoutView>("new");
-  const [scoutChain, setScoutChain]         = useState<string | null>(null);
-  const [scoutSort, setScoutSort]           = useState<"mcap-desc" | "mcap-asc" | "newest" | null>(null);
+  const [trendingTokens, setTrendingTokens] = useState<TokenInfo[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
   const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
   const [paperMode, setPaperMode]           = useState(false);
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
@@ -173,6 +171,24 @@ export default function FeedPage() {
     const i = setInterval(() => fetchLiveCoins(setLiveCoins), 5 * 60_000);
     return () => clearInterval(i);
   }, []);
+
+  // Fetch trending tokens when Trending tab is active
+  useEffect(() => {
+    if (mainTab !== "trending") return;
+    let cancelled = false;
+    async function load() {
+      setTrendingLoading(true);
+      try {
+        const tokens = await fetchTrending();
+        if (!cancelled) setTrendingTokens(tokens);
+      } finally {
+        if (!cancelled) setTrendingLoading(false);
+      }
+    }
+    load();
+    const i = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(i); };
+  }, [mainTab]);
 
   // Live price SSE stream — connects to backend /prices/live, updates every ~1.5s
   useEffect(() => {
@@ -435,35 +451,10 @@ export default function FeedPage() {
 
   const MAIN_TABS: { key: MainTab; label: string }[] = [
     { key: "feed",  label: "Feed" },
-    { key: "scout", label: "Scout" },
+    { key: "trending", label: "Trending" },
     { key: "ranks", label: "Ranks" },
   ];
 
-  // Scout: trending with chain + sort filters
-  let scoutTrending = [...allChallenges];
-  if (scoutChain) scoutTrending = scoutTrending.filter(c => c.chain === scoutChain);
-  if (scoutSort === "mcap-desc") {
-    scoutTrending.sort((a, b) => {
-      const ca = liveCoins.find(co => co.symbol === a.symbol)?.marketCap ?? 0;
-      const cb = liveCoins.find(co => co.symbol === b.symbol)?.marketCap ?? 0;
-      return cb - ca;
-    });
-  } else if (scoutSort === "mcap-asc") {
-    scoutTrending.sort((a, b) => {
-      const ca = liveCoins.find(co => co.symbol === a.symbol)?.marketCap ?? 0;
-      const cb = liveCoins.find(co => co.symbol === b.symbol)?.marketCap ?? 0;
-      return ca - cb;
-    });
-  } else {
-    scoutTrending.sort((a, b) => a.openedAt - b.openedAt); // newest first
-  }
-
-  // Scout: coins with no open markets
-  const touchedSymbols = new Set(markets.map(m => m.symbol));
-  let scoutUntouched = liveCoins.filter(co => !touchedSymbols.has(co.symbol));
-  if (scoutChain) scoutUntouched = scoutUntouched.filter(co => co.chain === scoutChain);
-  if (scoutSort === "mcap-desc") scoutUntouched = [...scoutUntouched].sort((a, b) => b.marketCap - a.marketCap);
-  else if (scoutSort === "mcap-asc") scoutUntouched = [...scoutUntouched].sort((a, b) => a.marketCap - b.marketCap);
 
   return (
     <div className={`flex flex-col h-[100dvh] ${T.root}`}>
@@ -688,7 +679,7 @@ export default function FeedPage() {
                           </p>
                         </div>
                         <button
-                          onClick={() => setMainTab("scout")}
+                          onClick={() => setMainTab("trending")}
                           className={`px-5 py-2.5 rounded-xl text-[12px] font-black tracking-wide transition-all ${
                             paperMode
                               ? "bg-yellow-400 text-black hover:bg-yellow-300"
@@ -708,9 +699,9 @@ export default function FeedPage() {
                             ? "Switch timeframe or open a paper market yourself."
                             : "Switch timeframe or open one yourself."}
                         </p>
-                        <button onClick={() => setMainTab("scout")}
+                        <button onClick={() => setMainTab("trending")}
                           className={`text-[12px] font-black px-4 py-2 rounded-xl transition-all ${dk ? "bg-white/8 hover:bg-white/15 text-white/50 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-900"}`}>
-                          Scout pairs →
+                          Trending →
                         </button>
                       </>
                     )}
@@ -728,78 +719,49 @@ export default function FeedPage() {
           </motion.div>
         )}
 
-        {/* SCOUT TAB */}
-        {!selectedCoin && mainTab === "scout" && (
-          <motion.div key="scout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
+        {/* TRENDING TAB */}
+        {!selectedCoin && mainTab === "trending" && (
+          <motion.div key="trending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
 
-            {/* Scout sub-nav + filters */}
+            {/* Header */}
             <div className={`flex items-center justify-between px-5 py-2 border-b shrink-0 ${T.navBorder}`}>
-              <div className="flex items-center gap-1">
-                {(["new", "trending", "untouched"] as ScoutView[]).map(v => (
-                  <button key={v} onClick={() => setScoutView(v)}
-                    className={`text-[12px] font-black px-3 py-1.5 rounded-xl transition-all ${scoutView === v ? T.filterActive : T.filterInactive}`}>
-                    {v === "new" ? "New Pairs" : v === "trending" ? "Trending" : "Untouched"}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* CA search button */}
-                <button
-                  onClick={() => setCASearchOpen(true)}
-                  className={`text-[11px] font-black px-3 py-1.5 rounded-xl border transition-all ${
-                    dk ? "border-white/8 text-white/40 hover:text-white/80 hover:bg-white/6" : "border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  ⌕ Search / CA
-                </button>
-                {/* Scout filter bar — right aligned */}
-                <ScoutFilterBar dk={dk} navBorder={T.navBorder} chain={scoutChain} setChain={setScoutChain} sort={scoutSort} setSort={setScoutSort} />
-              </div>
+              <span className={`text-[11px] font-black uppercase tracking-widest ${dk ? "text-white/30" : "text-gray-400"}`}>
+                🔥 Trending on DexScreener
+              </span>
+              <button
+                onClick={() => setCASearchOpen(true)}
+                className={`text-[11px] font-black px-3 py-1.5 rounded-xl border transition-all ${
+                  dk ? "border-white/8 text-white/40 hover:text-white/80 hover:bg-white/6" : "border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                ⌕ Search / CA
+              </button>
             </div>
 
-            {/* Scout content */}
-            <div className="flex-1 overflow-hidden flex">
-              {scoutView === "new" ? (
-                <NewPairsView
-                  markets={markets}
-                  dk={dk}
-                  onOpenMarket={handleOpenMarket}
-                  onViewCoin={handleCoinClick}
-                  loggedIn={!!user}
-                  onAuthRequired={() => setAuthOpen(true)}
-                  chainFilter={scoutChain}
-                  liveCoins={liveCoins}
-                />
-              ) : scoutView === "trending" ? (
-                <div className="flex-1 overflow-y-auto px-5 py-5">
-                  {scoutTrending.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {scoutTrending.map((c, i) => (
-                        <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => handleCoinClick(c.symbol)} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className={`flex flex-col items-center justify-center h-full gap-3 ${T.emptyIcon}`}>
-                      <span className="text-[32px]">—</span>
-                      <p className="text-[13px] font-bold">No markets yet</p>
-                      <button onClick={() => setScoutView("new")}
-                        className={`text-[12px] font-black px-4 py-2 rounded-xl transition-all ${dk ? "bg-white/8 hover:bg-white/15 text-white/50 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}>
-                        Open the first one →
-                      </button>
-                    </div>
-                  )}
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-5">
+              {trendingLoading && trendingTokens.length === 0 ? (
+                <div className={`flex items-center justify-center h-full ${dk ? "text-white/30" : "text-gray-400"}`}>
+                  <span className="text-[13px] font-bold">Loading…</span>
+                </div>
+              ) : trendingTokens.length === 0 ? (
+                <div className={`flex flex-col items-center justify-center h-full gap-3 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                  <span className="text-[32px]">—</span>
+                  <p className="text-[13px] font-bold">No trending data</p>
                 </div>
               ) : (
-                /* Untouched — coins with zero open markets */
-                <UntouchedView
-                  coins={scoutUntouched}
-                  dk={dk}
-                  onOpenMarket={handleOpenMarket}
-                  onViewCoin={handleCoinClick}
-                  loggedIn={!!user}
-                  onAuthRequired={() => setAuthOpen(true)}
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {trendingTokens.map((token, i) => (
+                    <TrendingTokenCard
+                      key={token.address}
+                      token={token}
+                      rank={i + 1}
+                      dk={dk}
+                      onOpenMarket={() => handleOpenMarket({ symbol: token.symbol, chain: token.chainLabel, marketCap: token.marketCap, ca: token.address } as any)}
+                      onViewCoin={() => handleCoinClick(token.symbol)}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           </motion.div>
@@ -1461,71 +1423,81 @@ function FilterBar({ dk, navBorder, filter, setFilter, marketCapMax, setMarketCa
   );
 }
 
-// ─── ScoutFilterBar ───────────────────────────────────────────────────────────
+// ─── TrendingTokenCard ────────────────────────────────────────────────────────
 
-function ScoutFilterBar({ dk, navBorder, chain, setChain, sort, setSort }: {
-  dk: boolean; navBorder: string;
-  chain: string | null; setChain: (v: string | null) => void;
-  sort: "mcap-desc" | "mcap-asc" | "newest" | null; setSort: (v: "mcap-desc" | "mcap-asc" | "newest" | null) => void;
+function TrendingTokenCard({ token, rank, dk, onOpenMarket, onViewCoin }: {
+  token: TokenInfo; rank: number; dk: boolean;
+  onOpenMarket: () => void; onViewCoin: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const activeCount = [chain !== null, sort !== null].filter(Boolean).length;
-
-  const btnBase = dk
-    ? "border border-white/8 text-[11px] font-black px-3 py-1.5 rounded-xl transition-all"
-    : "border border-gray-200 text-[11px] font-black px-3 py-1.5 rounded-xl transition-all";
-  const btnActive   = dk ? "bg-white/14 text-white" : "bg-gray-200 text-gray-900";
-  const btnInactive = dk ? "bg-transparent text-white/35 hover:text-white/60 hover:bg-white/6" : "bg-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-50";
-  const chipOn  = dk ? "bg-white text-black" : "bg-gray-900 text-white";
-  const chipOff = dk ? "bg-white/6 text-white/40 hover:bg-white/10 hover:text-white/70 border border-white/8" : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-700 border border-gray-200";
-
-  function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-    return <button onClick={onClick} className={`text-[11px] font-black px-3 py-1.5 rounded-xl transition-all ${active ? chipOn : chipOff}`}>{label}</button>;
+  function chainPill(chain: string) {
+    if (chain === "SOL")  return dk ? "text-purple-300 bg-purple-500/20" : "text-purple-700 bg-purple-100";
+    if (chain === "BASE") return dk ? "text-blue-300 bg-blue-500/20"     : "text-blue-700 bg-blue-100";
+    if (chain === "BSC")  return dk ? "text-yellow-300 bg-yellow-500/20" : "text-yellow-700 bg-yellow-100";
+    return dk ? "text-orange-300 bg-orange-500/20" : "text-orange-700 bg-orange-100";
   }
 
-  return (
-    <div className="relative">
-      <button onClick={() => setOpen(o => !o)} className={`flex items-center gap-1.5 ${btnBase} ${open || activeCount > 0 ? btnActive : btnInactive}`}>
-        <span>Filters</span>
-        {activeCount > 0 && (
-          <span className={`text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center ${dk ? "bg-white/25 text-white" : "bg-gray-400 text-white"}`}>
-            {activeCount}
-          </span>
-        )}
-        <span className={`text-[9px] transition-transform duration-150 ${open ? "rotate-180" : ""}`}>▾</span>
-      </button>
+  function fmtPrice(n: number): string {
+    if (n >= 1) return `$${n.toFixed(4)}`;
+    if (n >= 0.0001) return `$${n.toFixed(6)}`;
+    return `$${n.toPrecision(4)}`;
+  }
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className={`absolute right-0 top-full mt-1 z-20 rounded-2xl border p-3 space-y-2.5 min-w-[240px] ${dk ? "bg-[#161616] border-white/10 shadow-2xl" : "bg-white border-gray-200 shadow-xl"}`}
-          >
-            <div className="flex items-center gap-2">
-              <span className={`text-[9px] font-black uppercase tracking-widest w-[40px] shrink-0 ${dk ? "text-white/20" : "text-gray-400"}`}>Chain</span>
-              <div className="flex gap-1.5 flex-wrap">
-                <Chip label="All"  active={chain === null}    onClick={() => setChain(null)} />
-                <Chip label="SOL"  active={chain === "SOL"}   onClick={() => setChain("SOL")} />
-                <Chip label="ETH"  active={chain === "ETH"}   onClick={() => setChain("ETH")} />
-                <Chip label="BASE" active={chain === "BASE"}  onClick={() => setChain("BASE")} />
-                <Chip label="BSC"  active={chain === "BSC"}   onClick={() => setChain("BSC")} />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-[9px] font-black uppercase tracking-widest w-[40px] shrink-0 ${dk ? "text-white/20" : "text-gray-400"}`}>Sort</span>
-              <div className="flex gap-1.5 flex-wrap">
-                <Chip label="Newest"     active={sort === null}         onClick={() => setSort(null)} />
-                <Chip label="Mkt Cap ↓" active={sort === "mcap-desc"}  onClick={() => setSort("mcap-desc")} />
-                <Chip label="Mkt Cap ↑" active={sort === "mcap-asc"}   onClick={() => setSort("mcap-asc")} />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+  function fmtNum(n: number): string {
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000)     return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)         return `$${(n / 1_000).toFixed(0)}K`;
+    return `$${n.toFixed(0)}`;
+  }
+
+  const pos = "text-emerald-400";
+  const neg = "text-red-400";
+  const card = dk ? "border-white/8 bg-white/[0.03] hover:border-white/14" : "border-gray-200 bg-white hover:border-gray-300 shadow-sm";
+  const label = dk ? "text-white/25" : "text-gray-400";
+  const muted = dk ? "text-white/40" : "text-gray-500";
+  const strong = dk ? "text-white" : "text-gray-900";
+  const poolBox = dk ? "bg-white/4" : "bg-gray-50";
+  const openBtn = dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-black";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: rank * 0.03 }}
+      className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-all ${card}`}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-black ${label}`}>#{rank}</span>
+            <button onClick={onViewCoin} className={`text-[18px] font-black leading-none transition-colors hover:opacity-70 ${strong}`}>
+              ${token.symbol}
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${chainPill(token.chainLabel)}`}>{token.chainLabel}</span>
+            <span className={`text-[10px] font-mono ${muted}`}>{fmtPrice(token.price)}</span>
+          </div>
+        </div>
+        <span className={`text-[13px] font-black ${token.change24h >= 0 ? pos : neg}`}>
+          {token.change24h >= 0 ? "+" : ""}{token.change24h.toFixed(1)}%
+        </span>
+      </div>
+
+      <div className={`rounded-xl px-3 py-2.5 flex justify-between ${poolBox}`}>
+        <div>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${label}`}>Mkt cap</p>
+          <p className={`text-[12px] font-black ${muted}`}>{token.marketCap > 0 ? fmtNum(token.marketCap) : "—"}</p>
+        </div>
+        <div className="text-right">
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${label}`}>Vol 24h</p>
+          <p className={`text-[12px] font-black ${muted}`}>{token.volume24h > 0 ? fmtNum(token.volume24h) : "—"}</p>
+        </div>
+      </div>
+
+      <button onClick={onOpenMarket} className={`w-full py-2.5 rounded-xl text-[12px] font-black transition-all ${openBtn}`}>
+        Open Market →
+      </button>
+    </motion.div>
   );
 }
 
@@ -1625,95 +1597,3 @@ function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tap
   );
 }
 
-// ─── UntouchedView ─────────────────────────────────────────────────────────────
-
-function UntouchedView({ coins, dk, onOpenMarket, onViewCoin, loggedIn, onAuthRequired }: {
-  coins: Coin[];
-  dk: boolean;
-  onOpenMarket: (coin: Coin) => void;
-  onViewCoin: (symbol: string) => void;
-  loggedIn: boolean;
-  onAuthRequired: () => void;
-}) {
-  const T = {
-    card:    dk ? "border-white/8 bg-white/[0.03] hover:border-white/14" : "border-gray-200 bg-white hover:border-gray-300 shadow-sm",
-    label:   dk ? "text-white/25" : "text-gray-400",
-    strong:  dk ? "text-white" : "text-gray-900",
-    muted:   dk ? "text-white/40" : "text-gray-500",
-    poolBox: dk ? "bg-white/4" : "bg-gray-50",
-    pos:     "text-emerald-400",
-    neg:     "text-red-400",
-    openBtn: dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-black",
-    emptyIcon: dk ? "text-white/20" : "text-gray-300",
-  };
-
-  function chainPill(chain: string) {
-    if (chain === "SOL")  return dk ? "text-purple-300 bg-purple-500/20" : "text-purple-700 bg-purple-100";
-    if (chain === "BASE") return dk ? "text-blue-300 bg-blue-500/20"     : "text-blue-700 bg-blue-100";
-    if (chain === "BSC")  return dk ? "text-yellow-300 bg-yellow-500/20" : "text-yellow-700 bg-yellow-100";
-    return dk ? "text-orange-300 bg-orange-500/20" : "text-orange-700 bg-orange-100";
-  }
-
-  if (coins.length === 0) {
-    return (
-      <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${T.emptyIcon}`}>
-        <span className="text-[32px]">—</span>
-        <p className="text-[13px] font-bold">All pairs have open markets</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 overflow-y-auto px-5 py-5">
-      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-        {coins.map((coin, i) => (
-          <motion.div
-            key={coin.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03 }}
-            className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-all ${T.card}`}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <button onClick={() => onViewCoin(coin.symbol)}
-                  className={`text-[18px] font-black leading-none transition-colors hover:opacity-70 ${T.strong}`}>
-                  ${coin.symbol}
-                </button>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${chainPill(coin.chain)}`}>{coin.chain}</span>
-                  <span className={`text-[10px] font-mono ${T.muted}`}>${formatPrice(coin.price)}</span>
-                </div>
-              </div>
-              <span className={`text-[13px] font-black ${coin.change24h >= 0 ? T.pos : T.neg}`}>
-                {coin.change24h >= 0 ? "+" : ""}{coin.change24h.toFixed(1)}%
-              </span>
-            </div>
-
-            <div className={`rounded-xl px-3 py-2.5 flex justify-between ${T.poolBox}`}>
-              <div>
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${T.label}`}>Mkt cap</p>
-                <p className={`text-[12px] font-black ${T.muted}`}>{formatMarketCap(coin.marketCap)}</p>
-              </div>
-              <div className="text-center">
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${T.label}`}>Age</p>
-                <p className={`text-[12px] font-black ${T.muted}`}>{coin.age}</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${T.label}`}>Markets</p>
-                <p className={`text-[12px] font-black ${T.label}`}>none yet</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => { if (!loggedIn) { onAuthRequired(); return; } onOpenMarket(coin); }}
-              className={`w-full py-2.5 rounded-xl text-[12px] font-black transition-all ${T.openBtn}`}
-            >
-              Be first — Open Market
-            </button>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}

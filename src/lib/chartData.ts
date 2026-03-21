@@ -49,7 +49,7 @@ const DS_CHAIN: Record<string, string> = {
 
 const USD_QUOTES = ["USDC", "USDT", "USD", "BUSD", "DAI"];
 
-function pairsToTokenInfo(pairs: any[]): TokenInfo | null {
+export function pairsToTokenInfo(pairs: any[]): TokenInfo | null {
   const withPrice = pairs.filter((p) => p.priceUsd && parseFloat(p.priceUsd) > 0);
   // Prefer USD-quoted pairs (most accurate for USD price tracking)
   const usdPairs = withPrice.filter((p) => USD_QUOTES.includes(p.quoteToken?.symbol?.toUpperCase()));
@@ -155,6 +155,37 @@ export async function getOHLCV(
       }))
       .sort((a, b) => (a.time as number) - (b.time as number))
       .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
+  } catch {
+    return [];
+  }
+}
+
+// ─── DexScreener Trending (token boosts) ─────────────────────────────────────
+
+/** Fetch top trending tokens from DexScreener boost rankings */
+export async function fetchTrending(limit = 20): Promise<TokenInfo[]> {
+  try {
+    const boostRes = await fetch("https://api.dexscreener.com/token-boosts/top/v1");
+    if (!boostRes.ok) return [];
+    const boosts: Array<{ chainId: string; tokenAddress: string; totalAmount: number }> = await boostRes.json();
+    const top = boosts.slice(0, limit);
+    if (top.length === 0) return [];
+
+    // Batch fetch pair data for all addresses in one call
+    const addresses = top.map(b => b.tokenAddress).join(",");
+    const pairsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addresses}`);
+    if (!pairsRes.ok) return [];
+    const pairsData = await pairsRes.json();
+    const allPairs: any[] = pairsData.pairs ?? [];
+
+    const results: TokenInfo[] = [];
+    for (const boost of top) {
+      const addr = boost.tokenAddress.toLowerCase();
+      const tokenPairs = allPairs.filter(p => p.baseToken?.address?.toLowerCase() === addr);
+      const info = pairsToTokenInfo(tokenPairs);
+      if (info) results.push(info);
+    }
+    return results;
   } catch {
     return [];
   }
