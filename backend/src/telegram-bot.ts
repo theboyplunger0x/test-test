@@ -577,26 +577,46 @@ export async function startBot() {
     // Let command handlers deal with commands
     if (text.startsWith("/")) return next();
 
-    // In groups, plain text is blocked by privacy mode — guide user to /search
+    // In groups: respond to CAs (token search) or @mentions (AI)
     if (ctx.chat.type !== "private") {
       const isCA = text.length > 20 && !/\s/.test(text);
-      if (!isCA) return;
-      // In groups: search and post token card with Open Trade button
-      const searching = await ctx.reply("🔍 Searching…");
+
+      // CA pasted → search token and post card
+      if (isCA) {
+        const searching = await ctx.reply("🔍 Searching…");
+        try {
+          const found = await searchToken(text);
+          await ctx.telegram.deleteMessage(ctx.chat.id, searching.message_id).catch(() => {});
+          if (!found) return ctx.reply(`❌ Token not found for that CA.`);
+          found.groupChatId = ctx.chat.id;
+          pendingTrades.set(ctx.from.id, found);
+          const deepLink = `https://t.me/${botUsername}?start=opentrade`;
+          await ctx.reply(groupTokenMessage(found), {
+            parse_mode: "Markdown",
+            ...Markup.inlineKeyboard([[Markup.button.url("🔥 Open Trade", deepLink)]]),
+          });
+        } catch {
+          await ctx.telegram.deleteMessage(ctx.chat.id, searching.message_id).catch(() => {});
+          await ctx.reply("❌ Error searching token.");
+        }
+        return;
+      }
+
+      // @mention → strip mention and reply with AI
+      const mentionRegex = new RegExp(`@${botUsername}\\b`, "i");
+      const isMentioned = mentionRegex.test(text)
+        || (ctx.message as any).reply_to_message?.from?.username?.toLowerCase() === botUsername.toLowerCase();
+
+      if (!isMentioned) return;
+
+      const cleanText = text.replace(mentionRegex, "").trim() || "gm";
+      if (!anthropic) return ctx.reply("gm ser 🫡");
       try {
-        const found = await searchToken(text);
-        await ctx.telegram.deleteMessage(ctx.chat.id, searching.message_id).catch(() => {});
-        if (!found) return ctx.reply(`❌ Token not found for that CA.`);
-        found.groupChatId = ctx.chat.id;
-        pendingTrades.set(ctx.from.id, found);
-        const deepLink = `https://t.me/${botUsername}?start=opentrade`;
-        await ctx.reply(groupTokenMessage(found), {
-          parse_mode: "Markdown",
-          ...Markup.inlineKeyboard([[Markup.button.url("🔥 Open Trade", deepLink)]]),
-        });
-      } catch {
-        await ctx.telegram.deleteMessage(ctx.chat.id, searching.message_id).catch(() => {});
-        await ctx.reply("❌ Error searching token.");
+        const session = await getSession(ctx.from.id).catch(() => null);
+        const reply = await getAIReply(ctx.from.id, cleanText, session);
+        await ctx.reply(reply, { parse_mode: "Markdown" });
+      } catch (e: any) {
+        console.error("[bot] AI group error:", e.message);
       }
       return;
     }
