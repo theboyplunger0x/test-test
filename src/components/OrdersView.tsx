@@ -445,7 +445,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           onClick={async () => {
             try {
               const { token } = await api.tgInitLink();
-              window.open(`https://t.me/testingagent13223bot?start=link_${token}`, "_blank");
+              window.open(`https://t.me/FUDmarkets_BOT?start=link_${token}`, "_blank");
             } catch (e: any) {
               alert(e.message ?? "Error connecting Telegram");
             }

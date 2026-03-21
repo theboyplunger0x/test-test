@@ -316,7 +316,7 @@ export async function startBot() {
   const bot = new Telegraf(BOT_TOKEN);
 
   // Bot username (fetched once at startup for deep links)
-  let botUsername = "testingagent13223bot";
+  let botUsername = "FUDmarkets_BOT";
   bot.telegram.getMe().then(me => { botUsername = me.username ?? botUsername; }).catch(() => {});
 
   // DEBUG: log every update
