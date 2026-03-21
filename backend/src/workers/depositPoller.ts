@@ -15,7 +15,7 @@ const USDC_SOL_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 const baseClient = createPublicClient({
   chain: base,
-  transport: http(process.env.BASE_RPC_URL),
+  transport: http(process.env.BASE_RPC_URL ?? "https://mainnet.base.org"),
 });
 
 const solClient = new Connection(

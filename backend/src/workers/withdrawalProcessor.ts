@@ -25,7 +25,7 @@ const USDC_ABI = [{
 
 const basePublicClient = createPublicClient({
   chain: base,
-  transport: http(process.env.BASE_RPC_URL),
+  transport: http(process.env.BASE_RPC_URL ?? "https://mainnet.base.org"),
 });
 
 const solClient = new Connection(
@@ -41,7 +41,7 @@ async function sendEvmUsdc(fromIndex: number, toAddress: string, amountUsd: numb
   const walletClient = createWalletClient({
     account,
     chain: base,
-    transport: http(process.env.BASE_RPC_URL),
+    transport: http(process.env.BASE_RPC_URL ?? "https://mainnet.base.org"),
   });
 
   const amount = parseUnits(amountUsd.toString(), USDC_DECIMALS);

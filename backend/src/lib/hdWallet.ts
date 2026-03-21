@@ -15,7 +15,7 @@ function getSeed(): Buffer {
   if (!_seed) {
     const mnemonic = process.env.HD_MNEMONIC;
     if (!mnemonic) throw new Error("HD_MNEMONIC env var not set");
-    _seed = Buffer.from(mnemonicToSeedSync(mnemonic));
+    _seed = Buffer.from(mnemonicToSeedSync(mnemonic.trim()));
   }
   return _seed;
 }
