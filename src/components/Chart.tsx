@@ -6,6 +6,7 @@ import type { Candle } from "@/lib/chartData";
 
 interface Props {
   candles: Candle[];
+  livePrice?: number;   // updated every 5s — only updates last point, no full re-render
   entryPrice?: number;
   direction?: "long" | "short" | null;
   dk?: boolean;
@@ -23,7 +24,7 @@ function fmtPrice(n: number): string {
 // How many candles to keep visible (fills chart without cramming all history)
 const VISIBLE_CANDLES = 40;
 
-export default function Chart({ candles, entryPrice, direction, dk = true }: Props) {
+export default function Chart({ candles, livePrice, entryPrice, direction, dk = true }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
   const seriesRef    = useRef<ISeriesApi<SeriesType> | null>(null);
@@ -127,6 +128,13 @@ export default function Chart({ candles, entryPrice, direction, dk = true }: Pro
     });
   }, [candles]);
 
+  // Live price — update only the last data point (no full re-render, no flicker)
+  useEffect(() => {
+    if (!seriesRef.current || !livePrice || candles.length === 0) return;
+    const lastCandle = candles[candles.length - 1];
+    seriesRef.current.update({ time: lastCandle.time, value: livePrice } as any);
+  }, [livePrice, candles]);
+
   // Entry price dashed horizontal line ("Price to beat")
   useEffect(() => {
     if (!seriesRef.current || !entryPrice) return;
@@ -137,7 +145,7 @@ export default function Chart({ candles, entryPrice, direction, dk = true }: Pro
       lineWidth: 1,
       lineStyle: 2,
       axisLabelVisible: true,
-      title: "Price to beat",
+      title: ">>> PRICE TO BEAT <<<",
     });
     return () => { try { seriesRef.current?.removePriceLine(priceLine); } catch {} };
   }, [entryPrice, direction]);

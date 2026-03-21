@@ -72,6 +72,7 @@ export default function CoinDetail({
   const [candles, setCandles]     = useState<Candle[]>([]);
   const [loading, setLoading]     = useState(true);
   const [tick, setTick]           = useState(0);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
 
   // countdown ticker
   useEffect(() => {
@@ -100,12 +101,24 @@ export default function CoinDetail({
     fetchCandles(tokenInfo.pairAddress, timeframe);
   }, [tokenInfo, timeframe, fetchCandles]);
 
-  // Real-time: re-fetch price every 15s and update last candle
+  // Full OHLCV refresh every 30s (historical shape)
   useEffect(() => {
     if (!tokenInfo?.pairAddress) return;
-    const i = setInterval(() => fetchCandles(tokenInfo!.pairAddress, timeframe), 15_000);
+    const i = setInterval(() => fetchCandles(tokenInfo!.pairAddress, timeframe), 30_000);
     return () => clearInterval(i);
   }, [tokenInfo, timeframe, fetchCandles]);
+
+  // Fast price poll every 5s — updates just the last chart point via livePrice prop
+  useEffect(() => {
+    if (!tokenInfo) return;
+    const poll = async () => {
+      const info = await searchBySymbol(symbol, chain);
+      if (info) { setLivePrice(info.price); setTokenInfo(info); }
+    };
+    poll();
+    const i = setInterval(poll, 5_000);
+    return () => clearInterval(i);
+  }, [tokenInfo?.pairAddress, symbol, chain]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Transform candles for market cap view: multiply price values by circulating supply
   // Supply approximated as currentMcap / currentPrice (constant supply assumption)
@@ -278,6 +291,7 @@ export default function CoinDetail({
           )}
           <Chart
             candles={displayCandles}
+            livePrice={chartView === "price" ? (livePrice ?? undefined) : undefined}
             entryPrice={chartView === "price" ? entryPrice : undefined}
             direction={side}
             dk={dk}
