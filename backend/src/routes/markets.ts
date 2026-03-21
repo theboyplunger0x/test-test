@@ -4,7 +4,7 @@ import { getPrice, screenToken } from "../services/oracle.js";
 import { nextWindowClose, calcPayout, calcHouseFee, type Timeframe } from "../lib/market.js";
 import { scheduleResolution } from "../workers/resolver.js";
 
-const VALID_TIMEFRAMES: Timeframe[] = ["5m", "15m", "1h", "4h", "12h", "24h"];
+const VALID_TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
 
 export async function marketRoutes(app: FastifyInstance) {
 

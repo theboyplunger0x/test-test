@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { searchByCA, searchBySymbol, TokenInfo } from "@/lib/chartData";
 
-const TFS = ["5m", "15m", "1h", "4h", "12h", "24h"];
+const TFS = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
 
 function formatPrice(n: number): string {
   if (n === 0) return "0";

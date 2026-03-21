@@ -163,6 +163,7 @@ export async function getOHLCV(
 /** Pick sensible resolution + limit for a given chart timeframe */
 export function resolutionForTf(tf: string): { resolution: OHLCVResolution; limit: number } {
   switch (tf) {
+    case "1m":  return { resolution: "minute", limit: 60  };  // 60 1m candles = 1h
     case "5m":  return { resolution: "minute", limit: 120 };  // 2h of 1m candles
     case "15m": return { resolution: "minute", limit: 200 };  // 3.3h
     case "1h":  return { resolution: "hour",   limit: 96  };  // 4 days

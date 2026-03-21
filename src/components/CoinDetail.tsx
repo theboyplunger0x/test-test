@@ -11,7 +11,7 @@ const Chart = dynamic(() => import("./Chart"), { ssr: false });
 
 const FEE = 0.05;
 const AMOUNTS = [5, 25, 100, 500];
-const TIMEFRAMES = ["5m", "15m", "1h", "4h", "24h"];
+const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 
 function mult(mine: number, other: number) {
   if (mine === 0) return 0;
@@ -173,7 +173,7 @@ export default function CoinDetail({
     ? (finalAmount * activeMult).toFixed(0)
     : null;
 
-  const entryPrice  = activeMarket ? parseFloat(activeMarket.entry_price) : tokenInfo?.price;
+  const entryPrice  = activeMarket ? parseFloat(activeMarket.entry_price) : (livePrice ?? tokenInfo?.price);
 
   async function handleTrade() {
     if (!isReady) return;
@@ -267,7 +267,7 @@ export default function CoinDetail({
           <div className="flex items-center gap-1.5">
             {/* Chart TF — independent from trade TF */}
             <div className={`flex rounded-xl overflow-hidden text-[11px] font-black shrink-0 ${T.toggleBase}`}>
-              {["5m","15m","1h","4h","24h"].map((tf) => (
+              {["1m","5m","15m","1h","4h","24h"].map((tf) => (
                 <button key={tf} onClick={() => setChartTf(tf)}
                   className={`w-9 py-2 text-center transition-all ${chartTf === tf ? T.toggleActive : T.toggleInact}`}>
                   {tf}

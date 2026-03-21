@@ -25,8 +25,9 @@ type ScoutView = "new" | "trending" | "untouched";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
-const TIMEFRAMES = ["5m", "15m", "1h", "4h", "12h", "24h"];
+const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
 const TF_ICONS: Record<string, string> = {
+  "1m":  "·",
   "5m":  "≡",
   "15m": "◌",
   "1h":  "◔",
@@ -1304,7 +1305,7 @@ function FilterBar({ dk, navBorder, filter, setFilter, marketCapMax, setMarketCa
   // Active pill tags
   const activePills = [
     filter !== "all"       ? { label: filter === "hot" ? "🔥 Hot" : "🍋 Juicy", clear: () => setFilter("all") }         : null,
-    marketCapMax !== null  ? { label: `Cap <${marketCapMax >= 1_000_000 ? "$1M" : `$${marketCapMax / 1000}K`}`, clear: () => setMarketCapMax(null) } : null,
+    marketCapMax !== null  ? { label: `Cap <${marketCapMax >= 1_000_000 ? "$1M" : marketCapMax >= 1_000 ? `$${marketCapMax / 1000}K` : `$${marketCapMax}`}`, clear: () => setMarketCapMax(null) } : null,
     minPool !== null       ? { label: `Pool >$${minPool}`, clear: () => setMinPool(null) }                              : null,
     poolSortDir !== null   ? { label: poolSortDir === "asc" ? "Pool ↑" : "Pool ↓", clear: () => setPoolSortDir(null) } : null,
   ].filter(Boolean) as { label: string; clear: () => void }[];
@@ -1374,8 +1375,8 @@ function FilterBar({ dk, navBorder, filter, setFilter, marketCapMax, setMarketCa
                   )}
                   <Row label="Mkt Cap">
                     <Chip label="Any"    active={marketCapMax === null}       onClick={() => setMarketCapMax(null)} />
+                    <Chip label="<$20K"  active={marketCapMax === 20_000}     onClick={() => setMarketCapMax(20_000)} />
                     <Chip label="<$100K" active={marketCapMax === 100_000}    onClick={() => setMarketCapMax(100_000)} />
-                    <Chip label="<$500K" active={marketCapMax === 500_000}    onClick={() => setMarketCapMax(500_000)} />
                     <Chip label="<$1M"   active={marketCapMax === 1_000_000}  onClick={() => setMarketCapMax(1_000_000)} />
                   </Row>
                   {statusFilter === "open" && (

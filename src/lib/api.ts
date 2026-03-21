@@ -25,6 +25,20 @@ export type User = {
   balance_usd: string;
   paper_balance_usd: string;
   created_at?: string;
+  tier?: "" | "normal" | "top";
+};
+
+export type ReferralStats = {
+  code: string;
+  link: string;
+  tier: "normal" | "top";
+  referral_rate: number;
+  cashback_rate: number;
+  referred_count: number;
+  total_referral_usd: string;
+  total_cashback_usd: string;
+  claimable_usd: string;
+  recent_rewards: { reward_usd: string; created_at: string; referred_username: string }[];
 };
 
 export type AuthResponse = { token: string; user: User };
@@ -143,6 +157,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ amount, chain, to_address }),
     }),
+
+  getReferral: () => req<ReferralStats>("/referral"),
+  claimRewards: () => req<{ claimed_usd: string; new_balance: string }>("/referral/claim", { method: "POST", body: "{}" }),
 
   getMarkets: (timeframe?: string) =>
     req<Market[]>(`/markets${timeframe ? `?timeframe=${timeframe}` : ""}`),

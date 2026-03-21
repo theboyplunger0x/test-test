@@ -1,8 +1,9 @@
 // Market lifecycle helpers
 
-export type Timeframe = "5m" | "15m" | "1h" | "4h" | "12h" | "24h";
+export type Timeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "12h" | "24h";
 
 const TF_MS: Record<Timeframe, number> = {
+  "1m":  1  * 60 * 1000,
   "5m":  5  * 60 * 1000,
   "15m": 15 * 60 * 1000,
   "1h":  60 * 60 * 1000,
