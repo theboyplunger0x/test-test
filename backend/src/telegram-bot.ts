@@ -851,6 +851,8 @@ export function startBot() {
     { command: "unlink",   description: "Desconectar tu cuenta de Telegram" },
   ]).catch((e) => console.error("[bot] setMyCommands error:", e.message));
 
+  // Clear any webhook that might be blocking long-polling
+  await bot.telegram.deleteWebhook({ drop_pending_updates: true });
   bot.launch();
   console.log("🤖 Telegram bot iniciado");
 
