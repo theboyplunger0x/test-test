@@ -13,6 +13,7 @@ import { referralRoutes }    from "./routes/referral.js";
 import { depositRoutes }     from "./routes/deposits.js";
 import { activityRoutes }    from "./routes/activity.js";
 import { scheduleAllPendingMarkets } from "./workers/resolver.js";
+import { pollDeposits }              from "./workers/depositPoller.js";
 import { runMigrations }             from "./db/runMigrations.js";
 import { startBot }                  from "./telegram-bot.js";
 
@@ -61,6 +62,10 @@ await runMigrations();
 
 // Schedule resolution for all open markets (handles restarts)
 await scheduleAllPendingMarkets();
+
+// Poll for incoming deposits every 30s
+setInterval(pollDeposits, 30_000);
+pollDeposits();
 
 // Start server
 const port = parseInt(process.env.PORT ?? "3001");

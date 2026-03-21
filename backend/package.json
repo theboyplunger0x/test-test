@@ -13,6 +13,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@scure/bip32": "^1.6.2",
     "@scure/bip39": "^1.5.4",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
