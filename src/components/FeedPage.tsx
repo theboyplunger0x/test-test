@@ -526,7 +526,7 @@ export default function FeedPage() {
                     ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
                     : `${T.portfolioBtn}`
                 }`}>
-                {paperMode ? "📄 Paper" : "💵 Real"}
+                {paperMode ? "Paper" : "Real"}
               </motion.button>
 
               {/* Balance — click to deposit/credit */}
