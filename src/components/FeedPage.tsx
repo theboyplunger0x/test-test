@@ -519,15 +519,16 @@ export default function FeedPage() {
           {user ? (
             <>
               {/* Paper / Real toggle */}
-              <motion.button whileTap={{ scale: 0.94 }}
-                onClick={() => setPaperMode(m => !m)}
-                className={`flex items-center gap-1 border text-[11px] font-black px-2.5 py-2 rounded-xl transition-all ${
-                  paperMode
-                    ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
-                    : `${T.portfolioBtn}`
-                }`}>
-                {paperMode ? "Paper" : "Real"}
-              </motion.button>
+              <div className={`flex rounded-xl p-0.5 border text-[11px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
+                <button onClick={() => setPaperMode(false)}
+                  className={`px-2.5 py-1.5 rounded-[10px] transition-all ${!paperMode ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
+                  Real
+                </button>
+                <button onClick={() => setPaperMode(true)}
+                  className={`px-2.5 py-1.5 rounded-[10px] transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
+                  Paper
+                </button>
+              </div>
 
               {/* Balance — click to deposit/credit */}
               <motion.button whileTap={{ scale: 0.94 }}
