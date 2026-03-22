@@ -206,17 +206,17 @@ export default function FeedPage() {
   useEffect(() => {
     if (mainTab !== "trending") return;
     let cancelled = false;
-    async function load() {
-      setTrendingLoading(true);
+    async function load(initial = false) {
+      if (initial) setTrendingLoading(true);
       try {
         const tokens = await fetchTrending();
         if (!cancelled) setTrendingTokens(tokens);
       } finally {
-        if (!cancelled) setTrendingLoading(false);
+        if (initial && !cancelled) setTrendingLoading(false);
       }
     }
-    load();
-    const i = setInterval(load, 60_000);
+    load(true);
+    const i = setInterval(() => load(false), 60_000);
     return () => { cancelled = true; clearInterval(i); };
   }, [mainTab]);
 
