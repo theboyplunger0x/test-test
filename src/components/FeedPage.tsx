@@ -492,7 +492,7 @@ export default function FeedPage() {
       {/* Top bar */}
       <div className={`flex items-center justify-between px-4 md:px-6 py-3 border-b-2 ${T.topBorder} shrink-0`}>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[16px] md:text-[17px] font-black tracking-tight">FUD</span><span className="text-[16px] md:text-[17px] font-black tracking-tight opacity-30 ml-1">Markets</span>
+          <span className="text-[16px] md:text-[17px] font-black tracking-tight">FUD.</span>
         </div>
 
         {/* Live dot — minimal center indicator on desktop */}
