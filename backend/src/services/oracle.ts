@@ -60,9 +60,9 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
 
 // Entry screening thresholds — applied only to tokens not yet in the system
 const SCREEN = {
-  MIN_TXS_24H:   5,
+  MIN_TXS_24H:   10,
   MIN_VOL_24H:   100,     // USD
-  MIN_FEES_24H:  1,       // USD  (estimated as volume × 0.3%)
+  MIN_FEES_24H:  5,       // USD  (estimated as volume × 0.3%)
   MIN_MCAP:      10_000,  // USD
   FEE_RATE:      0.003,   // 0.3% — typical AMM fee
 };
