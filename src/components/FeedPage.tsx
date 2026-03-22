@@ -518,6 +518,17 @@ export default function FeedPage() {
 
           {user ? (
             <>
+              {/* Paper / Real toggle */}
+              <motion.button whileTap={{ scale: 0.94 }}
+                onClick={() => setPaperMode(m => !m)}
+                className={`flex items-center gap-1 border text-[11px] font-black px-2.5 py-2 rounded-xl transition-all ${
+                  paperMode
+                    ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
+                    : `${T.portfolioBtn}`
+                }`}>
+                {paperMode ? "📄 Paper" : "💵 Real"}
+              </motion.button>
+
               {/* Balance — click to deposit/credit */}
               <motion.button whileTap={{ scale: 0.94 }}
                 onClick={() => paperMode ? setPaperCreditOpen(true) : setDepositOpen(true)}
