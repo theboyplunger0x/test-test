@@ -8,6 +8,23 @@
 
 import { getPriceFromGenLayer, isGenLayerConfigured } from "./genLayerOracle.js";
 
+// ─── Simple in-memory cache for DexScreener responses (60s TTL) ───────────────
+const _cache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 60_000; // 1 minute
+
+async function dexFetch(url: string): Promise<any> {
+  const cached = _cache.get(url);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
+
+  const res = await fetch(url, { headers: { "User-Agent": "FUDMarkets/1.0" } });
+  if (res.status === 429) throw new Error(`DexScreener rate limit hit — try again in a moment`);
+  if (!res.ok) throw new Error(`DexScreener fetch failed: ${res.status}`);
+
+  const data = await res.json();
+  _cache.set(url, { data, ts: Date.now() });
+  return data;
+}
+
 const CHAIN_MAP: Record<string, string> = {
   SOL:  "solana",
   BASE: "base",
@@ -31,12 +48,7 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
   console.log(`[oracle] Using DexScreener for ${symbol}/${chain}`);
   const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
 
-  const res = await fetch(`${DEXSCREENER}?q=${encodeURIComponent(symbol)}`, {
-    headers: { "User-Agent": "MemeBets/1.0" },
-  });
-  if (!res.ok) throw new Error(`DexScreener fetch failed: ${res.status}`);
-
-  const data = await res.json() as any;
+  const data = await dexFetch(`${DEXSCREENER}?q=${encodeURIComponent(symbol)}`) as any;
   const pairs: any[] = data.pairs ?? [];
 
   if (pairs.length === 0) throw new Error(`No pairs found for ${symbol}`);
@@ -75,12 +87,9 @@ export type ScreenResult =
 export async function screenToken(ca: string): Promise<ScreenResult> {
   let pairs: any[];
   try {
-    const res = await fetch(
-      `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(ca.trim())}`,
-      { headers: { "User-Agent": "MemeBets/1.0" } }
-    );
-    if (!res.ok) return { ok: false, reason: "Could not reach DexScreener to verify token." };
-    const data = await res.json() as any;
+    const data = await dexFetch(
+      `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(ca.trim())}`
+    ) as any;
     pairs = data.pairs ?? [];
   } catch {
     return { ok: false, reason: "Token verification request failed." };
