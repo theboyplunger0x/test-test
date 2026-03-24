@@ -79,8 +79,8 @@ export async function authRoutes(app: FastifyInstance) {
     const isEmail = username.includes("@");
     const { rows: [user] } = await db.query(
       isEmail
-        ? `SELECT id, username, password_hash, balance_usd, paper_balance_usd FROM users WHERE email = $1`
-        : `SELECT id, username, password_hash, balance_usd, paper_balance_usd FROM users WHERE username = $1`,
+        ? `SELECT id, username, password_hash, balance_usd, paper_balance_usd, tier, x_username, telegram_username, avatar_url, bio FROM users WHERE email = $1`
+        : `SELECT id, username, password_hash, balance_usd, paper_balance_usd, tier, x_username, telegram_username, avatar_url, bio FROM users WHERE username = $1`,
       [username.toLowerCase()]
     );
 
@@ -94,7 +94,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const token = await (app as any).jwt.sign({ userId: user.id, username: user.username });
-    return { token, user: { id: user.id, username: user.username, balance_usd: user.balance_usd, paper_balance_usd: user.paper_balance_usd } };
+    return { token, user: { id: user.id, username: user.username, balance_usd: user.balance_usd, paper_balance_usd: user.paper_balance_usd, tier: user.tier ?? "", x_username: user.x_username, telegram_username: user.telegram_username, avatar_url: user.avatar_url, bio: user.bio } };
   });
 
   // GET /auth/me

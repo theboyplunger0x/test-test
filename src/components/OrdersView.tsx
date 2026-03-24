@@ -269,6 +269,10 @@ function ProfileHeader({ dk, onViewProfile }: { dk: boolean; onViewProfile?: () 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image must be smaller than 2MB");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
@@ -276,7 +280,9 @@ function ProfileHeader({ dk, onViewProfile }: { dk: boolean; onViewProfile?: () 
       try {
         await api.updateProfile(dataUrl, bio);
         setAvatar(dataUrl);
-      } catch {}
+      } catch (err: any) {
+        alert(err.message ?? "Failed to upload avatar");
+      }
       setSaving(false);
     };
     reader.readAsDataURL(file);
@@ -288,7 +294,9 @@ function ProfileHeader({ dk, onViewProfile }: { dk: boolean; onViewProfile?: () 
       await api.updateProfile(avatar, bioInput);
       setBio(bioInput);
       setEditingBio(false);
-    } catch {}
+    } catch (err: any) {
+      alert(err.message ?? "Failed to save bio");
+    }
     setSaving(false);
   }
 

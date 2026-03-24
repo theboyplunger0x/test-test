@@ -36,7 +36,7 @@ function PnlChart({ trades, period, dk }: {
   const points = filtered.map(t => {
     const amount = parseFloat(t.amount);
     const won = t.winner_side === t.side;
-    cum += won ? amount * 0.9 : -amount;
+    cum += won ? amount * 0.95 : -amount;
     return cum;
   });
 
