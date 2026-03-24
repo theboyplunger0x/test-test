@@ -531,8 +531,9 @@ async function processMention(tweet: any) {
 async function poll() {
   try {
     const now = Math.floor(Date.now() / 1000);
-    // Use mentions endpoint — returns ALL direct mentions, no search index limitations
-    const sinceTime = lastPollTime - 60; // 60s overlap to avoid missing tweets at boundaries
+    // Rolling 10-minute window — handles API indexing delays (new tweets can take 2-5min to appear)
+    // processedIds Set handles deduplication across polls
+    const sinceTime = now - 600;
     const url = `https://api.twitterapi.io/twitter/user/mentions?userName=${FUDMARKETS_USERNAME}&sinceTime=${sinceTime}`;
     console.log(`[x-agent] polling mentions: sinceTime=${sinceTime}`);
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
@@ -546,10 +547,7 @@ async function poll() {
     console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} mention(s) | raw keys: ${Object.keys(data).join(",")} | status: ${data.status}`);
     if (mentions.length === 0 && data.status !== "success") console.log(`[x-agent] raw response: ${JSON.stringify(data).slice(0, 300)}`);
 
-    await saveLastPollTime(now);
-    lastPollTime = now;
-
-    // Skip own tweets and already-processed IDs (processedIds handles the 60s overlap dedup)
+    // Skip own tweets and already-processed IDs (processedIds handles dedup across polls)
     const toProcess = mentions.filter((t: any) => {
       const author = (t.author?.userName ?? t.user?.screen_name ?? "").toLowerCase();
       if (author === FUDMARKETS_USERNAME.toLowerCase()) return false;
