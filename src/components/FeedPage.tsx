@@ -710,7 +710,7 @@ export default function FeedPage() {
                 {filtered.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {filtered.map((c, i) => (
-                      <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => handleCoinClick(c.symbol)} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
+                      <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => handleCoinClick(c.symbol)} onViewProfile={setProfileUser} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
                     ))}
                   </div>
                 ) : (
@@ -1124,11 +1124,12 @@ export default function FeedPage() {
 
 // ─── ChallengeCard ────────────────────────────────────────────────────────────
 
-function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, dk, livePrice, paperMode }: {
+function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, onViewProfile, dk, livePrice, paperMode }: {
   challenge: Challenge;
   index: number;
   onAdd: (id: string, side: "short" | "long", amount: number) => Promise<string | null>;
   onViewCoin: () => void;
+  onViewProfile: (username: string) => void;
   dk: boolean;
   livePrice?: number;
   paperMode?: boolean;
@@ -1303,7 +1304,7 @@ function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, dk, livePrice, 
 
       <div className={`flex justify-between text-[10px] font-bold ${metaTxt}`}>
         <button
-          onClick={(e) => { e.stopPropagation(); if (c.openerUsername) setProfileUser(c.openerUsername); }}
+          onClick={(e) => { e.stopPropagation(); if (c.openerUsername) onViewProfile(c.openerUsername); }}
           className={`flex items-center gap-1.5 hover:opacity-70 transition-opacity ${c.openerUsername ? "cursor-pointer" : "cursor-default"}`}
         >
           {c.openerAvatar ? (
