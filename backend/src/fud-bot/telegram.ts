@@ -1104,22 +1104,18 @@ export async function startBot() {
     if (!data) return;
 
     if (data.startsWith("xapprove_") || data.startsWith("xreject_")) {
-      const approved  = data.startsWith("xapprove_");
+      const approved   = data.startsWith("xapprove_");
       const callbackId = data.replace(/^x(approve|reject)_/, "x_");
-      const result = await handleXApproval(callbackId, approved);
+      const chatId     = String(ctx.chat?.id ?? (ctx.callbackQuery as any).message?.chat?.id ?? "");
+      const result     = await handleXApproval(callbackId, approved, chatId);
 
       const label = result === "posted"   ? "✅ Posted!"
                   : result === "rejected" ? "❌ Rejected"
                   : result === "expired"  ? "⏱ Expired"
                   : "⚠️ Error posting";
 
-      await ctx.answerCbQuery(label);
-      try {
-        await ctx.editMessageText(
-          (ctx.callbackQuery.message as any)?.text + `\n\n${label}`,
-          { parse_mode: "Markdown" }
-        );
-      } catch {}
+      await ctx.answerCbQuery(label).catch(() => {});
+      // editAdminMessages already updated all admin chats — no need to editMessageText here
       return;
     }
   });

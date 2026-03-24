@@ -6,7 +6,12 @@ import { createHmac } from "node:crypto";
 const TWITTERAPI_KEY = process.env.TWITTERAPI_KEY!;
 const API            = process.env.BACKEND_URL || "http://localhost:3001";
 const FUDMARKETS_UID = "426916379898642432"; // @FUDmarkets X user ID
-const ADMIN_TG_ID    = process.env.ADMIN_TG_ID!; // your Telegram chat ID
+
+// Support up to 2 admin Telegram chat IDs (comma-separated or separate env vars)
+const ADMIN_TG_IDS: string[] = [
+  process.env.ADMIN_TG_ID,
+  process.env.ADMIN_TG_ID_2,
+].filter(Boolean) as string[];
 
 const anthropic = new Anthropic();
 
@@ -18,12 +23,13 @@ const xClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_TOKEN_SECRET!,
 });
 
-// Pending approvals: callbackId → { tweetId, xUsername, reply, timeout }
+// Pending approvals: callbackId → { tweetId, xUsername, reply, timeout, msgIds }
 const pending = new Map<string, {
   tweetId:   string;
   xUsername: string;
   reply:     string;
   timeout:   ReturnType<typeof setTimeout>;
+  msgIds:    Map<string, number>; // chatId → messageId (for editing after decision)
 }>();
 
 let lastMentionId: string | null = null;
@@ -106,45 +112,81 @@ async function shouldProcess(tweet: any): Promise<{ ok: boolean; reason: string 
 
 // ─── Telegram notification ───────────────────────────────────────────────────
 
-async function sendToAdminTelegram(text: string, inlineKeyboard?: object) {
-  if (!ADMIN_TG_ID || !process.env.BOT_TOKEN) {
-    console.warn("[x-agent] sendToAdminTelegram skipped — ADMIN_TG_ID or BOT_TOKEN not set");
-    return;
+/** Send a message to all admin chats. Returns Map<chatId, messageId> for later editing. */
+async function sendToAdminTelegram(text: string, inlineKeyboard?: object): Promise<Map<string, number>> {
+  const msgIds = new Map<string, number>();
+  if (!ADMIN_TG_IDS.length || !process.env.BOT_TOKEN) {
+    console.warn("[x-agent] sendToAdminTelegram skipped — ADMIN_TG_IDS or BOT_TOKEN not set");
+    return msgIds;
   }
-  const body: any = { chat_id: ADMIN_TG_ID, text, parse_mode: "Markdown" };
-  if (inlineKeyboard) body.reply_markup = { inline_keyboard: inlineKeyboard };
-  const res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    console.error(`[x-agent] Telegram send failed: ${res.status} ${err}`);
+  for (const chatId of ADMIN_TG_IDS) {
+    const body: any = { chat_id: chatId, text, parse_mode: "Markdown" };
+    if (inlineKeyboard) body.reply_markup = { inline_keyboard: inlineKeyboard };
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = await res.json() as any;
+        msgIds.set(chatId, data.result?.message_id);
+      } else {
+        const err = await res.text();
+        console.error(`[x-agent] Telegram send to ${chatId} failed: ${res.status} ${err}`);
+      }
+    } catch (e: any) {
+      console.error(`[x-agent] Telegram send to ${chatId} error: ${e.message}`);
+    }
+  }
+  return msgIds;
+}
+
+/** Edit a previously sent message (removes buttons, shows status). */
+async function editAdminMessages(msgIds: Map<string, number>, text: string) {
+  if (!process.env.BOT_TOKEN) return;
+  for (const [chatId, messageId] of msgIds) {
+    try {
+      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/editMessageText`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ chat_id: chatId, message_id: messageId, text, parse_mode: "Markdown" }),
+      });
+    } catch {}
   }
 }
 
 // Called by Telegram bot when admin taps ✅ or ❌
-export async function handleXApproval(callbackId: string, approved: boolean) {
+export async function handleXApproval(callbackId: string, approved: boolean, byAdminChatId?: string) {
   const entry = pending.get(callbackId);
   if (!entry) return "expired";
 
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
 
+  let result: "posted" | "rejected" | "error";
   if (approved) {
     try {
       await xClient.v2.reply(entry.reply, entry.tweetId);
       console.log(`[x-agent] Posted reply to @${entry.xUsername}`);
-      return "posted";
+      result = "posted";
     } catch (e: any) {
       console.error(`[x-agent] Failed to post reply: ${e.message}`);
-      return "error";
+      result = "error";
     }
   } else {
     console.log(`[x-agent] Reply to @${entry.xUsername} rejected`);
-    return "rejected";
+    result = "rejected";
   }
+
+  // Edit all admin messages to show the final status (removes buttons, notifies both)
+  const statusLine = result === "posted"   ? "✅ *Posted!*"
+                   : result === "rejected" ? "❌ *Rejected*"
+                   : "⚠️ *Error posting*";
+  const originalText = `*X mention from @${entry.xUsername}*\n\n_"${entry.tweetId}"_\n\n*Draft reply:*\n${entry.reply}`;
+  await editAdminMessages(entry.msgIds, `${statusLine}\n\n${entry.reply}`);
+
+  return result;
 }
 
 // ─── AI System prompt ─────────────────────────────────────────────────────────
@@ -328,22 +370,24 @@ async function processMention(tweet: any) {
     `*Draft reply:*\n${reply}\n\n` +
     `[View tweet](${tweetUrl})`;
 
-  await sendToAdminTelegram(notif, [
+  const msgIds = await sendToAdminTelegram(notif, [
     [
       { text: "✅ Post",   callback_data: `xapprove_${callbackId}` },
       { text: "❌ Reject", callback_data: `xreject_${callbackId}` },
     ],
   ]);
 
-  // Auto-reject after 30 minutes
-  const timeout = setTimeout(() => {
+  // Auto-reject after 30 minutes — edit both messages to show timeout
+  const timeout = setTimeout(async () => {
     if (pending.has(callbackId)) {
+      const e = pending.get(callbackId)!;
       pending.delete(callbackId);
       console.log(`[x-agent] Auto-rejected reply to @${xUsername} (30min timeout)`);
+      await editAdminMessages(e.msgIds, `⏱ *Expired* (30min)\n\n${e.reply}`);
     }
   }, 30 * 60 * 1000);
 
-  pending.set(callbackId, { tweetId, xUsername, reply, timeout });
+  pending.set(callbackId, { tweetId, xUsername, reply, timeout, msgIds });
 }
 
 // ─── Poll loop ────────────────────────────────────────────────────────────────
