@@ -124,11 +124,16 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
   };
 
   const handleBell = async () => {
-    if (!followStatus?.following) return;
+    if (!followStatus.following) return;
+    const newVal = !followStatus.notify_trades;
+    setFollowStatus(s => ({ ...s, notify_trades: newVal })); // optimistic
     try {
-      const result = await api.setNotifyTrades(username, !followStatus.notify_trades);
-      setFollowStatus(s => s ? { ...s, notify_trades: result.notify_trades } : s);
-    } catch {}
+      const result = await api.setNotifyTrades(username, newVal);
+      setFollowStatus(s => ({ ...s, notify_trades: result.notify_trades }));
+    } catch (err: any) {
+      setFollowStatus(s => ({ ...s, notify_trades: !newVal })); // revert
+      alert(err?.message ?? "Failed to update notification setting");
+    }
   };
 
   const pnl = profile ? parseFloat(profile.pnl) : 0;
