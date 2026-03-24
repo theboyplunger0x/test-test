@@ -3,6 +3,7 @@ import { message } from "telegraf/filters";
 import { db } from "../db/client.js";
 import { createHmac, randomBytes } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { handleXApproval } from "./x.js";
 
 const API = process.env.BACKEND_URL || "http://localhost:3001";
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -1107,6 +1108,32 @@ export async function startBot() {
   } catch (e) {
     console.warn("[bot] deleteWebhook failed (ignored):", e);
   }
+  // ── X agent approval callbacks ──────────────────────────────────────────────
+  bot.on("callback_query", async (ctx) => {
+    const data = (ctx.callbackQuery as any).data as string | undefined;
+    if (!data) return;
+
+    if (data.startsWith("xapprove_") || data.startsWith("xreject_")) {
+      const approved  = data.startsWith("xapprove_");
+      const callbackId = data.replace(/^x(approve|reject)_/, "x_");
+      const result = await handleXApproval(callbackId, approved);
+
+      const label = result === "posted"   ? "✅ Posted!"
+                  : result === "rejected" ? "❌ Rejected"
+                  : result === "expired"  ? "⏱ Expired"
+                  : "⚠️ Error posting";
+
+      await ctx.answerCbQuery(label);
+      try {
+        await ctx.editMessageText(
+          (ctx.callbackQuery.message as any)?.text + `\n\n${label}`,
+          { parse_mode: "Markdown" }
+        );
+      } catch {}
+      return;
+    }
+  });
+
   bot.launch().catch((e: any) => console.error("[bot] launch error:", e?.message ?? e));
   console.log("🤖 Telegram bot started");
 
