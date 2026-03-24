@@ -219,7 +219,7 @@ You're operating on X (Twitter). Users mention @FUDmarkets to interact with you.
 Personality:
 - Casual, sharp, slightly sarcastic but not forced
 - Short responses — max 2-3 sentences + relevant data
-- Switch to Spanish if the user writes in Spanish
+- Always reply in the same language the user wrote in. If they write in Spanish, reply in Spanish. If English, reply in English. Never mix languages.
 - Never use forced crypto slang
 
 What you can do:
@@ -438,14 +438,22 @@ async function poll() {
   try {
     const params = new URLSearchParams({ userId: FUDMARKETS_UID });
     if (lastMentionId) params.set("sinceId", lastMentionId);
-    const res  = await fetch(`https://api.twitterapi.io/twitter/user/mentions?${params}`, {
-      headers: { "X-API-Key": TWITTERAPI_KEY },
-    });
-    if (!res.ok) { console.error(`[x-agent] Poll error: ${res.status}`); return; }
-    const data     = await res.json() as any;
-    const mentions = data.tweets ?? [];
-    if (!mentions.length) { console.log(`[x-agent] ${new Date().toISOString()} — no new mentions`); return; }
-    lastMentionId = mentions[0].id;
+    const url = `https://api.twitterapi.io/twitter/user/mentions?${params}`;
+    const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[x-agent] Poll HTTP ${res.status}: ${body}`);
+      return;
+    }
+    const data = await res.json() as any;
+    // Log top-level keys on first poll so we know the response shape
+    if (!lastMentionId) console.log(`[x-agent] API keys: ${Object.keys(data).join(", ")}`);
+    // twitterapi.io may use "tweets", "data", or "results"
+    const mentions: any[] = data.tweets ?? data.data ?? data.results ?? [];
+    console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} mention(s) found (sinceId=${lastMentionId ?? "none"})`);
+    if (!mentions.length) return;
+    // Newest first → set sinceId to the highest tweet ID
+    lastMentionId = mentions.reduce((max: string, t: any) => (t.id > max ? t.id : max), mentions[0].id);
     for (const tweet of [...mentions].reverse()) await processMention(tweet);
   } catch (e: any) {
     console.error(`[x-agent] Poll error: ${e.message}`);
