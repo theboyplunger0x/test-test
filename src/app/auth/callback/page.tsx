@@ -9,12 +9,21 @@ function CallbackInner() {
   const [status, setStatus] = useState<"processing" | "error">("processing");
 
   useEffect(() => {
-    const token      = searchParams.get("token");
-    const authError  = searchParams.get("auth_error");
-    const xConnected = searchParams.get("x_connected");
-    const xUsername  = searchParams.get("x_username");
+    const token        = searchParams.get("token");
+    const authError    = searchParams.get("auth_error");
+    const xConnected   = searchParams.get("x_connected");
+    const xUsername    = searchParams.get("x_username");
+    const oauthToken   = searchParams.get("oauth_token");
+    const oauthVerifier = searchParams.get("oauth_verifier");
 
-    // X OAuth callback — just signal success and go home
+    // X OAuth step 2 — forward to backend to exchange tokens
+    if (oauthToken && oauthVerifier) {
+      const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      window.location.href = `${api}/auth/x-callback?oauth_token=${oauthToken}&oauth_verifier=${oauthVerifier}`;
+      return;
+    }
+
+    // X OAuth success — backend redirected back here
     if (xConnected === "1") {
       if (xUsername) localStorage.setItem("x_username_connected", xUsername);
       router.replace("/");
