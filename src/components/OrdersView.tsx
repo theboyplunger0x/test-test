@@ -244,7 +244,7 @@ const PencilIcon = () => (
   </svg>
 );
 
-function ProfileHeader({ dk, onViewProfile }: { dk: boolean; onViewProfile?: () => void }) {
+function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onViewProfile?: () => void; onUserUpdate?: () => void }) {
   const [username, setUsername]           = useState<string | null>(null);
   const [tier, setTier]                   = useState<string | undefined>(undefined);
   const [avatar, setAvatar]               = useState("");
@@ -280,6 +280,7 @@ function ProfileHeader({ dk, onViewProfile }: { dk: boolean; onViewProfile?: () 
       try {
         await api.updateProfile(dataUrl, bio);
         setAvatar(dataUrl);
+        onUserUpdate?.();
       } catch (err: any) {
         alert(err.message ?? "Failed to upload avatar");
       }
@@ -376,7 +377,7 @@ function ProfileHeader({ dk, onViewProfile }: { dk: boolean; onViewProfile?: () 
   );
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -503,7 +504,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
   return (
     <>
-      <ProfileHeader dk={dk} onViewProfile={onViewOwnProfile} />
+      <ProfileHeader dk={dk} onViewProfile={onViewOwnProfile} onUserUpdate={onUserUpdate} />
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
         {/* Balance + P&L */}

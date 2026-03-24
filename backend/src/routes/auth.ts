@@ -101,7 +101,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.get("/auth/me", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username, telegram_username FROM users WHERE id = $1`, [userId]
+      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username, telegram_username, avatar_url, bio FROM users WHERE id = $1`, [userId]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
     return user;

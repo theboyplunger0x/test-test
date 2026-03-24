@@ -1153,6 +1153,7 @@ export default function FeedPage() {
                     }, 3000);
                   }}
                   onViewOwnProfile={() => { setOrdersOpen(false); setProfilePageUser(user?.username ?? null); }}
+                  onUserUpdate={() => api.me().then(setUser).catch(() => {})}
                 />
               </div>
             </motion.div>

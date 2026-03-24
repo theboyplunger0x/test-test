@@ -21,7 +21,7 @@ import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
 import { runMigrations }             from "./db/runMigrations.js";
 import { startBot, startXAgent }     from "./fud-bot/index.js";
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 }); // 5MB — enough for base64 avatar images
 
 // Plugins
 await app.register(cors, { origin: true });
