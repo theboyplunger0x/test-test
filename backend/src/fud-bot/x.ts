@@ -7,6 +7,7 @@ const API                 = process.env.BACKEND_URL || "http://localhost:3001";
 const FUDMARKETS_USERNAME = "FUDmarkets";
 const TW_USERNAME         = process.env.X_TWITTER_USERNAME || FUDMARKETS_USERNAME;
 const TW_PASSWORD         = process.env.X_TWITTER_PASSWORD!;
+const TW_EMAIL            = process.env.X_TWITTER_EMAIL!;
 
 // Support up to 2 admin Telegram chat IDs
 const ADMIN_TG_IDS: string[] = [
@@ -44,7 +45,7 @@ async function twitterLogin(): Promise<string | null> {
     const res = await fetch("https://api.twitterapi.io/twitter/user_login_v2", {
       method:  "POST",
       headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD }),
+      body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD, email: TW_EMAIL }),
     });
     const data = await res.json() as any;
     if (!res.ok || !data.login_cookies) {
