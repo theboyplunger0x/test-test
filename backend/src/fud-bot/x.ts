@@ -440,6 +440,7 @@ async function poll() {
     const params = new URLSearchParams({ query, queryType: "Latest" });
     if (lastMentionId) params.set("sinceId", lastMentionId);
     const url = `https://api.twitterapi.io/twitter/tweet/advanced_search?${params}`;
+    console.log(`[x-agent] polling URL: ${url}`);
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
     if (!res.ok) {
       const body = await res.text();
