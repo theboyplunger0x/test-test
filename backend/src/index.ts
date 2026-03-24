@@ -17,6 +17,7 @@ import { pollDeposits }              from "./workers/depositPoller.js";
 import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
 import { runMigrations }             from "./db/runMigrations.js";
 import { startBot }                  from "./telegram-bot.js";
+import { startXAgent }               from "./x-agent.js";
 
 const app = Fastify({ logger: true });
 
@@ -79,3 +80,6 @@ console.log(`FUD.markets backend running on :${port}`);
 
 // Start Telegram bot (non-blocking)
 startBot().catch(e => console.error("[bot] startup error:", e));
+
+// Start X agent (non-blocking — skips if TWITTERAPI_KEY not set)
+startXAgent().catch(e => console.error("[x-agent] startup error:", e));

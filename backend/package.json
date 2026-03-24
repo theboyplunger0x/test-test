@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc || true",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "x-agent": "tsx src/x-agent.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
