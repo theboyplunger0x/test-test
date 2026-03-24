@@ -568,15 +568,15 @@ export default function FeedPage() {
                 className={`flex items-center justify-center w-9 h-9 transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   {/* Box body */}
-                  <rect x="3" y="11" width="18" height="10" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="3" y="11" width="18" height="10" rx="2" stroke="currentColor" strokeWidth="2.2"/>
                   {/* Ribbon band */}
-                  <rect x="2" y="7" width="20" height="4" rx="1" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="2" y="7" width="20" height="4" rx="1.5" stroke="currentColor" strokeWidth="2.2"/>
                   {/* Vertical ribbon */}
-                  <path d="M12 7v14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Left bow loop */}
-                  <path d="M12 7C12 7 9 5.5 8 4c-.7-1 0-2.5 1.5-2C11 2.5 12 7 12 7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  {/* Right bow loop */}
-                  <path d="M12 7C12 7 15 5.5 16 4c.7-1 0-2.5-1.5-2C13 2.5 12 7 12 7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M12 7v14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
+                  {/* Left bow loop — filled & round */}
+                  <path d="M12 7H7.5a2.5 2.5 0 110-5C11 2 12 7 12 7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15"/>
+                  {/* Right bow loop — filled & round */}
+                  <path d="M12 7h4.5a2.5 2.5 0 100-5C13 2 12 7 12 7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15"/>
                 </svg>
               </motion.button>
 
