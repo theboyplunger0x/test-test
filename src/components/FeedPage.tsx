@@ -531,13 +531,13 @@ export default function FeedPage() {
         {/* Search bar */}
         <button
           onClick={() => setCASearchOpen(true)}
-          className={`flex-1 max-w-[340px] flex items-center gap-2 px-3.5 py-2 rounded-xl border text-left transition-all ${dk ? "bg-white/[0.03] border-white/10 hover:border-white/20" : "bg-gray-50 border-gray-200 hover:border-gray-300"}`}
+          className={`flex-1 flex items-center gap-2 px-3.5 py-2 rounded-xl border text-left transition-all ${dk ? "bg-white/[0.03] border-white/10 hover:border-white/20" : "bg-gray-50 border-gray-200 hover:border-gray-300"}`}
         >
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 opacity-40">
             <circle cx="8.5" cy="8.5" r="5.75" stroke="currentColor" strokeWidth="1.8"/>
             <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
           </svg>
-          <span className={`text-[12px] font-bold ${dk ? "text-white/25" : "text-gray-400"}`}>Search / CA</span>
+          <span className={`text-[12px] font-bold ${dk ? "text-white/25" : "text-gray-400"}`}>Drop a $ticker/CA</span>
           <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded border ${dk ? "border-white/10 text-white/20" : "border-gray-200 text-gray-400"}`}>/</span>
         </button>
 
@@ -546,7 +546,7 @@ export default function FeedPage() {
           {user ? (
             <>
               {/* Balance */}
-              <div className="hidden sm:flex flex-col items-end leading-none">
+              <div className="hidden sm:flex flex-col items-end gap-0.5">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
                   {paperMode ? "Paper" : "Balance"}
                 </span>
