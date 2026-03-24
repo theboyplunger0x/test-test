@@ -8,6 +8,7 @@ const FUDMARKETS_USERNAME = "FUDmarkets";
 const TW_USERNAME         = process.env.X_TWITTER_USERNAME || FUDMARKETS_USERNAME;
 const TW_PASSWORD         = process.env.X_TWITTER_PASSWORD!;
 const TW_EMAIL            = process.env.X_TWITTER_EMAIL!;
+const TW_PROXY            = process.env.X_PROXY_URL;
 
 // Support up to 2 admin Telegram chat IDs
 const ADMIN_TG_IDS: string[] = [
@@ -46,7 +47,7 @@ async function twitterLogin(retries = 5): Promise<string | null> {
       const res = await fetch("https://api.twitterapi.io/twitter/user_login_v2", {
         method:  "POST",
         headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-        body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD, email: TW_EMAIL }),
+        body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD, email: TW_EMAIL, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
       });
       const data = await res.json() as any;
       if (res.status === 429) {
@@ -77,7 +78,7 @@ async function postReply(text: string, replyToId: string): Promise<void> {
   const res = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
     method:  "POST",
     headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-    body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId }),
+    body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
   });
   const data = await res.json() as any;
 
@@ -89,7 +90,7 @@ async function postReply(text: string, replyToId: string): Promise<void> {
     const res2 = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
       method:  "POST",
       headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId }),
+      body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
     });
     const data2 = await res2.json() as any;
     if (!res2.ok) throw new Error(JSON.stringify(data2));
