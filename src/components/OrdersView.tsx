@@ -237,7 +237,7 @@ function TierBadge({ tier }: { tier: string }) {
   return null;
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, onDisconnectX }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; onDisconnectX?: () => void }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramConnected }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramConnected?: boolean }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -441,39 +441,45 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         </button>
 
         {/* Connect Telegram */}
-        <button
-          onClick={async () => {
-            try {
-              const { token } = await api.tgInitLink();
-              window.open(`https://t.me/FUDmarkets_BOT?start=link_${token}`, "_blank");
-            } catch (e: any) {
-              alert(e.message ?? "Error connecting Telegram");
-            }
-          }}
-          className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
-            dk
-              ? "border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20"
-              : "border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100"
-          }`}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
-          </svg>
-          Connect Telegram
-        </button>
+        {telegramConnected ? (
+          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center gap-2 ${
+            dk ? "border-sky-500/20 bg-sky-500/5 text-sky-400/70" : "border-sky-200 bg-sky-50 text-sky-600"
+          }`}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
+            </svg>
+            Telegram connected ✓
+          </div>
+        ) : (
+          <button
+            onClick={async () => {
+              try {
+                const { token } = await api.tgInitLink();
+                window.open(`https://t.me/FUDmarkets_BOT?start=link_${token}`, "_blank");
+              } catch (e: any) {
+                alert(e.message ?? "Error connecting Telegram");
+              }
+            }}
+            className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+              dk
+                ? "border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20"
+                : "border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
+            </svg>
+            Connect Telegram
+          </button>
+        )}
 
         {/* Connect X */}
         {xUsername ? (
-          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between ${
+          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center gap-2 ${
             dk ? "border-white/8 bg-white/[0.02] text-white/60" : "border-gray-200 bg-gray-50 text-gray-500"
           }`}>
-            <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              @{xUsername}
-            </span>
-            <button onClick={onDisconnectX} className={`text-[11px] font-black transition-colors ${dk ? "text-red-400/60 hover:text-red-400" : "text-red-400 hover:text-red-600"}`}>
-              Disconnect
-            </button>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            @{xUsername} connected
           </div>
         ) : (
           <button

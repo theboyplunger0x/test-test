@@ -1076,7 +1076,7 @@ export default function FeedPage() {
               <div className="flex-1 overflow-hidden">
                 <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled}
                   xUsername={user?.x_username}
-                  onDisconnectX={async () => { await api.disconnectX(); setUser(u => u ? { ...u, x_username: undefined } : null); }}
+                  telegramConnected={user?.telegram_connected}
                 />
               </div>
             </motion.div>

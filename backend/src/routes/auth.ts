@@ -101,7 +101,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.get("/auth/me", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username FROM users WHERE id = $1`, [userId]
+      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username, (telegram_id IS NOT NULL) AS telegram_connected FROM users WHERE id = $1`, [userId]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
     return user;
@@ -350,7 +350,10 @@ export async function authRoutes(app: FastifyInstance) {
 
   // GET /auth/x-auth-url — generate X OAuth URL for the logged-in user
   app.get("/auth/x-auth-url", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
-    const userId      = (req as any).user.userId;
+    const userId = (req as any).user.userId;
+    // Block if already connected — connections are permanent
+    const { rows: [existing] } = await db.query(`SELECT x_username FROM users WHERE id = $1`, [userId]);
+    if (existing?.x_username) return reply.status(409).send({ error: "X account already connected" });
     const frontendUrl = process.env.FRONTEND_URL ?? "https://fud-markets.vercel.app";
     const callbackUrl = `${frontendUrl}/auth/callback`;
     const client      = new TwitterApi({ appKey: process.env.X_API_KEY!, appSecret: process.env.X_API_SECRET! });

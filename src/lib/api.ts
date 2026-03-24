@@ -27,6 +27,7 @@ export type User = {
   created_at?: string;
   tier?: "" | "normal" | "top";
   x_username?: string;
+  telegram_connected?: boolean;
 };
 
 export type ReferralStats = {
