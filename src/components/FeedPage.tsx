@@ -953,74 +953,6 @@ export default function FeedPage() {
                   )}
                 </div>
 
-                {/* Theme */}
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Appearance</p>
-                  <div className={`flex gap-2`}>
-                    {(["dark", "light"] as Theme[]).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setTheme(t)}
-                        className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${theme === t
-                          ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
-                          : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
-                        }`}
-                      >
-                        {t === "dark" ? "☽ Dark" : "☀ Light"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Trading Mode */}
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Trading Mode</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPaperMode(false)}
-                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${!paperMode
-                        ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
-                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
-                      }`}
-                    >
-                      Real
-                    </button>
-                    <button
-                      onClick={() => setPaperMode(true)}
-                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${paperMode
-                        ? "bg-yellow-400 text-black border-yellow-400"
-                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
-                      }`}
-                    >
-                      Paper
-                    </button>
-                  </div>
-                </div>
-
-                {/* Trade Presets */}
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Quick Bet Amounts</p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {tradePresets.map((v, i) => (
-                      <div key={i} className="relative">
-                        <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
-                        <input
-                          type="number"
-                          value={v}
-                          onChange={(e) => {
-                            const n = parseFloat(e.target.value);
-                            if (!isNaN(n) && n > 0) setTradePresets(prev => prev.map((p, j) => j === i ? n : p));
-                          }}
-                          className={`w-full pl-5 pr-2 py-2.5 rounded-2xl text-[12px] font-black text-center border outline-none transition-all ${
-                            dk ? "bg-white/[0.03] border-white/8 text-white focus:border-white/20" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-gray-400"
-                          }`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <p className={`text-[10px] font-bold mt-2 ${dk ? "text-white/20" : "text-gray-400"}`}>These appear as preset buttons when placing trades.</p>
-                </div>
-
                 {/* Connect X */}
                 {user && (
                   <div>
@@ -1088,6 +1020,74 @@ export default function FeedPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Theme */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Appearance</p>
+                  <div className={`flex gap-2`}>
+                    {(["dark", "light"] as Theme[]).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setTheme(t)}
+                        className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${theme === t
+                          ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
+                          : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
+                        }`}
+                      >
+                        {t === "dark" ? "☽ Dark" : "☀ Light"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Trading Mode */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Trading Mode</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPaperMode(false)}
+                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${!paperMode
+                        ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
+                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
+                      }`}
+                    >
+                      Real
+                    </button>
+                    <button
+                      onClick={() => setPaperMode(true)}
+                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${paperMode
+                        ? "bg-yellow-400 text-black border-yellow-400"
+                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
+                      }`}
+                    >
+                      Paper
+                    </button>
+                  </div>
+                </div>
+
+                {/* Trade Presets */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Quick Bet Amounts</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {tradePresets.map((v, i) => (
+                      <div key={i} className="relative">
+                        <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                        <input
+                          type="number"
+                          value={v}
+                          onChange={(e) => {
+                            const n = parseFloat(e.target.value);
+                            if (!isNaN(n) && n > 0) setTradePresets(prev => prev.map((p, j) => j === i ? n : p));
+                          }}
+                          className={`w-full pl-5 pr-2 py-2.5 rounded-2xl text-[12px] font-black text-center border outline-none transition-all ${
+                            dk ? "bg-white/[0.03] border-white/8 text-white focus:border-white/20" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-gray-400"
+                          }`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className={`text-[10px] font-bold mt-2 ${dk ? "text-white/20" : "text-gray-400"}`}>These appear as preset buttons when placing trades.</p>
+                </div>
 
                 {/* Account — last, only if logged in */}
                 {user && (
