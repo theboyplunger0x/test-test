@@ -972,19 +972,15 @@ export default function FeedPage() {
                 {/* Theme */}
                 <div>
                   <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Appearance</p>
-                  <div className={`flex gap-2`}>
-                    {(["dark", "light"] as Theme[]).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setTheme(t)}
-                        className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${theme === t
-                          ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
-                          : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
-                        }`}
-                      >
-                        {t === "dark" ? "☽ Dark" : "☀ Light"}
-                      </button>
-                    ))}
+                  <div className={`flex rounded-xl p-0.5 border text-[12px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
+                    <button onClick={() => setTheme("dark")}
+                      className={`flex-1 py-2 rounded-[10px] transition-all ${theme === "dark" ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
+                      ☽ Dark
+                    </button>
+                    <button onClick={() => setTheme("light")}
+                      className={`flex-1 py-2 rounded-[10px] transition-all ${theme === "light" ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
+                      ☀ Light
+                    </button>
                   </div>
                 </div>
 
