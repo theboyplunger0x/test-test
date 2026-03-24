@@ -108,22 +108,22 @@ const pending = new Map<string, {
   msgIds:    Map<string, number>; // chatId → messageId (for editing after decision)
 }>();
 
-let lastMentionId: string | null = null;
+let lastPollTime: number = Math.floor(Date.now() / 1000) - 300; // default: 5 min ago
 const processedIds = new Set<string>(); // dedup within a session
 
-async function loadLastMentionId() {
+async function loadLastPollTime() {
   try {
-    const { rows } = await db.query(`SELECT value FROM bot_kv WHERE key = 'x_last_mention_id'`);
-    if (rows[0]) { lastMentionId = rows[0].value; console.log(`[x-agent] Loaded lastMentionId=${lastMentionId}`); }
+    const { rows } = await db.query(`SELECT value FROM bot_kv WHERE key = 'x_last_poll_time'`);
+    if (rows[0]) { lastPollTime = parseInt(rows[0].value); console.log(`[x-agent] Loaded lastPollTime=${lastPollTime}`); }
   } catch {}
 }
 
-async function saveLastMentionId(id: string) {
+async function saveLastPollTime(t: number) {
   try {
     await db.query(
-      `INSERT INTO bot_kv (key, value) VALUES ('x_last_mention_id', $1)
+      `INSERT INTO bot_kv (key, value) VALUES ('x_last_poll_time', $1)
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [id]
+      [t.toString()]
     );
   } catch {}
 }
@@ -530,10 +530,11 @@ async function processMention(tweet: any) {
 
 async function poll() {
   try {
-    // Use literal @ in URL — twitterapi.io advanced_search breaks with %40 encoding
-    let url = `https://api.twitterapi.io/twitter/tweet/advanced_search?query=@${FUDMARKETS_USERNAME}&queryType=Latest`;
-    if (lastMentionId) url += `&sinceId=${lastMentionId}`;
-    console.log(`[x-agent] polling URL: ${url}`);
+    const now = Math.floor(Date.now() / 1000);
+    // Use mentions endpoint — returns ALL direct mentions, no search index limitations
+    const sinceTime = lastPollTime - 60; // 60s overlap to avoid missing tweets at boundaries
+    const url = `https://api.twitterapi.io/twitter/user/mentions?userName=${FUDMARKETS_USERNAME}&sinceTime=${sinceTime}`;
+    console.log(`[x-agent] polling mentions: sinceTime=${sinceTime} (${new Date(sinceTime * 1000).toISOString()})`);
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
     if (!res.ok) {
       const body = await res.text();
@@ -541,33 +542,26 @@ async function poll() {
       return;
     }
     const data = await res.json() as any;
-    const mentions: any[] = data.tweets ?? data.data ?? data.results ?? [];
-    console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} tweet(s) (sinceId=${lastMentionId ?? "none"})`);
-    if (!mentions.length) return;
-    console.log(`[x-agent] first: id=${mentions[0].id} text="${(mentions[0].text ?? "").slice(0, 80)}"`);
-    const priorLastId = lastMentionId; // capture before update
-    const newLastId = mentions.reduce((max: string, t: any) =>
-      BigInt(t.id) > BigInt(max) ? t.id : max, mentions[0].id);
-    // Never let lastMentionId go backwards — sinceId in twitterapi.io can return older tweets
-    if (!lastMentionId || BigInt(newLastId) > BigInt(lastMentionId)) {
-      lastMentionId = newLastId;
-      await saveLastMentionId(newLastId);
-    }
-    // Skip own tweets, already-processed IDs, and tweets at/before the previous boundary
-    // (twitterapi.io sinceId is inclusive — the boundary tweet always comes back)
+    const mentions: any[] = data.tweets ?? [];
+    console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} mention(s)`);
+
+    await saveLastPollTime(now);
+    lastPollTime = now;
+
+    // Skip own tweets and already-processed IDs (processedIds handles the 60s overlap dedup)
     const toProcess = mentions.filter((t: any) => {
       const author = (t.author?.userName ?? t.user?.screen_name ?? "").toLowerCase();
       if (author === FUDMARKETS_USERNAME.toLowerCase()) return false;
-      if (priorLastId && BigInt(t.id) <= BigInt(priorLastId)) return false;
       if (processedIds.has(t.id)) return false;
       processedIds.add(t.id);
       return true;
     });
     if (processedIds.size > 500) {
-      // Trim oldest entries to avoid unbounded memory growth
       const arr = [...processedIds];
       arr.slice(0, arr.length - 500).forEach(id => processedIds.delete(id));
     }
+    if (!toProcess.length) return;
+    console.log(`[x-agent] ${toProcess.length} new mention(s) to process`);
     for (const tweet of [...toProcess].reverse()) await processMention(tweet);
   } catch (e: any) {
     console.error(`[x-agent] Poll error: ${e.message}`);
@@ -579,9 +573,8 @@ async function poll() {
 export async function startXAgent() {
   if (!TWITTERAPI_KEY) { console.log("[x-agent] TWITTERAPI_KEY not set — skipping"); return; }
   console.log("[x-agent] Starting — monitoring @FUDmarkets");
-  await loadLastMentionId();
+  await loadLastPollTime();
   // Ensure we have login cookies ready
-  console.log(`[x-agent] TW_PASSWORD set: ${!!TW_PASSWORD} | TW_PROXY set: ${!!TW_PROXY}`);
   if (TW_PASSWORD) {
     const cookies = await loadCookies();
     if (!cookies) await twitterLogin();
