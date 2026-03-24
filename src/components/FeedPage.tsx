@@ -513,7 +513,7 @@ export default function FeedPage() {
         {/* Logo */}
         <div className="flex items-center gap-1 shrink-0">
           <span className="text-[16px] md:text-[17px] font-black tracking-tight">FUD.</span>
-          <span className="text-[16px] md:text-[17px] font-light tracking-tight opacity-30">Markets</span>
+          <span className="text-[10px] font-medium tracking-widest uppercase opacity-35 ml-2 mt-0.5">Markets</span>
         </div>
 
         {/* Search bar */}
