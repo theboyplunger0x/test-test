@@ -39,26 +39,35 @@ async function saveCookies(cookies: string) {
   );
 }
 
-async function twitterLogin(): Promise<string | null> {
+async function twitterLogin(retries = 5): Promise<string | null> {
   console.log("[x-agent] Logging in to Twitter via twitterapi.io...");
-  try {
-    const res = await fetch("https://api.twitterapi.io/twitter/user_login_v2", {
-      method:  "POST",
-      headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD, email: TW_EMAIL }),
-    });
-    const data = await res.json() as any;
-    if (!res.ok || !data.login_cookies) {
-      console.error(`[x-agent] Login failed: ${JSON.stringify(data)}`);
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch("https://api.twitterapi.io/twitter/user_login_v2", {
+        method:  "POST",
+        headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+        body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD, email: TW_EMAIL }),
+      });
+      const data = await res.json() as any;
+      if (res.status === 429) {
+        console.warn(`[x-agent] Login 429 — retrying in 6s (attempt ${i + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, 6000));
+        continue;
+      }
+      if (!res.ok || !data.login_cookies) {
+        console.error(`[x-agent] Login failed: ${JSON.stringify(data)}`);
+        return null;
+      }
+      console.log("[x-agent] Twitter login successful — cookies saved");
+      await saveCookies(data.login_cookies);
+      return data.login_cookies;
+    } catch (e: any) {
+      console.error(`[x-agent] Login error: ${e.message}`);
       return null;
     }
-    console.log("[x-agent] Twitter login successful — cookies saved");
-    await saveCookies(data.login_cookies);
-    return data.login_cookies;
-  } catch (e: any) {
-    console.error(`[x-agent] Login error: ${e.message}`);
-    return null;
   }
+  console.error("[x-agent] Login failed after retries");
+  return null;
 }
 
 async function postReply(text: string, replyToId: string): Promise<void> {
