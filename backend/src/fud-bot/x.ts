@@ -58,20 +58,50 @@ async function getUserByXUsername(xUsername: string) {
   return rows[0] ?? null;
 }
 
+// ─── Cooldown: max 5 mentions per user per 10 minutes ────────────────────────
+
+const cooldowns = new Map<string, number[]>(); // xUsername → timestamps
+
+function checkCooldown(xUsername: string): boolean {
+  const now    = Date.now();
+  const window = 10 * 60 * 1000; // 10 minutes
+  const limit  = 5;
+  const times  = (cooldowns.get(xUsername) ?? []).filter(t => now - t < window);
+  if (times.length >= limit) return false; // blocked
+  cooldowns.set(xUsername, [...times, now]);
+  return true;
+}
+
+// ─── Content filter: skip empty/emoji-only/too-short mentions ────────────────
+
+function hasSubstance(text: string): boolean {
+  // Strip @mentions, URLs, emojis, punctuation and check if anything real remains
+  const stripped = text
+    .replace(/@\w+/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+    .replace(/[\u{2600}-\u{27BF}]/gu, "")
+    .replace(/[^a-zA-Z0-9áéíóúñüÁÉÍÓÚÑÜ\s$]/g, "")
+    .trim();
+  // Need at least 2 real words
+  const words = stripped.split(/\s+/).filter(w => w.length > 1);
+  return words.length >= 2;
+}
+
 // ─── Filter: should we process this mention? ─────────────────────────────────
 
 async function shouldProcess(tweet: any): Promise<{ ok: boolean; reason: string }> {
-  const author = tweet.author ?? {};
+  const xUsername = (tweet.author?.userName ?? "").toLowerCase();
+  const text      = (tweet.text ?? "").replace(/@FUDmarkets/gi, "").trim();
 
-  // 1. Linked FUD account → always process
-  const fudUser = await getUserByXUsername((author.userName ?? "").toLowerCase());
-  if (fudUser) return { ok: true, reason: "linked FUD account" };
+  // 1. Content filter — skip emoji-only / too basic
+  if (!hasSubstance(text)) return { ok: false, reason: "no substance" };
 
-  // 2. X blue verified → process
-  if (author.isBlueVerified === true) return { ok: true, reason: "blue verified" };
+  // 2. Cooldown — max 5 per user per 10 min
+  if (!checkCooldown(xUsername)) return { ok: false, reason: "cooldown" };
 
-  // 3. Everything else → skip
-  return { ok: false, reason: "not linked and not verified" };
+  // 3. Everyone else passes — linked users, verified, and regular users all welcome
+  return { ok: true, reason: "ok" };
 }
 
 // ─── Telegram notification ───────────────────────────────────────────────────
