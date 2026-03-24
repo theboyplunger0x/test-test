@@ -184,7 +184,14 @@ export async function handleXPost(callbackId: string, replyIndex: number): Promi
   pending.delete(callbackId);
   const reply = entry.replies[replyIndex] ?? entry.replies[0];
   try {
-    await xClient.v2.reply(reply, entry.tweetId);
+    try {
+      await xClient.v2.reply(reply, entry.tweetId);
+    } catch (e2: any) {
+      if (e2?.code === 402 || String(e2?.message).includes("402")) {
+        // v2 requires paid plan — fallback to v1.1
+        await (xClient as any).v1.tweet(reply, { in_reply_to_status_id: entry.tweetId, auto_populate_reply_metadata: true });
+      } else throw e2;
+    }
     console.log(`[x-agent] Posted opt ${replyIndex + 1} to @${entry.xUsername}`);
     await editAdminMessages(entry.msgIds, `✅ *Posted* (opt ${replyIndex + 1})\n\n_${reply}_`);
     return "posted";
@@ -202,7 +209,13 @@ export async function handleXPostCustom(callbackId: string, customReply: string)
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
   try {
-    await xClient.v2.reply(customReply, entry.tweetId);
+    try {
+      await xClient.v2.reply(customReply, entry.tweetId);
+    } catch (e2: any) {
+      if (e2?.code === 402 || String(e2?.message).includes("402")) {
+        await (xClient as any).v1.tweet(customReply, { in_reply_to_status_id: entry.tweetId, auto_populate_reply_metadata: true });
+      } else throw e2;
+    }
     console.log(`[x-agent] Posted custom reply to @${entry.xUsername}`);
     await editAdminMessages(entry.msgIds, `✅ *Posted* (custom)\n\n_${customReply}_`);
     return "posted";
