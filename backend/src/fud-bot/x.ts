@@ -447,6 +447,8 @@ async function poll() {
       return;
     }
     const data = await res.json() as any;
+    // Log full raw response on every poll so we can diagnose shape issues
+    console.log(`[x-agent] raw response: ${JSON.stringify(data).slice(0, 500)}`);
     const mentions: any[] = data.tweets ?? data.data ?? data.results ?? [];
     console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} tweet(s) (sinceId=${lastMentionId ?? "none"})`);
     if (!mentions.length) return;
