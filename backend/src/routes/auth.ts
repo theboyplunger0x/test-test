@@ -394,15 +394,15 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.redirect(`${frontendUrl}/auth/callback?x_connected=1&x_username=${xUsername}`);
   });
 
-  // DELETE /auth/connect-x — unlink X account
-  app.delete("/auth/connect-x", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+  // POST /auth/disconnect-x — unlink X account
+  app.post("/auth/disconnect-x", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const userId = (req as any).user.userId;
     await db.query(`UPDATE users SET x_username = NULL WHERE id = $1`, [userId]);
     return { ok: true };
   });
 
-  // DELETE /auth/connect-telegram — unlink Telegram account
-  app.delete("/auth/connect-telegram", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+  // POST /auth/disconnect-telegram — unlink Telegram account
+  app.post("/auth/disconnect-telegram", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const userId = (req as any).user.userId;
     await db.query(`UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE id = $1`, [userId]);
     return { ok: true };

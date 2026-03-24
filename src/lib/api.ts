@@ -121,10 +121,10 @@ export const api = {
   getXAuthUrl: () => req<{ url: string }>("/auth/x-auth-url"),
 
   disconnectX: () =>
-    req<{ ok: boolean }>("/auth/connect-x", { method: "DELETE" }),
+    req<{ ok: boolean }>("/auth/disconnect-x", { method: "POST", body: "{}" }),
 
   disconnectTelegram: () =>
-    req<{ ok: boolean }>("/auth/connect-telegram", { method: "DELETE" }),
+    req<{ ok: boolean }>("/auth/disconnect-telegram", { method: "POST", body: "{}" }),
 
   paperCredit: (amount: number) =>
     req<{ paper_balance_usd: string }>("/auth/paper-credit", {
