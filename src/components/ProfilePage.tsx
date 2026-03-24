@@ -1,0 +1,336 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { api, UserProfile } from "../lib/api";
+
+const SEAL = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.266.14-1.897-.131-.63-.437-1.208-.882-1.671-.445-.464-1.011-.79-1.638-.944-.627-.155-1.284-.127-1.895.082-.274-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.61-.209-1.265-.237-1.892-.082-.627.155-1.193.48-1.639.944-.445.463-.749 1.04-.878 1.671-.13.63-.083 1.29.141 1.897-.587.274-1.086.706-1.44 1.246-.354.54-.551 1.17-.569 1.816.018.647.215 1.276.57 1.817.354.54.852.972 1.438 1.245-.224.607-.27 1.266-.14 1.897.13.63.436 1.208.882 1.671.445.464 1.011.79 1.638.944.627.155 1.284.127 1.895-.082.274.587.704 1.086 1.245 1.44.54.354 1.17.551 1.816.569.647-.016 1.275-.213 1.815-.567s.969-.854 1.24-1.44c.61.21 1.266.238 1.893.083.626-.155 1.192-.48 1.637-.944.445-.463.749-1.041.879-1.672.13-.63.083-1.29-.141-1.896.587-.274 1.086-.706 1.44-1.246.354-.54.551-1.17.569-1.816z";
+const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
+
+type ChartPeriod = "1W" | "1M" | "ALL";
+
+function PnlChart({ trades, period, dk }: {
+  trades: UserProfile["recent_trades"];
+  period: ChartPeriod;
+  dk: boolean;
+}) {
+  // Build cumulative PnL series from trades
+  const now = Date.now();
+  const cutoff = period === "1W" ? now - 7 * 86400000
+    : period === "1M" ? now - 30 * 86400000
+    : 0;
+
+  const filtered = trades
+    .filter(t => new Date(t.placed_at).getTime() >= cutoff && t.status === "resolved")
+    .sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
+
+  if (filtered.length < 2) {
+    return (
+      <div className={`flex items-center justify-center h-full text-[11px] ${dk ? "text-white/20" : "text-gray-400"}`}>
+        Not enough data
+      </div>
+    );
+  }
+
+  let cum = 0;
+  const points = filtered.map(t => {
+    const amount = parseFloat(t.amount);
+    const won = t.winner_side === t.side;
+    cum += won ? amount * 0.9 : -amount;
+    return cum;
+  });
+
+  const min = Math.min(0, ...points);
+  const max = Math.max(0, ...points);
+  const range = max - min || 1;
+  const W = 300, H = 80;
+
+  const coords = points.map((p, i) => {
+    const x = (i / (points.length - 1)) * W;
+    const y = H - ((p - min) / range) * H;
+    return `${x},${y}`;
+  });
+
+  const polyline = coords.join(" ");
+  const lastY = H - ((points[points.length - 1] - min) / range) * H;
+  const positive = points[points.length - 1] >= 0;
+  const color = positive ? "#34d399" : "#f87171";
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
+      <defs>
+        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon
+        points={`0,${H} ${polyline} ${W},${H}`}
+        fill="url(#chartGrad)"
+      />
+      <polyline points={polyline} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export default function ProfilePage({ username, dk, onClose }: {
+  username: string;
+  dk: boolean;
+  onClose: () => void;
+}) {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"positions" | "activity">("positions");
+  const [period, setPeriod] = useState<ChartPeriod>("1M");
+  const [posFilter, setPosFilter] = useState<"all" | "open" | "won" | "lost">("all");
+
+  useEffect(() => {
+    setLoading(true);
+    setProfile(null);
+    api.getUserProfile(username)
+      .then(setProfile)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [username]);
+
+  const pnl = profile ? parseFloat(profile.pnl) : 0;
+  const winRate = profile && profile.total_bets > 0
+    ? Math.round((profile.wins / profile.total_bets) * 100) : 0;
+  const losses = profile ? profile.total_bets - profile.wins : 0;
+
+  const joinDate = profile
+    ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+    : "";
+
+  const bg      = dk ? "bg-[#0c0c0c]" : "bg-white";
+  const border  = dk ? "border-white/8" : "border-gray-200";
+  const card    = dk ? "bg-white/[0.03] border-white/8" : "bg-gray-50 border-gray-200";
+  const muted   = dk ? "text-white/40" : "text-gray-400";
+  const strong  = dk ? "text-white" : "text-gray-900";
+  const sub     = dk ? "text-white/60" : "text-gray-600";
+
+  const filteredTrades = profile?.recent_trades.filter(t => {
+    if (posFilter === "open") return t.status === "open";
+    if (posFilter === "won") return t.status === "resolved" && t.winner_side === t.side;
+    if (posFilter === "lost") return t.status === "resolved" && t.winner_side !== t.side;
+    return true;
+  }) ?? [];
+
+  return (
+    <motion.div
+      initial={{ x: "100%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "100%" }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className={`fixed inset-0 z-[70] flex flex-col ${bg}`}
+    >
+      {/* Header */}
+      <div className={`flex items-center gap-3 px-5 py-4 border-b shrink-0 ${border}`}>
+        <button onClick={onClose} className={`text-[18px] font-bold ${muted} hover:opacity-60 transition-opacity`}>←</button>
+        <span className={`text-[15px] font-black ${strong}`}>{username}</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className={`flex items-center justify-center h-40 text-[13px] ${muted}`}>Loading…</div>
+        ) : !profile ? (
+          <div className={`flex items-center justify-center h-40 text-[13px] ${muted}`}>User not found</div>
+        ) : (
+          <div className="px-5 py-5 space-y-4">
+
+            {/* Top cards row */}
+            <div className="flex gap-3">
+              {/* Profile card */}
+              <div className={`flex-1 rounded-2xl border p-4 ${card}`}>
+                <div className="flex items-center gap-3 mb-4">
+                  {profile.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-[20px] font-black shrink-0 ${dk ? "bg-white/10 text-white/40" : "bg-gray-100 text-gray-400"}`}>
+                      {username.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[14px] font-black ${strong}`}>{username}</span>
+                      {profile.tier === "top" && (
+                        <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
+                          <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
+                        </svg>
+                      )}
+                      {profile.tier === "normal" && (
+                        <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
+                          <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
+                        </svg>
+                      )}
+                    </div>
+                    <p className={`text-[11px] mt-0.5 ${muted}`}>Joined {joinDate}</p>
+                    {profile.bio && <p className={`text-[11px] mt-1 ${sub}`}>{profile.bio}</p>}
+                  </div>
+                </div>
+                <div className={`border-t pt-3 ${border} grid grid-cols-3 gap-2`}>
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Bets</p>
+                    <p className={`text-[18px] font-black ${strong}`}>{profile.total_bets}</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Wins</p>
+                    <p className={`text-[18px] font-black text-emerald-400`}>{profile.wins}</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Losses</p>
+                    <p className={`text-[18px] font-black text-red-400`}>{losses}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PnL card */}
+              <div className={`flex-1 rounded-2xl border p-4 flex flex-col ${card}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-black ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>{pnl >= 0 ? "▲" : "▼"}</span>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${muted}`}>P&L</span>
+                  </div>
+                  <div className="flex gap-1">
+                    {(["1W", "1M", "ALL"] as ChartPeriod[]).map(p => (
+                      <button key={p} onClick={() => setPeriod(p)}
+                        className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg transition-all ${
+                          period === p
+                            ? (dk ? "bg-white text-black" : "bg-gray-900 text-white")
+                            : muted + " hover:opacity-70"
+                        }`}>
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className={`text-[22px] font-black mb-2 ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {pnl >= 0 ? "+" : "-"}${Math.abs(pnl).toFixed(2)}
+                </p>
+                <div className="flex-1 min-h-[60px]">
+                  <PnlChart trades={profile.recent_trades} period={period} dk={dk} />
+                </div>
+                <div className="flex justify-between mt-2">
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Win rate</p>
+                    <p className={`text-[14px] font-black ${strong}`}>{winRate}%</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Volume</p>
+                    <p className={`text-[14px] font-black ${strong}`}>${parseFloat(profile.volume).toFixed(0)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className={`flex rounded-xl p-0.5 border text-[12px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
+              <button onClick={() => setTab("positions")}
+                className={`flex-1 py-2 rounded-[10px] transition-all ${tab === "positions" ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
+                Positions
+              </button>
+              <button onClick={() => setTab("activity")}
+                className={`flex-1 py-2 rounded-[10px] transition-all ${tab === "activity" ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
+                Activity
+              </button>
+            </div>
+
+            {/* Positions tab */}
+            {tab === "positions" && (
+              <div>
+                {/* Filter pills */}
+                <div className="flex gap-1.5 mb-3">
+                  {(["all", "open", "won", "lost"] as const).map(f => (
+                    <button key={f} onClick={() => setPosFilter(f)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black transition-all ${
+                        posFilter === f
+                          ? (dk ? "bg-white text-black" : "bg-gray-900 text-white")
+                          : (dk ? "bg-white/5 text-white/40 hover:text-white/70" : "bg-gray-100 text-gray-400 hover:text-gray-700")
+                      }`}>
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {filteredTrades.length === 0 ? (
+                  <p className={`text-[13px] ${muted} text-center py-8`}>No positions found.</p>
+                ) : (
+                  <div className={`rounded-2xl border overflow-hidden ${border}`}>
+                    {/* Table header */}
+                    <div className={`grid grid-cols-[1fr_80px_80px] px-4 py-2 border-b text-[10px] font-black uppercase tracking-widest ${muted} ${border} ${dk ? "bg-white/[0.02]" : "bg-gray-50"}`}>
+                      <span>Market</span>
+                      <span className="text-right">Amount</span>
+                      <span className="text-right">Result</span>
+                    </div>
+                    {filteredTrades.map((t, i) => {
+                      const won  = t.status === "resolved" && t.winner_side === t.side;
+                      const lost = t.status === "resolved" && t.winner_side !== t.side;
+                      const isOpen = t.status !== "resolved";
+                      return (
+                        <div key={i} className={`grid grid-cols-[1fr_80px_80px] px-4 py-3 items-center ${i < filteredTrades.length - 1 ? `border-b ${border}` : ""} ${dk ? "hover:bg-white/[0.02]" : "hover:bg-gray-50"} transition-colors`}>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[11px] font-black ${t.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
+                                {t.side === "long" ? "▲ Long" : "▼ Short"}
+                              </span>
+                              <span className={`text-[10px] font-bold ${muted}`}>{t.timeframe}</span>
+                            </div>
+                            <p className={`text-[13px] font-black mt-0.5 ${strong}`}>${t.symbol}</p>
+                            <p className={`text-[10px] ${muted}`}>{t.chain.toUpperCase()}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-[13px] font-black ${strong}`}>${parseFloat(t.amount).toFixed(0)}</p>
+                          </div>
+                          <div className="text-right">
+                            {isOpen  && <span className={`text-[11px] font-black ${muted}`}>Open</span>}
+                            {won     && <span className="text-[11px] font-black text-emerald-400">Won ✓</span>}
+                            {lost    && <span className="text-[11px] font-black text-red-400">Lost ✗</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Activity tab */}
+            {tab === "activity" && (
+              <div className={`rounded-2xl border overflow-hidden ${border}`}>
+                {profile.recent_trades.length === 0 ? (
+                  <p className={`text-[13px] ${muted} text-center py-8`}>No activity yet.</p>
+                ) : (
+                  profile.recent_trades.map((t, i) => {
+                    const won = t.status === "resolved" && t.winner_side === t.side;
+                    const lost = t.status === "resolved" && t.winner_side !== t.side;
+                    const date = new Date(t.placed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    return (
+                      <div key={i} className={`flex items-center justify-between px-4 py-3 ${i < profile.recent_trades.length - 1 ? `border-b ${border}` : ""}`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-[16px] ${t.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
+                            {t.side === "long" ? "▲" : "▼"}
+                          </span>
+                          <div>
+                            <p className={`text-[12px] font-black ${strong}`}>${t.symbol} {t.side.toUpperCase()} {t.timeframe}</p>
+                            <p className={`text-[10px] ${muted}`}>{date}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-[12px] font-black ${strong}`}>${parseFloat(t.amount).toFixed(0)}</p>
+                          {won  && <p className="text-[10px] font-black text-emerald-400">Won</p>}
+                          {lost && <p className="text-[10px] font-black text-red-400">Lost</p>}
+                          {t.status === "open" && <p className={`text-[10px] font-black ${muted}`}>Open</p>}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}

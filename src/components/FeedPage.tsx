@@ -15,6 +15,7 @@ import CASearchModal from "./CASearchModal";
 import ReferralModal from "./ReferralModal";
 import LeaderboardView from "./LeaderboardView";
 import ProfileModal from "./ProfileModal";
+import ProfilePage from "./ProfilePage";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
@@ -125,6 +126,7 @@ export default function FeedPage() {
   const [paperCreditLoading, setPaperCreditLoading] = useState(false);
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
+  const [profilePageUser, setProfilePageUser]       = useState<string | null>(null);
   const [xInput, setXInput]                         = useState("");
   const [xSaving, setXSaving]                       = useState(false);
   const [xMsg, setXMsg]                             = useState("");
@@ -837,7 +839,7 @@ export default function FeedPage() {
         {/* RANKS TAB */}
         {!selectedCoin && mainTab === "ranks" && (
           <motion.div key="ranks" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
-            <LeaderboardView dk={dk} />
+            <LeaderboardView dk={dk} onViewProfile={(u) => setProfilePageUser(u)} />
           </motion.div>
         )}
 
@@ -1094,6 +1096,7 @@ export default function FeedPage() {
                       if (attempts >= 20) clearInterval(poll);
                     }, 3000);
                   }}
+                  onViewOwnProfile={() => { setOrdersOpen(false); setProfilePageUser(user?.username ?? null); }}
                 />
               </div>
             </motion.div>
@@ -1104,7 +1107,11 @@ export default function FeedPage() {
       {/* Profile Modal */}
       <AnimatePresence>
         {profileUser && (
-          <ProfileModal username={profileUser} dk={dk} onClose={() => setProfileUser(null)} />
+          <ProfileModal username={profileUser} dk={dk} onClose={() => setProfileUser(null)}
+            onViewProfile={() => { setProfilePageUser(profileUser); setProfileUser(null); }} />
+        )}
+        {profilePageUser && (
+          <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)} />
         )}
       </AnimatePresence>
     </div>

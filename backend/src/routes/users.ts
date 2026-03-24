@@ -46,7 +46,7 @@ export async function userRoutes(app: FastifyInstance) {
        JOIN markets m ON m.id = p.market_id
        WHERE p.user_id = $1 AND p.is_paper = false
        ORDER BY p.placed_at DESC
-       LIMIT 8`,
+       LIMIT 50`,
       [user.id]
     );
 

@@ -21,7 +21,7 @@ function TierBadge({ tier }: { tier?: string }) {
   return null;
 }
 
-export default function ProfileModal({ username, dk, onClose }: { username: string; dk: boolean; onClose: () => void }) {
+export default function ProfileModal({ username, dk, onClose, onViewProfile }: { username: string; dk: boolean; onClose: () => void; onViewProfile?: () => void }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -70,7 +70,7 @@ export default function ProfileModal({ username, dk, onClose }: { username: stri
             )}
             <div>
               <div className="flex items-center gap-1.5">
-                <span className={`text-[16px] font-black ${strong}`}>{username}</span>
+                <button onClick={onViewProfile} className={`text-[16px] font-black ${strong} hover:opacity-70 transition-opacity`}>{username}</button>
                 <TierBadge tier={profile?.tier} />
               </div>
               {profile?.bio && (
@@ -104,6 +104,13 @@ export default function ProfileModal({ username, dk, onClose }: { username: stri
                 </p>
               </div>
             </div>
+
+            {onViewProfile && (
+              <button onClick={onViewProfile}
+                className={`w-full py-2.5 rounded-xl text-[12px] font-black border transition-all mb-4 ${dk ? "border-white/10 text-white/50 hover:text-white/80 hover:border-white/20" : "border-gray-200 text-gray-500 hover:text-gray-700"}`}>
+                View full profile →
+              </button>
+            )}
 
             {/* Recent trades */}
             {profile.recent_trades.length > 0 && (

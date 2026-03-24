@@ -244,7 +244,7 @@ const PencilIcon = () => (
   </svg>
 );
 
-function ProfileHeader({ dk }: { dk: boolean }) {
+function ProfileHeader({ dk, onViewProfile }: { dk: boolean; onViewProfile?: () => void }) {
   const [username, setUsername]           = useState<string | null>(null);
   const [tier, setTier]                   = useState<string | undefined>(undefined);
   const [avatar, setAvatar]               = useState("");
@@ -322,7 +322,7 @@ function ProfileHeader({ dk }: { dk: boolean }) {
 
       {/* Username + tier */}
       <div className="flex items-center gap-1.5 mb-2">
-        <span className={`text-[15px] font-black ${strong}`}>{username}</span>
+        <button onClick={onViewProfile} className={`text-[15px] font-black ${strong} cursor-pointer hover:opacity-70 transition-opacity`}>{username}</button>
         {tier === "top" && (
           <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
             <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
@@ -368,7 +368,7 @@ function ProfileHeader({ dk }: { dk: boolean }) {
   );
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -495,7 +495,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
   return (
     <>
-      <ProfileHeader dk={dk} />
+      <ProfileHeader dk={dk} onViewProfile={onViewOwnProfile} />
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
         {/* Balance + P&L */}

@@ -14,7 +14,7 @@ const PERIOD_LABELS: Record<Period, string> = {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-export default function LeaderboardView({ dk }: { dk: boolean }) {
+export default function LeaderboardView({ dk, onViewProfile }: { dk: boolean; onViewProfile?: (username: string) => void }) {
   const [period, setPeriod]   = useState<Period>("week");
   const [rows, setRows]       = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +114,7 @@ export default function LeaderboardView({ dk }: { dk: boolean }) {
                       </span>
                     )}
                     <div>
-                      <p className={`text-[14px] font-black ${T.strong}`}>{row.username}</p>
+                      <button onClick={() => onViewProfile?.(row.username)} className={`text-[14px] font-black ${T.strong} hover:opacity-70 transition-opacity`}>{row.username}</button>
                       <p className={`text-[10px] font-bold ${T.muted}`}>
                         {row.wins}W / {row.total_bets - row.wins}L · {winRate}% win rate
                       </p>
