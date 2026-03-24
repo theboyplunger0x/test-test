@@ -5,7 +5,7 @@ import { createHmac } from "node:crypto";
 
 const TWITTERAPI_KEY = process.env.TWITTERAPI_KEY!;
 const API            = process.env.BACKEND_URL || "http://localhost:3001";
-const FUDMARKETS_UID = "426916379898642432"; // @FUDmarkets X user ID
+const FUDMARKETS_USERNAME = "FUDmarkets"; // @FUDmarkets X handle
 
 // Support up to 2 admin Telegram chat IDs (comma-separated or separate env vars)
 const ADMIN_TG_IDS: string[] = [
@@ -436,7 +436,7 @@ async function processMention(tweet: any) {
 
 async function poll() {
   try {
-    const params = new URLSearchParams({ userId: FUDMARKETS_UID });
+    const params = new URLSearchParams({ userName: FUDMARKETS_USERNAME });
     if (lastMentionId) params.set("sinceId", lastMentionId);
     const url = `https://api.twitterapi.io/twitter/user/mentions?${params}`;
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
