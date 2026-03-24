@@ -483,8 +483,10 @@ async function poll() {
     if (!mentions.length) return;
     console.log(`[x-agent] first: id=${mentions[0].id} text="${(mentions[0].text ?? "").slice(0, 80)}"`);
     const priorLastId = lastMentionId; // capture before update
-    const newLastId = mentions.reduce((max: string, t: any) => (t.id > max ? t.id : max), mentions[0].id);
-    if (newLastId !== lastMentionId) {
+    const newLastId = mentions.reduce((max: string, t: any) =>
+      BigInt(t.id) > BigInt(max) ? t.id : max, mentions[0].id);
+    // Never let lastMentionId go backwards — sinceId in twitterapi.io can return older tweets
+    if (!lastMentionId || BigInt(newLastId) > BigInt(lastMentionId)) {
       lastMentionId = newLastId;
       await saveLastMentionId(lastMentionId);
     }
