@@ -436,9 +436,10 @@ async function processMention(tweet: any) {
 
 async function poll() {
   try {
-    const params = new URLSearchParams({ userName: FUDMARKETS_USERNAME });
+    const query  = `@${FUDMARKETS_USERNAME}`;
+    const params = new URLSearchParams({ query, queryType: "Latest" });
     if (lastMentionId) params.set("sinceId", lastMentionId);
-    const url = `https://api.twitterapi.io/twitter/user/mentions?${params}`;
+    const url = `https://api.twitterapi.io/twitter/tweet/advanced_search?${params}`;
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
     if (!res.ok) {
       const body = await res.text();
@@ -446,15 +447,16 @@ async function poll() {
       return;
     }
     const data = await res.json() as any;
-    // Log top-level keys on first poll so we know the response shape
-    if (!lastMentionId) console.log(`[x-agent] API keys: ${Object.keys(data).join(", ")}`);
-    // twitterapi.io may use "tweets", "data", or "results"
     const mentions: any[] = data.tweets ?? data.data ?? data.results ?? [];
-    console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} mention(s) found (sinceId=${lastMentionId ?? "none"})`);
+    console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} tweet(s) (sinceId=${lastMentionId ?? "none"})`);
     if (!mentions.length) return;
-    // Newest first → set sinceId to the highest tweet ID
+    console.log(`[x-agent] first: id=${mentions[0].id} text="${(mentions[0].text ?? "").slice(0, 80)}"`);
     lastMentionId = mentions.reduce((max: string, t: any) => (t.id > max ? t.id : max), mentions[0].id);
-    for (const tweet of [...mentions].reverse()) await processMention(tweet);
+    // Skip our own tweets
+    const toProcess = mentions.filter((t: any) =>
+      (t.author?.userName ?? t.user?.screen_name ?? "").toLowerCase() !== FUDMARKETS_USERNAME.toLowerCase()
+    );
+    for (const tweet of [...toProcess].reverse()) await processMention(tweet);
   } catch (e: any) {
     console.error(`[x-agent] Poll error: ${e.message}`);
   }
