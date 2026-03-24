@@ -3,7 +3,7 @@ import { message } from "telegraf/filters";
 import { db } from "../db/client.js";
 import { createHmac, randomBytes } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { handleXApproval } from "./x.js";
+import { handleXPost, handleXPostCustom, handleXReject, getXPending } from "./x.js";
 
 const API = process.env.BACKEND_URL || "http://localhost:3001";
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -27,6 +27,9 @@ const pendingRegistration = new Set<number>();
 
 // Pending custom bet on existing market: tgId → { marketId, side }
 const pendingMarketBets = new Map<number, { marketId: string; side: string }>();
+
+// X agent edit mode: tgId → { callbackId, customReply? }
+const pendingXEdits = new Map<number, { callbackId: string; customReply?: string }>();
 
 // Pending trade state: tgId → token info waiting for mode/TF/side/amount selection
 interface PendingTrade {
@@ -579,6 +582,24 @@ export async function startBot() {
     // Let command handlers deal with commands
     if (text.startsWith("/")) return next();
 
+    // ── X agent edit mode ──────────────────────────────────────────────────
+    if (pendingXEdits.has(ctx.from.id)) {
+      const { callbackId } = pendingXEdits.get(ctx.from.id)!;
+      const customReply = text.slice(0, 270);
+      pendingXEdits.set(ctx.from.id, { callbackId, customReply });
+      await ctx.reply(
+        `*Preview* (${customReply.length}/270):\n\n_${customReply}_`,
+        {
+          parse_mode: "Markdown",
+          ...Markup.inlineKeyboard([[
+            Markup.button.callback("✅ Post this", `xconfirm_${callbackId}`),
+            Markup.button.callback("❌ Cancel",    `xcancel_${callbackId}`),
+          ]]),
+        }
+      );
+      return;
+    }
+
     // In groups: respond to CAs (token search) or @mentions (AI)
     if (ctx.chat.type !== "private") {
       const isCA = text.length > 20 && !/\s/.test(text);
@@ -1103,19 +1124,58 @@ export async function startBot() {
     const data = (ctx.callbackQuery as any).data as string | undefined;
     if (!data) return;
 
-    if (data.startsWith("xapprove_") || data.startsWith("xreject_")) {
-      const approved   = data.startsWith("xapprove_");
-      const callbackId = data.replace(/^x(approve|reject)_/, "x_");
-      const chatId     = String(ctx.chat?.id ?? (ctx.callbackQuery as any).message?.chat?.id ?? "");
-      const result     = await handleXApproval(callbackId, approved, chatId);
-
-      const label = result === "posted"   ? "✅ Posted!"
-                  : result === "rejected" ? "❌ Rejected"
-                  : result === "expired"  ? "⏱ Expired"
-                  : "⚠️ Error posting";
-
+    // ── Post variant: xpost_{id}_{index} ──────────────────────────────────────
+    const postMatch = data.match(/^xpost_(.+)_(\d+)$/);
+    if (postMatch) {
+      const [, callbackId, idxStr] = postMatch;
+      const result = await handleXPost(callbackId, parseInt(idxStr));
+      const label  = result === "posted" ? "✅ Posted!" : result === "expired" ? "⏱ Expired" : "⚠️ Error";
       await ctx.answerCbQuery(label).catch(() => {});
-      // editAdminMessages already updated all admin chats — no need to editMessageText here
+      return;
+    }
+
+    // ── Edit mode: xedit_{id} ──────────────────────────────────────────────
+    if (data.startsWith("xedit_")) {
+      const callbackId = data.slice("xedit_".length);
+      const entry = getXPending(callbackId);
+      if (!entry) { await ctx.answerCbQuery("⏱ Expired").catch(() => {}); return; }
+      pendingXEdits.set(ctx.from!.id, { callbackId });
+      await ctx.answerCbQuery("✏️ Send your reply").catch(() => {});
+      const opts = entry.replies.map((r, i) => `[${i + 1}] ${r}`).join("\n\n");
+      await ctx.reply(`✏️ *Edit reply for @${entry.xUsername}*\n\nCurrent options:\n${opts}\n\nSend your custom reply (max 270 chars):`, { parse_mode: "Markdown" });
+      return;
+    }
+
+    // ── Confirm custom reply: xconfirm_{id} ───────────────────────────────
+    if (data.startsWith("xconfirm_")) {
+      const callbackId = data.slice("xconfirm_".length);
+      const edit = [...pendingXEdits.entries()].find(([, v]) => v.callbackId === callbackId && v.customReply);
+      if (!edit) { await ctx.answerCbQuery("⏱ Expired").catch(() => {}); return; }
+      const [tgId, { customReply }] = edit;
+      pendingXEdits.delete(tgId);
+      const result = await handleXPostCustom(callbackId, customReply!);
+      const label  = result === "posted" ? "✅ Posted!" : result === "expired" ? "⏱ Expired" : "⚠️ Error";
+      await ctx.answerCbQuery(label).catch(() => {});
+      return;
+    }
+
+    // ── Cancel edit: xcancel_{id} ──────────────────────────────────────────
+    if (data.startsWith("xcancel_")) {
+      const callbackId = data.slice("xcancel_".length);
+      for (const [tgId, v] of pendingXEdits) {
+        if (v.callbackId === callbackId) { pendingXEdits.delete(tgId); break; }
+      }
+      await ctx.answerCbQuery("Cancelled").catch(() => {});
+      await ctx.reply("Edit cancelled.").catch(() => {});
+      return;
+    }
+
+    // ── Reject: xreject_{id} ───────────────────────────────────────────────
+    if (data.startsWith("xreject_")) {
+      const callbackId = data.slice("xreject_".length);
+      const result = await handleXReject(callbackId);
+      const label  = result === "rejected" ? "❌ Rejected" : "⏱ Expired";
+      await ctx.answerCbQuery(label).catch(() => {});
       return;
     }
   });

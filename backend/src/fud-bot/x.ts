@@ -23,11 +23,11 @@ const xClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_TOKEN_SECRET!,
 });
 
-// Pending approvals: callbackId → { tweetId, xUsername, reply, timeout, msgIds }
+// Pending approvals: callbackId → { tweetId, xUsername, replies, timeout, msgIds }
 const pending = new Map<string, {
   tweetId:   string;
   xUsername: string;
-  reply:     string;
+  replies:   string[];            // 3 generated variants
   timeout:   ReturnType<typeof setTimeout>;
   msgIds:    Map<string, number>; // chatId → messageId (for editing after decision)
 }>();
@@ -156,37 +156,58 @@ async function editAdminMessages(msgIds: Map<string, number>, text: string) {
   }
 }
 
-// Called by Telegram bot when admin taps ✅ or ❌
-export async function handleXApproval(callbackId: string, approved: boolean, byAdminChatId?: string) {
+// ─── Export helpers for Telegram bot ─────────────────────────────────────────
+
+/** Post one of the generated reply variants */
+export async function handleXPost(callbackId: string, replyIndex: number): Promise<string> {
   const entry = pending.get(callbackId);
   if (!entry) return "expired";
-
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
-
-  let result: "posted" | "rejected" | "error";
-  if (approved) {
-    try {
-      await xClient.v2.reply(entry.reply, entry.tweetId);
-      console.log(`[x-agent] Posted reply to @${entry.xUsername}`);
-      result = "posted";
-    } catch (e: any) {
-      console.error(`[x-agent] Failed to post reply: ${e.message}`);
-      result = "error";
-    }
-  } else {
-    console.log(`[x-agent] Reply to @${entry.xUsername} rejected`);
-    result = "rejected";
+  const reply = entry.replies[replyIndex] ?? entry.replies[0];
+  try {
+    await xClient.v2.reply(reply, entry.tweetId);
+    console.log(`[x-agent] Posted opt ${replyIndex + 1} to @${entry.xUsername}`);
+    await editAdminMessages(entry.msgIds, `✅ *Posted* (opt ${replyIndex + 1})\n\n_${reply}_`);
+    return "posted";
+  } catch (e: any) {
+    console.error(`[x-agent] Failed to post: ${e.message}`);
+    await editAdminMessages(entry.msgIds, `⚠️ *Error posting*: ${e.message}`);
+    return "error";
   }
+}
 
-  // Edit all admin messages to show the final status (removes buttons, notifies both)
-  const statusLine = result === "posted"   ? "✅ *Posted!*"
-                   : result === "rejected" ? "❌ *Rejected*"
-                   : "⚠️ *Error posting*";
-  const originalText = `*X mention from @${entry.xUsername}*\n\n_"${entry.tweetId}"_\n\n*Draft reply:*\n${entry.reply}`;
-  await editAdminMessages(entry.msgIds, `${statusLine}\n\n${entry.reply}`);
+/** Post a custom (manually edited) reply */
+export async function handleXPostCustom(callbackId: string, customReply: string): Promise<string> {
+  const entry = pending.get(callbackId);
+  if (!entry) return "expired";
+  clearTimeout(entry.timeout);
+  pending.delete(callbackId);
+  try {
+    await xClient.v2.reply(customReply, entry.tweetId);
+    console.log(`[x-agent] Posted custom reply to @${entry.xUsername}`);
+    await editAdminMessages(entry.msgIds, `✅ *Posted* (custom)\n\n_${customReply}_`);
+    return "posted";
+  } catch (e: any) {
+    console.error(`[x-agent] Failed to post custom: ${e.message}`);
+    return "error";
+  }
+}
 
-  return result;
+/** Reject — discard all variants */
+export async function handleXReject(callbackId: string): Promise<string> {
+  const entry = pending.get(callbackId);
+  if (!entry) return "expired";
+  clearTimeout(entry.timeout);
+  pending.delete(callbackId);
+  console.log(`[x-agent] Rejected reply to @${entry.xUsername}`);
+  await editAdminMessages(entry.msgIds, `❌ *Rejected* — @${entry.xUsername}`);
+  return "rejected";
+}
+
+/** Read pending entry (used by Telegram edit flow) */
+export function getXPending(callbackId: string) {
+  return pending.get(callbackId);
 }
 
 // ─── AI System prompt ─────────────────────────────────────────────────────────
@@ -359,35 +380,56 @@ async function processMention(tweet: any) {
     });
   }
 
-  const reply = response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
-  console.log(`  → Draft reply: ${reply}`);
+  const baseReply = response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
+  console.log(`  → Base reply: ${baseReply}`);
+
+  // ── Generate 3 variants ──
+  let replies: string[] = [];
+  try {
+    const varRes = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001", max_tokens: 700,
+      system: SYSTEM,
+      messages: [
+        ...messages,
+        { role: "assistant", content: response.content },
+        { role: "user", content: "Write 3 distinct tweet reply variants (max 270 chars each). Vary the tone: [1] casual/funny, [2] data-focused/sharp, [3] hype/punchy. Format exactly:\n[1] <reply>\n[2] <reply>\n[3] <reply>" },
+      ],
+    });
+    const varText = varRes.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
+    replies = varText.split(/\[\d\]\s+/).map(s => s.trim()).filter(Boolean).slice(0, 3);
+    if (replies.length === 0) replies = [baseReply];
+  } catch {
+    replies = [baseReply];
+  }
+  console.log(`  → ${replies.length} variants generated`);
 
   // ── Send to admin Telegram for approval ──
   const callbackId = `x_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-  const notif = `*X mention from @${xUsername}*\n\n` +
-    `_"${text}"_\n\n` +
-    `*Draft reply:*\n${reply}\n\n` +
-    `[View tweet](${tweetUrl})`;
+  const optLines = replies.map((r, i) => `*[${i + 1}]* ${r}`).join("\n\n");
+  const notif = `*X mention from @${xUsername}*\n\n_"${text}"_\n\n${optLines}\n\n[View tweet](${tweetUrl})`;
 
-  const msgIds = await sendToAdminTelegram(notif, [
+  const keyboard = [
+    replies.map((_, i) => ({ text: `✅ ${i + 1}`, callback_data: `xpost_${callbackId}_${i}` })),
     [
-      { text: "✅ Post",   callback_data: `xapprove_${callbackId}` },
+      { text: "✏️ Edit",   callback_data: `xedit_${callbackId}` },
       { text: "❌ Reject", callback_data: `xreject_${callbackId}` },
     ],
-  ]);
+  ];
 
-  // Auto-reject after 30 minutes — edit both messages to show timeout
+  const msgIds = await sendToAdminTelegram(notif, keyboard);
+
+  // Auto-expire after 30 minutes
   const timeout = setTimeout(async () => {
     if (pending.has(callbackId)) {
       const e = pending.get(callbackId)!;
       pending.delete(callbackId);
-      console.log(`[x-agent] Auto-rejected reply to @${xUsername} (30min timeout)`);
-      await editAdminMessages(e.msgIds, `⏱ *Expired* (30min)\n\n${e.reply}`);
+      console.log(`[x-agent] Auto-expired reply to @${xUsername}`);
+      await editAdminMessages(e.msgIds, `⏱ *Expired* (30min) — @${xUsername}`);
     }
   }, 30 * 60 * 1000);
 
-  pending.set(callbackId, { tweetId, xUsername, reply, timeout, msgIds });
+  pending.set(callbackId, { tweetId, xUsername, replies, timeout, msgIds });
 }
 
 // ─── Poll loop ────────────────────────────────────────────────────────────────
