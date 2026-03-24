@@ -469,15 +469,18 @@ async function poll() {
     console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} tweet(s) (sinceId=${lastMentionId ?? "none"})`);
     if (!mentions.length) return;
     console.log(`[x-agent] first: id=${mentions[0].id} text="${(mentions[0].text ?? "").slice(0, 80)}"`);
+    const priorLastId = lastMentionId; // capture before update
     const newLastId = mentions.reduce((max: string, t: any) => (t.id > max ? t.id : max), mentions[0].id);
     if (newLastId !== lastMentionId) {
       lastMentionId = newLastId;
       await saveLastMentionId(lastMentionId);
     }
-    // Skip own tweets and already-processed IDs
+    // Skip own tweets, already-processed IDs, and tweets at/before the previous boundary
+    // (twitterapi.io sinceId is inclusive — the boundary tweet always comes back)
     const toProcess = mentions.filter((t: any) => {
       const author = (t.author?.userName ?? t.user?.screen_name ?? "").toLowerCase();
       if (author === FUDMARKETS_USERNAME.toLowerCase()) return false;
+      if (priorLastId && BigInt(t.id) <= BigInt(priorLastId)) return false;
       if (processedIds.has(t.id)) return false;
       processedIds.add(t.id);
       return true;
