@@ -84,8 +84,9 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
   const [tab, setTab] = useState<"positions" | "activity">("positions");
   const [period, setPeriod] = useState<ChartPeriod>("1M");
   const [posFilter, setPosFilter] = useState<"all" | "open" | "won" | "lost">("all");
-  const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
+  const [followStatus, setFollowStatus] = useState<FollowStatus>({ following: false, notify_trades: false });
   const [followLoading, setFollowLoading] = useState(false);
+  const [followHovered, setFollowHovered] = useState(false);
 
   const isOwnProfile = currentUser === username;
   const loggedIn = typeof window !== "undefined" && !!localStorage.getItem("token");
@@ -93,7 +94,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
   useEffect(() => {
     setLoading(true);
     setProfile(null);
-    setFollowStatus(null);
+    setFollowStatus({ following: false, notify_trades: false });
     api.getUserProfile(username)
       .then(setProfile)
       .catch(() => {})
@@ -166,7 +167,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
         <button onClick={onClose} className={`text-[18px] font-bold ${muted} hover:opacity-60 transition-opacity`}>←</button>
         <span className={`text-[15px] font-black ${strong} flex-1`}>{username}</span>
         {/* Follow actions */}
-        {loggedIn && !isOwnProfile && followStatus !== null && (
+        {loggedIn && !isOwnProfile && (
           <div className="flex items-center gap-1.5">
             {followStatus.following && (
               <button onClick={handleBell}
@@ -182,13 +183,21 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
                 </svg>
               </button>
             )}
-            <button onClick={handleFollow} disabled={followLoading}
+            <button
+              onClick={handleFollow}
+              disabled={followLoading}
+              onMouseEnter={() => setFollowHovered(true)}
+              onMouseLeave={() => setFollowHovered(false)}
               className={`px-4 py-1.5 rounded-xl text-[12px] font-black transition-all ${
                 followStatus.following
-                  ? (dk ? "border border-white/10 text-white/50 hover:text-red-400 hover:border-red-400/30" : "border border-gray-200 text-gray-500 hover:text-red-500")
+                  ? followHovered
+                    ? (dk ? "border border-red-400/40 text-red-400" : "border border-red-300 text-red-500")
+                    : (dk ? "border border-white/10 text-white/50" : "border border-gray-200 text-gray-500")
                   : "bg-blue-500 hover:bg-blue-400 text-white"
               }`}>
-              {followStatus.following ? "Following" : "Follow"}
+              {followStatus.following
+                ? followHovered ? "Unfollow" : "Following"
+                : "Follow"}
             </button>
           </div>
         )}
