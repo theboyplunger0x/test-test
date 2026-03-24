@@ -987,23 +987,13 @@ export default function FeedPage() {
                 {/* Trading Mode */}
                 <div>
                   <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Trading Mode</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPaperMode(false)}
-                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${!paperMode
-                        ? (dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900")
-                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
-                      }`}
-                    >
+                  <div className={`flex rounded-xl p-0.5 border text-[12px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
+                    <button onClick={() => setPaperMode(false)}
+                      className={`flex-1 py-2 rounded-[10px] transition-all ${!paperMode ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
                       Real
                     </button>
-                    <button
-                      onClick={() => setPaperMode(true)}
-                      className={`flex-1 py-3 rounded-2xl text-[12px] font-black border transition-all ${paperMode
-                        ? "bg-yellow-400 text-black border-yellow-400"
-                        : (dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-700")
-                      }`}
-                    >
+                    <button onClick={() => setPaperMode(true)}
+                      className={`flex-1 py-2 rounded-[10px] transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
                       Paper
                     </button>
                   </div>
@@ -1073,7 +1063,7 @@ export default function FeedPage() {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className={`fixed right-0 top-0 h-full w-full md:w-[420px] border-l z-50 flex flex-col ${T.drawerBg}`}>
               <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
-                <span className="text-[15px] font-black">Portfolio</span>
+                <span className="text-[15px] font-black">Account</span>
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
               <div className="flex-1 overflow-hidden">
@@ -1680,8 +1670,6 @@ function TrendingTokenCard({ token, rank, dk, onOpenMarket, onViewCoin }: {
 
 // ─── TapeSidebar ──────────────────────────────────────────────────────────────
 
-const FAKE_USERS = ["0xa3…f1", "moon_bro", "0xc9…22", "ape_lord", "bear_gang", "sol_maxi", "0x77…bc", "degen.sol", "flip_god", "paperhand"];
-
 type TapeEntry = {
   uid: string; symbol: string; side: "short" | "long";
   amount: number; message: string; user: string; ts: number;
@@ -1692,35 +1680,23 @@ function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tap
   challenges: Challenge[]; onViewCoin: (symbol: string) => void; dk: boolean;
   tapeBorder: string; sidebarLabel: string; tapeColLabel: string; open: boolean; onToggle: () => void;
 }) {
-  const [entries, setEntries] = useState<TapeEntry[]>(() =>
-    [...challenges].reverse().slice(0, 20).map(c => ({
+  const toEntries = (cs: Challenge[]) =>
+    [...cs].reverse().slice(0, 40).map(c => ({
       uid: `init-${c.id}`,
       symbol: c.symbol,
-      side: Math.random() > 0.5 ? "long" : "short",
-      amount: [10, 25, 50, 100, 250][Math.floor(Math.random() * 5)],
+      side: (c.longPool >= c.shortPool ? "long" : "short") as "long" | "short",
+      amount: Math.round(c.longPool + c.shortPool),
       message: c.tagline,
-      user: c.user,
+      user: c.openerUsername ?? c.user,
       ts: Date.now() - c.openedAt * 1000,
       isOpen: c.status === "open",
-    }))
-  );
+    }));
+
+  const [entries, setEntries] = useState<TapeEntry[]>(() => toEntries(challenges));
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (challenges.length === 0) return;
-    const interval = setInterval(() => {
-      const c    = challenges[Math.floor(Math.random() * challenges.length)];
-      const side: "short" | "long" = Math.random() > 0.5 ? "long" : "short";
-      setEntries(prev => [{
-        uid: `${Date.now()}-${Math.random()}`, symbol: c.symbol, side,
-        amount: [10, 25, 50, 100, 250][Math.floor(Math.random() * 5)],
-        message: c.tagline,
-        user: FAKE_USERS[Math.floor(Math.random() * FAKE_USERS.length)],
-        ts: Date.now(),
-        isOpen: c.status === "open",
-      }, ...prev].slice(0, 60));
-    }, 2400);
-    return () => clearInterval(interval);
+    setEntries(toEntries(challenges));
   }, [challenges]);
 
   const rowBg  = dk ? "hover:bg-white/4" : "hover:bg-gray-100";
