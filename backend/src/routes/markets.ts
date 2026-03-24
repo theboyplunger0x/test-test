@@ -122,6 +122,33 @@ export async function marketRoutes(app: FastifyInstance) {
       // Fire-and-forget tier check for real bets
       if (!isPaper) checkAndUpgradeTier(user.userId).catch(() => {});
 
+      // Fire-and-forget: notify followers who subscribed to this user's trades
+      if (!isPaper) {
+        (async () => {
+          try {
+            const { rows: followers } = await db.query(
+              `SELECT f.follower_id FROM follows f WHERE f.following_id = $1 AND f.notify_trades = true`,
+              [user.userId]
+            );
+            if (followers.length === 0) return;
+            const { rows: [trader] } = await db.query(`SELECT username FROM users WHERE id = $1`, [user.userId]);
+            const payload = JSON.stringify({
+              trader_username: trader?.username ?? user.userId,
+              symbol: market.symbol,
+              timeframe: market.timeframe,
+              side,
+              amount,
+            });
+            for (const f of followers) {
+              await db.query(
+                `INSERT INTO notifications (user_id, type, payload) VALUES ($1, 'followed_trade', $2)`,
+                [f.follower_id, payload]
+              );
+            }
+          } catch {}
+        })();
+      }
+
       return reply.status(201).send({
         position,
         new_balance:       userRow.balance_usd,

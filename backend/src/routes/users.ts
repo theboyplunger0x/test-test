@@ -11,6 +11,13 @@ export async function userRoutes(app: FastifyInstance) {
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
 
+    const { rows: [counts] } = await db.query(
+      `SELECT
+        (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS follower_count,
+        (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following_count`,
+      [user.id]
+    );
+
     // Stats from non-paper settled positions
     const { rows: [stats] } = await db.query(
       `SELECT
@@ -60,6 +67,8 @@ export async function userRoutes(app: FastifyInstance) {
       wins: stats?.wins ?? 0,
       pnl: pnl.toFixed(2),
       volume: volume.toFixed(2),
+      follower_count: counts?.follower_count ?? 0,
+      following_count: counts?.following_count ?? 0,
       recent_trades: recentTrades,
     };
   });

@@ -68,6 +68,63 @@ export async function resolveMarket(marketId: string) {
 
     await client.query("COMMIT");
     console.log(`[resolver] Market ${market.id} (${market.symbol}) resolved → ${winnerSide} wins. Fee: $${fee}`);
+
+    // Fire-and-forget: create notifications for all position holders + followers
+    (async () => {
+      try {
+        const BIG_TRADE_THRESHOLD = 50;
+        const { rows: allPositions } = await db.query(
+          `SELECT p.*, u.username FROM positions p JOIN users u ON u.id = p.user_id WHERE p.market_id = $1 AND p.is_paper = false`,
+          [market.id]
+        );
+
+        for (const pos of allPositions) {
+          const won = pos.side === winnerSide;
+          const posAmount = parseFloat(pos.amount);
+          const pnl = won
+            ? posAmount * (winPool > 0 ? (losePool * 0.95) / winPool : 0)
+            : -posAmount;
+
+          // market_resolved notification for the position holder
+          await db.query(
+            `INSERT INTO notifications (user_id, type, payload) VALUES ($1, 'market_resolved', $2)`,
+            [pos.user_id, JSON.stringify({
+              market_id: market.id,
+              symbol: market.symbol,
+              timeframe: market.timeframe,
+              side: pos.side,
+              winner_side: winnerSide,
+              amount: posAmount,
+              pnl: parseFloat(pnl.toFixed(2)),
+            })]
+          );
+
+          // followed_big_trade notification for followers if |pnl| > threshold
+          if (Math.abs(pnl) >= BIG_TRADE_THRESHOLD) {
+            const { rows: followers } = await db.query(
+              `SELECT follower_id FROM follows WHERE following_id = $1`,
+              [pos.user_id]
+            );
+            const bigPayload = JSON.stringify({
+              trader_username: pos.username,
+              symbol: market.symbol,
+              timeframe: market.timeframe,
+              side: pos.side,
+              amount: posAmount,
+              pnl: parseFloat(pnl.toFixed(2)),
+            });
+            for (const f of followers) {
+              await db.query(
+                `INSERT INTO notifications (user_id, type, payload) VALUES ($1, 'followed_big_trade', $2)`,
+                [f.follower_id, bigPayload]
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[resolver] notification error:", err);
+      }
+    })();
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(`[resolver] Error resolving market ${marketId}:`, err);

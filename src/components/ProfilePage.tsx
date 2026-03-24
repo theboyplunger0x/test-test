@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { api, UserProfile } from "../lib/api";
+import { api, UserProfile, FollowStatus } from "../lib/api";
 
 const SEAL = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.266.14-1.897-.131-.63-.437-1.208-.882-1.671-.445-.464-1.011-.79-1.638-.944-.627-.155-1.284-.127-1.895.082-.274-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.61-.209-1.265-.237-1.892-.082-.627.155-1.193.48-1.639.944-.445.463-.749 1.04-.878 1.671-.13.63-.083 1.29.141 1.897-.587.274-1.086.706-1.44 1.246-.354.54-.551 1.17-.569 1.816.018.647.215 1.276.57 1.817.354.54.852.972 1.438 1.245-.224.607-.27 1.266-.14 1.897.13.63.436 1.208.882 1.671.445.464 1.011.79 1.638.944.627.155 1.284.127 1.895-.082.274.587.704 1.086 1.245 1.44.54.354 1.17.551 1.816.569.647-.016 1.275-.213 1.815-.567s.969-.854 1.24-1.44c.61.21 1.266.238 1.893.083.626-.155 1.192-.48 1.637-.944.445-.463.749-1.041.879-1.672.13-.63.083-1.29-.141-1.896.587-.274 1.086-.706 1.44-1.246.354-.54.551-1.17.569-1.816z";
 const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
@@ -73,25 +73,62 @@ function PnlChart({ trades, period, dk }: {
   );
 }
 
-export default function ProfilePage({ username, dk, onClose }: {
+export default function ProfilePage({ username, dk, onClose, currentUser }: {
   username: string;
   dk: boolean;
   onClose: () => void;
+  currentUser?: string;
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"positions" | "activity">("positions");
   const [period, setPeriod] = useState<ChartPeriod>("1M");
   const [posFilter, setPosFilter] = useState<"all" | "open" | "won" | "lost">("all");
+  const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  const isOwnProfile = currentUser === username;
+  const loggedIn = typeof window !== "undefined" && !!localStorage.getItem("token");
 
   useEffect(() => {
     setLoading(true);
     setProfile(null);
+    setFollowStatus(null);
     api.getUserProfile(username)
       .then(setProfile)
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    if (loggedIn && !isOwnProfile) {
+      api.getFollowStatus(username).then(setFollowStatus).catch(() => {});
+    }
   }, [username]);
+
+  const handleFollow = async () => {
+    if (followLoading) return;
+    setFollowLoading(true);
+    try {
+      if (followStatus?.following) {
+        await api.unfollowUser(username);
+        setFollowStatus({ following: false, notify_trades: false });
+      } else {
+        const result = await api.followUser(username);
+        setFollowStatus(result);
+        // Optimistically bump follower count
+        setProfile(p => p ? { ...p, follower_count: (p.follower_count ?? 0) + 1 } : p);
+      }
+    } catch {} finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleBell = async () => {
+    if (!followStatus?.following) return;
+    try {
+      const result = await api.setNotifyTrades(username, !followStatus.notify_trades);
+      setFollowStatus(s => s ? { ...s, notify_trades: result.notify_trades } : s);
+    } catch {}
+  };
 
   const pnl = profile ? parseFloat(profile.pnl) : 0;
   const winRate = profile && profile.total_bets > 0
@@ -127,7 +164,34 @@ export default function ProfilePage({ username, dk, onClose }: {
       {/* Header */}
       <div className={`flex items-center gap-3 px-5 py-4 border-b shrink-0 ${border}`}>
         <button onClick={onClose} className={`text-[18px] font-bold ${muted} hover:opacity-60 transition-opacity`}>←</button>
-        <span className={`text-[15px] font-black ${strong}`}>{username}</span>
+        <span className={`text-[15px] font-black ${strong} flex-1`}>{username}</span>
+        {/* Follow actions */}
+        {loggedIn && !isOwnProfile && followStatus !== null && (
+          <div className="flex items-center gap-1.5">
+            {followStatus.following && (
+              <button onClick={handleBell}
+                title={followStatus.notify_trades ? "Mute trades" : "Notify on all trades"}
+                className={`flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${
+                  followStatus.notify_trades
+                    ? "bg-blue-500 border-blue-500 text-white"
+                    : (dk ? "border-white/10 text-white/30 hover:text-white/60" : "border-gray-200 text-gray-400 hover:text-gray-600")
+                }`}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+            <button onClick={handleFollow} disabled={followLoading}
+              className={`px-4 py-1.5 rounded-xl text-[12px] font-black transition-all ${
+                followStatus.following
+                  ? (dk ? "border border-white/10 text-white/50 hover:text-red-400 hover:border-red-400/30" : "border border-gray-200 text-gray-500 hover:text-red-500")
+                  : "bg-blue-500 hover:bg-blue-400 text-white"
+              }`}>
+              {followStatus.following ? "Following" : "Follow"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -180,6 +244,17 @@ export default function ProfilePage({ username, dk, onClose }: {
                   <div>
                     <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Losses</p>
                     <p className={`text-[18px] font-black text-red-400`}>{losses}</p>
+                  </div>
+                </div>
+                {/* Followers / Following */}
+                <div className={`border-t pt-3 mt-2 ${border} flex gap-4`}>
+                  <div>
+                    <span className={`text-[14px] font-black ${strong}`}>{profile.follower_count ?? 0}</span>
+                    <span className={`text-[11px] font-bold ml-1 ${muted}`}>followers</span>
+                  </div>
+                  <div>
+                    <span className={`text-[14px] font-black ${strong}`}>{profile.following_count ?? 0}</span>
+                    <span className={`text-[11px] font-bold ml-1 ${muted}`}>following</span>
                   </div>
                 </div>
               </div>

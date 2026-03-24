@@ -87,6 +87,19 @@ export type LeaderboardEntry = {
   volume: string;
 };
 
+export type FollowStatus = {
+  following: boolean;
+  notify_trades: boolean;
+};
+
+export type AppNotification = {
+  id: string;
+  type: "market_resolved" | "new_follower" | "followed_big_trade" | "followed_trade";
+  payload: Record<string, any>;
+  read: boolean;
+  created_at: string;
+};
+
 export type UserProfile = {
   username: string;
   avatar_url?: string;
@@ -97,6 +110,8 @@ export type UserProfile = {
   wins: number;
   pnl: string;
   volume: string;
+  follower_count?: number;
+  following_count?: number;
   recent_trades: {
     side: "long" | "short";
     amount: string;
@@ -245,4 +260,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ avatar_url, bio }),
     }),
+
+  // Follow system
+  followUser: (username: string) =>
+    req<FollowStatus>(`/users/${encodeURIComponent(username)}/follow`, { method: "POST", body: "{}" }),
+
+  unfollowUser: (username: string) =>
+    req<{ following: boolean }>(`/users/${encodeURIComponent(username)}/follow`, { method: "DELETE" }),
+
+  setNotifyTrades: (username: string, notify_trades: boolean) =>
+    req<{ notify_trades: boolean }>(`/users/${encodeURIComponent(username)}/follow`, {
+      method: "PATCH",
+      body: JSON.stringify({ notify_trades }),
+    }),
+
+  getFollowStatus: (username: string) =>
+    req<FollowStatus>(`/users/${encodeURIComponent(username)}/follow-status`),
+
+  // Notifications
+  getNotifications: () => req<AppNotification[]>("/notifications"),
+  getUnreadCount: () => req<{ unread: number }>("/notifications/count"),
+  markAllRead: () => req<{ ok: boolean }>("/notifications/read-all", { method: "POST", body: "{}" }),
+  markNotificationsRead: (ids: string[]) =>
+    req<{ ok: boolean }>("/notifications/read", { method: "POST", body: JSON.stringify({ ids }) }),
 };

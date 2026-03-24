@@ -16,6 +16,7 @@ import ReferralModal from "./ReferralModal";
 import LeaderboardView from "./LeaderboardView";
 import ProfileModal from "./ProfileModal";
 import ProfilePage from "./ProfilePage";
+import NotificationsPanel from "./NotificationsPanel";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
@@ -127,6 +128,8 @@ export default function FeedPage() {
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [profilePageUser, setProfilePageUser]       = useState<string | null>(null);
+  const [notifPanelOpen, setNotifPanelOpen]         = useState(false);
+  const [unreadCount, setUnreadCount]               = useState(0);
   const [xInput, setXInput]                         = useState("");
   const [xSaving, setXSaving]                       = useState(false);
   const [xMsg, setXMsg]                             = useState("");
@@ -198,6 +201,15 @@ export default function FeedPage() {
     if (!xUsername) return;
     localStorage.removeItem("x_username_connected");
     setUser(u => u ? { ...u, x_username: xUsername } : null);
+  }, [user]);
+
+  // Poll unread notification count every 60s
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    const fetch = () => api.getUnreadCount().then(r => setUnreadCount(r.unread)).catch(() => {});
+    fetch();
+    const iv = setInterval(fetch, 60_000);
+    return () => clearInterval(iv);
   }, [user]);
 
   // Fetch markets + poll every 30s; also refresh user balance to capture payouts
@@ -564,13 +576,18 @@ export default function FeedPage() {
 
               {/* Notifications */}
               <motion.button whileTap={{ scale: 0.94 }}
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => { setNotifPanelOpen(true); setUnreadCount(0); }}
                 title="Notifications"
-                className={`flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${T.portfolioBtn}`}>
+                className={`relative flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${T.portfolioBtn}`}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-blue-500 text-white text-[9px] font-black flex items-center justify-center px-1">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </motion.button>
 
               {/* User avatar + username */}
@@ -1141,10 +1158,20 @@ export default function FeedPage() {
       <AnimatePresence>
         {profileUser && (
           <ProfileModal username={profileUser} dk={dk} onClose={() => setProfileUser(null)}
-            onViewProfile={() => { setProfilePageUser(profileUser); setProfileUser(null); }} />
+            onViewProfile={() => { setProfilePageUser(profileUser); setProfileUser(null); }}
+            currentUser={user?.username} />
         )}
         {profilePageUser && (
-          <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)} />
+          <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)}
+            currentUser={user?.username} />
+        )}
+      </AnimatePresence>
+
+      {/* Notifications Panel */}
+      <AnimatePresence>
+        {notifPanelOpen && (
+          <NotificationsPanel dk={dk} onClose={() => setNotifPanelOpen(false)}
+            onViewProfile={(u) => { setNotifPanelOpen(false); setProfilePageUser(u); }} />
         )}
       </AnimatePresence>
     </div>

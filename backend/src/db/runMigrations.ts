@@ -150,6 +150,29 @@ ALTER TABLE tg_link_tokens ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE tg_link_tokens ALTER COLUMN tg_id DROP NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+
+CREATE TABLE IF NOT EXISTS follows (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  follower_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  notify_trades BOOLEAN NOT NULL DEFAULT false,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (follower_id, following_id),
+  CHECK (follower_id <> following_id)
+);
+CREATE INDEX IF NOT EXISTS idx_follows_follower  ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL,
+  payload    JSONB NOT NULL DEFAULT '{}',
+  read       BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user   ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read) WHERE read = false;
 `;
 
 export async function runMigrations() {
