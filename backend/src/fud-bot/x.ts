@@ -454,9 +454,8 @@ async function processMention(tweet: any) {
 
 async function poll() {
   try {
-    // "to:username" is the Twitter search operator for finding mentions/replies
-    const query = `to:${FUDMARKETS_USERNAME}`;
-    let url = `https://api.twitterapi.io/twitter/tweet/advanced_search?query=${encodeURIComponent(query)}&queryType=Latest`;
+    // Use literal @ in URL — twitterapi.io advanced_search breaks with %40 encoding
+    let url = `https://api.twitterapi.io/twitter/tweet/advanced_search?query=@${FUDMARKETS_USERNAME}&queryType=Latest`;
     if (lastMentionId) url += `&sinceId=${lastMentionId}`;
     console.log(`[x-agent] polling URL: ${url}`);
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
