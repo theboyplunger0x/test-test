@@ -565,12 +565,12 @@ export default function FeedPage() {
               {/* Referral */}
               <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
                 title="Referrals & Cashback"
-                className={`flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${T.portfolioBtn}`}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                  <path d="M20 12v7a1 1 0 01-1 1H5a1 1 0 01-1-1v-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                  <path d="M22 9H2v3h20V9z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M12 22V9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                  <path d="M12 9C12 9 9 7 9 4.5a3 3 0 016 0C15 7 12 9 12 9z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                className={`flex items-center justify-center w-9 h-9 transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M20 12v7a1 1 0 01-1 1H5a1 1 0 01-1-1v-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+                  <path d="M22 9H2v3h20V9z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M12 22V9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+                  <path d="M12 9C12 9 9 7 9 4.5a3 3 0 016 0C15 7 12 9 12 9z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </motion.button>
 
@@ -578,13 +578,13 @@ export default function FeedPage() {
               <motion.button whileTap={{ scale: 0.94 }}
                 onClick={() => { setNotifPanelOpen(true); setUnreadCount(0); }}
                 title="Notifications"
-                className={`relative flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${T.portfolioBtn}`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                className={`relative flex items-center justify-center w-9 h-9 transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-blue-500 text-white text-[9px] font-black flex items-center justify-center px-1">
+                  <span className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 rounded-full bg-blue-500 text-white text-[8px] font-black flex items-center justify-center px-1">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
