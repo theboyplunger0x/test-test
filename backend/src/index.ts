@@ -24,7 +24,11 @@ import { startBot, startXAgent }     from "./fud-bot/index.js";
 const app = Fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 }); // 5MB — enough for base64 avatar images
 
 // Plugins
-await app.register(cors, { origin: true });
+await app.register(cors, {
+  origin: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+});
 await app.register(jwt, { secret: process.env.JWT_SECRET! });
 
 // Rate limiting
