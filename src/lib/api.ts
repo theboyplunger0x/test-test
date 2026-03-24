@@ -26,6 +26,7 @@ export type User = {
   paper_balance_usd: string;
   created_at?: string;
   tier?: "" | "normal" | "top";
+  x_username?: string;
 };
 
 export type ReferralStats = {
@@ -115,6 +116,15 @@ export const api = {
     }),
 
   me: () => req<User>("/auth/me"),
+
+  connectX: (x_username: string) =>
+    req<{ x_username: string }>("/auth/connect-x", {
+      method: "POST",
+      body: JSON.stringify({ x_username }),
+    }),
+
+  disconnectX: () =>
+    req<{ ok: boolean }>("/auth/connect-x", { method: "DELETE" }),
 
   paperCredit: (amount: number) =>
     req<{ paper_balance_usd: string }>("/auth/paper-credit", {

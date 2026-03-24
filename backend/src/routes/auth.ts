@@ -100,7 +100,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.get("/auth/me", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at FROM users WHERE id = $1`, [userId]
+      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username FROM users WHERE id = $1`, [userId]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
     return user;
@@ -344,6 +344,28 @@ export async function authRoutes(app: FastifyInstance) {
       }).catch(() => {});
     }
 
+    return { ok: true };
+  });
+
+  // POST /auth/connect-x — link an X (Twitter) username to the user's account
+  app.post("/auth/connect-x", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const userId = (req as any).user.userId;
+    let { x_username } = req.body as any;
+    if (!x_username) return reply.status(400).send({ error: "x_username required" });
+    x_username = x_username.replace(/^@/, "").toLowerCase().trim();
+    // Check not taken by another user
+    const { rows: [taken] } = await db.query(
+      `SELECT id FROM users WHERE x_username = $1 AND id != $2`, [x_username, userId]
+    );
+    if (taken) return reply.status(409).send({ error: "This X account is already linked to another user" });
+    await db.query(`UPDATE users SET x_username = $1 WHERE id = $2`, [x_username, userId]);
+    return { x_username };
+  });
+
+  // DELETE /auth/connect-x — unlink X account
+  app.delete("/auth/connect-x", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const userId = (req as any).user.userId;
+    await db.query(`UPDATE users SET x_username = NULL WHERE id = $1`, [userId]);
     return { ok: true };
   });
 
