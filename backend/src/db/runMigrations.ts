@@ -105,6 +105,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_index        INT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_evm  TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_sol  TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id           BIGINT UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_username     TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS x_username            TEXT UNIQUE;
 
 CREATE TABLE IF NOT EXISTS x_oauth_tokens (

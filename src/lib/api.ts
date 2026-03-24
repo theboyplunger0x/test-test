@@ -27,7 +27,7 @@ export type User = {
   created_at?: string;
   tier?: "" | "normal" | "top";
   x_username?: string;
-  telegram_connected?: boolean;
+  telegram_username?: string;
 };
 
 export type ReferralStats = {
@@ -122,6 +122,9 @@ export const api = {
 
   disconnectX: () =>
     req<{ ok: boolean }>("/auth/connect-x", { method: "DELETE" }),
+
+  disconnectTelegram: () =>
+    req<{ ok: boolean }>("/auth/connect-telegram", { method: "DELETE" }),
 
   paperCredit: (amount: number) =>
     req<{ paper_balance_usd: string }>("/auth/paper-credit", {

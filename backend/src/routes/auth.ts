@@ -101,7 +101,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.get("/auth/me", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username, (telegram_id IS NOT NULL) AS telegram_connected FROM users WHERE id = $1`, [userId]
+      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username, telegram_username FROM users WHERE id = $1`, [userId]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
     return user;
@@ -398,6 +398,13 @@ export async function authRoutes(app: FastifyInstance) {
   app.delete("/auth/connect-x", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const userId = (req as any).user.userId;
     await db.query(`UPDATE users SET x_username = NULL WHERE id = $1`, [userId]);
+    return { ok: true };
+  });
+
+  // DELETE /auth/connect-telegram — unlink Telegram account
+  app.delete("/auth/connect-telegram", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const userId = (req as any).user.userId;
+    await db.query(`UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE id = $1`, [userId]);
     return { ok: true };
   });
 

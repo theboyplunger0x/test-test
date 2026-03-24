@@ -237,7 +237,7 @@ function TierBadge({ tier }: { tier: string }) {
   return null;
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramConnected }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramConnected?: boolean }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -441,14 +441,20 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         </button>
 
         {/* Connect Telegram */}
-        {telegramConnected ? (
-          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center gap-2 ${
-            dk ? "border-sky-500/20 bg-sky-500/5 text-sky-400/70" : "border-sky-200 bg-sky-50 text-sky-600"
-          }`}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
-            </svg>
-            Telegram connected ✓
+        {telegramUsername ? (
+          <div className={`group w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between cursor-pointer ${
+            dk ? "border-white/8 bg-white/[0.02] text-white/60 hover:border-red-500/30 hover:bg-red-500/5" : "border-gray-200 bg-gray-50 text-gray-500 hover:border-red-200 hover:bg-red-50"
+          }`} onClick={onDisconnectTelegram}>
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
+              </svg>
+              @{telegramUsername}
+            </span>
+            <span className={`text-[11px] font-bold transition-colors group-hover:text-red-400 ${dk ? "text-white/30" : "text-gray-400"}`}>
+              <span className="group-hover:hidden">connected ✓</span>
+              <span className="hidden group-hover:inline">disconnect</span>
+            </span>
           </div>
         ) : (
           <button
@@ -475,14 +481,17 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
         {/* Connect X */}
         {xUsername ? (
-          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between ${
-            dk ? "border-white/8 bg-white/[0.02] text-white/60" : "border-gray-200 bg-gray-50 text-gray-500"
-          }`}>
+          <div className={`group w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between cursor-pointer ${
+            dk ? "border-white/8 bg-white/[0.02] text-white/60 hover:border-red-500/30 hover:bg-red-500/5" : "border-gray-200 bg-gray-50 text-gray-500 hover:border-red-200 hover:bg-red-50"
+          }`} onClick={onDisconnectX}>
             <span className="flex items-center gap-2">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
               @{xUsername}
             </span>
-            <span className={`text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>connected ✓</span>
+            <span className={`text-[11px] font-bold transition-colors group-hover:text-red-400 ${dk ? "text-white/30" : "text-gray-400"}`}>
+              <span className="group-hover:hidden">connected ✓</span>
+              <span className="hidden group-hover:inline">disconnect</span>
+            </span>
           </div>
         ) : (
           <button

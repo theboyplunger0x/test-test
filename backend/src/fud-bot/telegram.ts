@@ -476,8 +476,8 @@ export async function startBot() {
       if (!entry) {
         return ctx.reply("❌ Link expired or invalid. Try again from the app.");
       }
-      await db.query(`UPDATE users SET telegram_id = NULL WHERE telegram_id = $1 AND id != $2`, [ctx.from.id, entry.user_id]);
-      await db.query(`UPDATE users SET telegram_id = $1 WHERE id = $2`, [ctx.from.id, entry.user_id]);
+      await db.query(`UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = $1 AND id != $2`, [ctx.from.id, entry.user_id]);
+      await db.query(`UPDATE users SET telegram_id = $1, telegram_username = $2 WHERE id = $3`, [ctx.from.id, ctx.from.username ?? null, entry.user_id]);
       sessions.delete(ctx.from.id);
       const { rows: [user] } = await db.query(`SELECT username FROM users WHERE id = $1`, [entry.user_id]);
       return ctx.reply(`✅ Telegram connected to *${user?.username ?? "your account"}*!\n\nYou can now trade directly from here.`, { parse_mode: "Markdown" });
@@ -1024,8 +1024,8 @@ export async function startBot() {
     }
 
     // Remove telegram_id from the auto-created account (if any), assign to web account
-    await db.query(`UPDATE users SET telegram_id = NULL WHERE telegram_id = $1 AND id != $2`, [ctx.from.id, data.user.id]);
-    await db.query(`UPDATE users SET telegram_id = $1 WHERE id = $2`, [ctx.from.id, data.user.id]);
+    await db.query(`UPDATE users SET telegram_id = NULL, telegram_username = NULL WHERE telegram_id = $1 AND id != $2`, [ctx.from.id, data.user.id]);
+    await db.query(`UPDATE users SET telegram_id = $1, telegram_username = $2 WHERE id = $3`, [ctx.from.id, ctx.from.username ?? null, data.user.id]);
     sessions.set(ctx.from.id, { token: data.token, userId: data.user.id, username: data.user.username });
 
     await ctx.reply(
