@@ -526,6 +526,15 @@ export default function FeedPage() {
             ⌕
           </motion.button>
 
+          {/* Referral button — only when logged in */}
+          {user && (
+            <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
+              title="Referrals & Cashback"
+              className={`flex items-center gap-1 border text-[12px] font-black px-2.5 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
+              <span>🔗</span>
+            </motion.button>
+          )}
+
           {/* Theme toggle */}
           <motion.button whileTap={{ scale: 0.94 }}
             onClick={() => setTheme(dk ? "light" : "dark")}
@@ -563,13 +572,6 @@ export default function FeedPage() {
                 className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
                 {tierBadge(user.tier) ?? <span>⬡</span>}
                 <span className="hidden md:inline">{user.username}</span>
-              </motion.button>
-
-              {/* Referral button */}
-              <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
-                title="Referrals & Cashback"
-                className={`flex items-center gap-1 border text-[12px] font-black px-2.5 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
-                <span>🔗</span>
               </motion.button>
             </>
           ) : (
