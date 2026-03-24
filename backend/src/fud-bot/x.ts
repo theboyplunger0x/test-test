@@ -543,7 +543,8 @@ async function poll() {
     }
     const data = await res.json() as any;
     const mentions: any[] = data.tweets ?? [];
-    console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} mention(s)`);
+    console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} mention(s) | raw keys: ${Object.keys(data).join(",")} | status: ${data.status}`);
+    if (mentions.length === 0 && data.status !== "success") console.log(`[x-agent] raw response: ${JSON.stringify(data).slice(0, 300)}`);
 
     await saveLastPollTime(now);
     lastPollTime = now;
