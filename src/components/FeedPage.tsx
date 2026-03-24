@@ -526,6 +526,13 @@ export default function FeedPage() {
             ⌕
           </motion.button>
 
+          {/* Theme toggle */}
+          <motion.button whileTap={{ scale: 0.94 }}
+            onClick={() => setTheme(dk ? "light" : "dark")}
+            className={`text-[13px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
+            {dk ? "☀" : "☽"}
+          </motion.button>
+
           {/* Referral button — only when logged in */}
           {user && (
             <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
@@ -534,13 +541,6 @@ export default function FeedPage() {
               <span>🔗</span>
             </motion.button>
           )}
-
-          {/* Theme toggle */}
-          <motion.button whileTap={{ scale: 0.94 }}
-            onClick={() => setTheme(dk ? "light" : "dark")}
-            className={`text-[13px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
-            {dk ? "☀" : "☽"}
-          </motion.button>
 
           {user ? (
             <>
@@ -1067,7 +1067,7 @@ export default function FeedPage() {
                 <span className="text-[15px] font-black">Your Profile</span>
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden flex flex-col">
                 <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled}
                   xUsername={user?.x_username}
                   telegramUsername={user?.telegram_username}
