@@ -2,6 +2,17 @@ import { FastifyInstance } from "fastify";
 import { db } from "../db/client.js";
 
 export async function userRoutes(app: FastifyInstance) {
+  // GET /users/search?q=... — search users by username prefix
+  app.get("/users/search", async (req) => {
+    const { q } = req.query as any;
+    if (!q || q.length < 2) return [];
+    const { rows } = await db.query(
+      `SELECT username, avatar_url, tier FROM users WHERE username ILIKE $1 ORDER BY username LIMIT 8`,
+      [`${q}%`]
+    );
+    return rows;
+  });
+
   // GET /users/:username — public profile
   app.get("/users/:username", async (req, reply) => {
     const { username } = req.params as any;

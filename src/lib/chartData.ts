@@ -91,6 +91,38 @@ export async function searchByCA(address: string): Promise<TokenInfo | null> {
   }
 }
 
+/** Search tokens by query — returns up to 8 distinct tokens (best pair per address) */
+export async function searchTokens(query: string): Promise<TokenInfo[]> {
+  try {
+    const q = query.trim();
+    const isCA = q.length > 20 && !q.includes(" ");
+    const url = isCA
+      ? `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(q)}`
+      : `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const pairs: any[] = data.pairs ?? [];
+    // One best result per unique base token address
+    const seen = new Map<string, TokenInfo>();
+    for (const p of pairs) {
+      if (!p.priceUsd || parseFloat(p.priceUsd) === 0) continue;
+      const addr = p.baseToken?.address?.toLowerCase();
+      if (!addr) continue;
+      const info = pairsToTokenInfo([p]);
+      if (!info) continue;
+      if (!seen.has(addr) || info.liquidity > (seen.get(addr)?.liquidity ?? 0)) {
+        seen.set(addr, info);
+      }
+    }
+    return Array.from(seen.values())
+      .sort((a, b) => b.liquidity - a.liquidity)
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
 /** Look up a token by symbol + chain (best liquidity pair) */
 export async function searchBySymbol(symbol: string, chain: string): Promise<TokenInfo | null> {
   try {

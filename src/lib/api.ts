@@ -261,6 +261,10 @@ export const api = {
       body: JSON.stringify({ avatar_url, bio }),
     }),
 
+  // User search
+  searchUsers: (q: string) =>
+    req<{ username: string; avatar_url?: string; tier?: string }[]>(`/users/search?q=${encodeURIComponent(q)}`),
+
   // Follow system
   followUser: (username: string) =>
     req<FollowStatus>(`/users/${encodeURIComponent(username)}/follow`, { method: "POST", body: "{}" }),

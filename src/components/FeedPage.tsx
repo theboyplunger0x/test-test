@@ -11,7 +11,7 @@ import CoinDetail from "./CoinDetail";
 import AuthModal from "./AuthModal";
 import DepositModal from "./DepositModal";
 import OpenMarketModal from "./OpenMarketModal";
-import CASearchModal from "./CASearchModal";
+import SearchModal from "./SearchModal";
 import ReferralModal from "./ReferralModal";
 import LeaderboardView from "./LeaderboardView";
 import ProfileModal from "./ProfileModal";
@@ -952,12 +952,12 @@ export default function FeedPage() {
       </AnimatePresence>
       <AnimatePresence>
         {caSearchOpen && (
-          <CASearchModal
+          <SearchModal
             dk={dk}
             onClose={() => setCASearchOpen(false)}
-            onTrade={handleCATradeResult}
-            onQuickTrade={handleCAQuickTrade}
-            presets={tradePresets}
+            onViewToken={handleCATradeResult}
+            onOpenMarket={(coin) => { setCASearchOpen(false); handleOpenMarket(coin); }}
+            onViewProfile={(username) => { setCASearchOpen(false); setProfilePageUser(username); }}
           />
         )}
       </AnimatePresence>
