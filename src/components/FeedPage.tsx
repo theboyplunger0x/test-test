@@ -568,15 +568,15 @@ export default function FeedPage() {
                 className={`flex items-center justify-center w-9 h-9 transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   {/* Box body */}
-                  <rect x="3" y="11" width="18" height="10" rx="2" stroke="currentColor" strokeWidth="2.2"/>
-                  {/* Ribbon band */}
-                  <rect x="2" y="7" width="20" height="4" rx="1.5" stroke="currentColor" strokeWidth="2.2"/>
+                  <rect x="3" y="11" width="18" height="10" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+                  {/* Lid */}
+                  <rect x="2" y="8" width="20" height="4" rx="1.5" stroke="currentColor" strokeWidth="2"/>
                   {/* Vertical ribbon */}
-                  <path d="M12 7v14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
-                  {/* Left bow loop — filled & round */}
-                  <path d="M12 7H7.5a2.5 2.5 0 110-5C11 2 12 7 12 7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15"/>
-                  {/* Right bow loop — filled & round */}
-                  <path d="M12 7h4.5a2.5 2.5 0 100-5C13 2 12 7 12 7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15"/>
+                  <line x1="12" y1="8" x2="12" y2="21" stroke="currentColor" strokeWidth="2"/>
+                  {/* Bow — left loop */}
+                  <path d="M12 8 C12 5, 8 4, 8 6 C8 8, 12 8, 12 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  {/* Bow — right loop */}
+                  <path d="M12 8 C12 5, 16 4, 16 6 C16 8, 12 8, 12 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
                 </svg>
               </motion.button>
 
