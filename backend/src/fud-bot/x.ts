@@ -83,9 +83,9 @@ function hasSubstance(text: string): boolean {
     .replace(/[\u{2600}-\u{27BF}]/gu, "")
     .replace(/[^a-zA-Z0-9áéíóúñüÁÉÍÓÚÑÜ\s$]/g, "")
     .trim();
-  // Need at least 2 real words
-  const words = stripped.split(/\s+/).filter(w => w.length > 1);
-  return words.length >= 2;
+  // Need at least 1 real word
+  const words = stripped.split(/\s+/).filter(w => w.length > 0);
+  return words.length >= 1;
 }
 
 // ─── Filter: should we process this mention? ─────────────────────────────────
@@ -94,8 +94,8 @@ async function shouldProcess(tweet: any): Promise<{ ok: boolean; reason: string 
   const xUsername = (tweet.author?.userName ?? "").toLowerCase();
   const text      = (tweet.text ?? "").replace(/@FUDmarkets/gi, "").trim();
 
-  // 1. Content filter — skip emoji-only / too basic
-  if (!hasSubstance(text)) return { ok: false, reason: "no substance" };
+  // 1. Content filter — skip emoji-only / completely empty
+  if (!hasSubstance(text)) return { ok: false, reason: `no substance (text="${text}")` };
 
   // 2. Cooldown — max 5 per user per 10 min
   if (!checkCooldown(xUsername)) return { ok: false, reason: "cooldown" };
@@ -107,14 +107,21 @@ async function shouldProcess(tweet: any): Promise<{ ok: boolean; reason: string 
 // ─── Telegram notification ───────────────────────────────────────────────────
 
 async function sendToAdminTelegram(text: string, inlineKeyboard?: object) {
-  if (!ADMIN_TG_ID || !process.env.BOT_TOKEN) return;
+  if (!ADMIN_TG_ID || !process.env.BOT_TOKEN) {
+    console.warn("[x-agent] sendToAdminTelegram skipped — ADMIN_TG_ID or BOT_TOKEN not set");
+    return;
+  }
   const body: any = { chat_id: ADMIN_TG_ID, text, parse_mode: "Markdown" };
   if (inlineKeyboard) body.reply_markup = { inline_keyboard: inlineKeyboard };
-  await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
   });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error(`[x-agent] Telegram send failed: ${res.status} ${err}`);
+  }
 }
 
 // Called by Telegram bot when admin taps ✅ or ❌
