@@ -106,6 +106,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_evm  TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deposit_address_sol  TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id           BIGINT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS x_username            TEXT UNIQUE;
+
+CREATE TABLE IF NOT EXISTS x_oauth_tokens (
+  oauth_token        TEXT PRIMARY KEY,
+  oauth_token_secret TEXT NOT NULL,
+  user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at         TIMESTAMPTZ NOT NULL
+);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code        TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by          UUID REFERENCES users(id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tier                 TEXT NOT NULL DEFAULT '';

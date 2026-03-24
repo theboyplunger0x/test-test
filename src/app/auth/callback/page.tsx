@@ -9,8 +9,17 @@ function CallbackInner() {
   const [status, setStatus] = useState<"processing" | "error">("processing");
 
   useEffect(() => {
-    const token     = searchParams.get("token");
-    const authError = searchParams.get("auth_error");
+    const token      = searchParams.get("token");
+    const authError  = searchParams.get("auth_error");
+    const xConnected = searchParams.get("x_connected");
+    const xUsername  = searchParams.get("x_username");
+
+    // X OAuth callback — just signal success and go home
+    if (xConnected === "1") {
+      if (xUsername) localStorage.setItem("x_username_connected", xUsername);
+      router.replace("/");
+      return;
+    }
 
     if (authError || !token) {
       setStatus("error");

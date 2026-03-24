@@ -237,7 +237,7 @@ function TierBadge({ tier }: { tier: string }) {
   return null;
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled }: { dk: boolean; balance?: string; notificationsEnabled?: boolean }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, onDisconnectX }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; onDisconnectX?: () => void }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -461,6 +461,40 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           </svg>
           Connect Telegram
         </button>
+
+        {/* Connect X */}
+        {xUsername ? (
+          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between ${
+            dk ? "border-white/8 bg-white/[0.02] text-white/60" : "border-gray-200 bg-gray-50 text-gray-500"
+          }`}>
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              @{xUsername}
+            </span>
+            <button onClick={onDisconnectX} className={`text-[11px] font-black transition-colors ${dk ? "text-red-400/60 hover:text-red-400" : "text-red-400 hover:text-red-600"}`}>
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={async () => {
+              try {
+                const { url } = await api.getXAuthUrl();
+                window.location.href = url;
+              } catch (e: any) {
+                alert(e.message ?? "Error connecting X");
+              }
+            }}
+            className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+              dk
+                ? "border-white/20 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                : "border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            Connect X
+          </button>
+        )}
 
         {/* Open positions */}
         <div>

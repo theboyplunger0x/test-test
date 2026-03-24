@@ -3,6 +3,7 @@ import { db } from "../db/client.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { TwitterApi } from "twitter-api-v2";
 
 // ─── Email transporter (lazy-init) ───────────────────────────────────────────
 
@@ -347,19 +348,47 @@ export async function authRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // POST /auth/connect-x — link an X (Twitter) username to the user's account
-  app.post("/auth/connect-x", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
-    const userId = (req as any).user.userId;
-    let { x_username } = req.body as any;
-    if (!x_username) return reply.status(400).send({ error: "x_username required" });
-    x_username = x_username.replace(/^@/, "").toLowerCase().trim();
+  // GET /auth/x-auth-url — generate X OAuth URL for the logged-in user
+  app.get("/auth/x-auth-url", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const userId      = (req as any).user.userId;
+    const frontendUrl = process.env.FRONTEND_URL ?? "https://fud-markets.vercel.app";
+    const callbackUrl = `${frontendUrl}/auth/callback`;
+    const client      = new TwitterApi({ appKey: process.env.X_API_KEY!, appSecret: process.env.X_API_SECRET! });
+    const { url, oauth_token, oauth_token_secret } = await client.generateAuthLink(callbackUrl, { linkMode: "authorize" });
+    // Store oauth_token_secret temporarily (5 min)
+    await db.query(
+      `INSERT INTO x_oauth_tokens (oauth_token, oauth_token_secret, user_id, expires_at)
+       VALUES ($1, $2, $3, NOW() + INTERVAL '5 minutes')
+       ON CONFLICT (oauth_token) DO UPDATE SET oauth_token_secret = $2, user_id = $3, expires_at = NOW() + INTERVAL '5 minutes'`,
+      [oauth_token, oauth_token_secret, userId]
+    );
+    return { url };
+  });
+
+  // GET /auth/x-callback — exchange OAuth verifier for access token, save x_username
+  app.get("/auth/x-callback", async (req, reply) => {
+    const { oauth_token, oauth_verifier } = req.query as any;
+    if (!oauth_token || !oauth_verifier) return reply.status(400).send({ error: "Missing OAuth params" });
+    const { rows: [entry] } = await db.query(
+      `DELETE FROM x_oauth_tokens WHERE oauth_token = $1 AND expires_at > NOW() RETURNING oauth_token_secret, user_id`,
+      [oauth_token]
+    );
+    if (!entry) return reply.status(400).send({ error: "OAuth token expired or invalid" });
+    const client   = new TwitterApi({ appKey: process.env.X_API_KEY!, appSecret: process.env.X_API_SECRET!, accessToken: oauth_token, accessSecret: entry.oauth_token_secret });
+    const { client: userClient, screenName } = await client.login(oauth_verifier);
+    const xUser    = await userClient.v2.me();
+    const xUsername = xUser.data.username.toLowerCase();
     // Check not taken by another user
     const { rows: [taken] } = await db.query(
-      `SELECT id FROM users WHERE x_username = $1 AND id != $2`, [x_username, userId]
+      `SELECT id FROM users WHERE x_username = $1 AND id != $2`, [xUsername, entry.user_id]
     );
-    if (taken) return reply.status(409).send({ error: "This X account is already linked to another user" });
-    await db.query(`UPDATE users SET x_username = $1 WHERE id = $2`, [x_username, userId]);
-    return { x_username };
+    if (taken) {
+      const frontendUrl = process.env.FRONTEND_URL ?? "https://fud-markets.vercel.app";
+      return reply.redirect(`${frontendUrl}/auth/callback?auth_error=already_linked`);
+    }
+    await db.query(`UPDATE users SET x_username = $1 WHERE id = $2`, [xUsername, entry.user_id]);
+    const frontendUrl = process.env.FRONTEND_URL ?? "https://fud-markets.vercel.app";
+    return reply.redirect(`${frontendUrl}/auth/callback?x_connected=1&x_username=${xUsername}`);
   });
 
   // DELETE /auth/connect-x — unlink X account

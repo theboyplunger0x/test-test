@@ -184,6 +184,15 @@ export default function FeedPage() {
       .catch((e: any) => alert("❌ " + (e.message ?? "Error al vincular Telegram")));
   }, [user]);
 
+  // After return from X OAuth — pick up connected username
+  useEffect(() => {
+    if (!user) return;
+    const xUsername = localStorage.getItem("x_username_connected");
+    if (!xUsername) return;
+    localStorage.removeItem("x_username_connected");
+    setUser(u => u ? { ...u, x_username: xUsername } : null);
+  }, [user]);
+
   // Fetch markets + poll every 30s; also refresh user balance to capture payouts
   useEffect(() => {
     async function fetchMarketsAndBalance() {
@@ -953,74 +962,6 @@ export default function FeedPage() {
                   )}
                 </div>
 
-                {/* Connect X */}
-                {user && (
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Connect X (Twitter)</p>
-                    <div className={`rounded-2xl border p-4 ${dk ? "border-white/8 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
-                      {user.x_username ? (
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>@{user.x_username}</p>
-                            <p className={`text-[11px] font-bold mt-0.5 ${dk ? "text-white/30" : "text-gray-400"}`}>FUD agent can trade on your behalf</p>
-                          </div>
-                          <button
-                            onClick={async () => {
-                              await api.disconnectX();
-                              setUser(u => u ? { ...u, x_username: undefined } : null);
-                            }}
-                            className={`text-[11px] font-black px-3 py-1.5 rounded-xl transition-all ${dk ? "text-red-400/70 hover:text-red-400 hover:bg-red-500/8" : "text-red-500 hover:bg-red-50"}`}
-                          >
-                            Disconnect
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <p className={`text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>
-                            Link your X handle so the FUD agent can open markets and place bets when you mention @FUDmarkets.
-                          </p>
-                          <div className="flex gap-2 mt-2">
-                            <div className="relative flex-1">
-                              <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>@</span>
-                              <input
-                                type="text"
-                                placeholder="yourhandle"
-                                value={xInput}
-                                onChange={e => { setXInput(e.target.value.replace(/^@/, "")); setXMsg(""); }}
-                                className={`w-full pl-7 pr-3 py-2.5 rounded-xl text-[12px] font-black border outline-none transition-all ${
-                                  dk ? "bg-white/[0.03] border-white/8 text-white focus:border-white/20 placeholder:text-white/20"
-                                     : "bg-gray-50 border-gray-200 text-gray-900 focus:border-gray-400 placeholder:text-gray-300"
-                                }`}
-                              />
-                            </div>
-                            <button
-                              disabled={xSaving || !xInput.trim()}
-                              onClick={async () => {
-                                setXSaving(true); setXMsg("");
-                                try {
-                                  const res = await api.connectX(xInput.trim());
-                                  setUser(u => u ? { ...u, x_username: res.x_username } : null);
-                                  setXInput("");
-                                } catch (e: any) {
-                                  setXMsg(e.message ?? "Error");
-                                } finally { setXSaving(false); }
-                              }}
-                              className={`px-4 py-2.5 rounded-xl text-[12px] font-black transition-all ${
-                                xSaving || !xInput.trim()
-                                  ? (dk ? "bg-white/5 text-white/20" : "bg-gray-100 text-gray-300")
-                                  : (dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700")
-                              }`}
-                            >
-                              {xSaving ? "..." : "Connect"}
-                            </button>
-                          </div>
-                          {xMsg && <p className="text-[11px] font-bold text-red-400 mt-1">{xMsg}</p>}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {/* Theme */}
                 <div>
                   <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Appearance</p>
@@ -1133,7 +1074,10 @@ export default function FeedPage() {
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
               <div className="flex-1 overflow-hidden">
-                <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled} />
+                <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled}
+                  xUsername={user?.x_username}
+                  onDisconnectX={async () => { await api.disconnectX(); setUser(u => u ? { ...u, x_username: undefined } : null); }}
+                />
               </div>
             </motion.div>
           </>

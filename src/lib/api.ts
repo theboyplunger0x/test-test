@@ -117,11 +117,7 @@ export const api = {
 
   me: () => req<User>("/auth/me"),
 
-  connectX: (x_username: string) =>
-    req<{ x_username: string }>("/auth/connect-x", {
-      method: "POST",
-      body: JSON.stringify({ x_username }),
-    }),
+  getXAuthUrl: () => req<{ url: string }>("/auth/x-auth-url"),
 
   disconnectX: () =>
     req<{ ok: boolean }>("/auth/connect-x", { method: "DELETE" }),
