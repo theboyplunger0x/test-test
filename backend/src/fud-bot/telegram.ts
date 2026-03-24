@@ -1036,15 +1036,6 @@ export async function startBot() {
     );
   });
 
-  // /unlink
-  bot.command("unlink", async (ctx) => {
-    const { rowCount } = await db.query(`UPDATE users SET telegram_id = NULL WHERE telegram_id = $1`, [ctx.from.id]);
-    sessions.delete(ctx.from.id);
-    await ctx.reply(rowCount && rowCount > 0
-      ? "✅ Account unlinked."
-      : "You had no linked account."
-    );
-  });
 
   // /me
   bot.command("me", async (ctx) => {
@@ -1099,7 +1090,6 @@ export async function startBot() {
     { command: "me",       description: "View your balance and username" },
     { command: "settings", description: "View/change presets: /settings 5 25 100 500" },
     { command: "link",     description: "Link your web account: /link username password" },
-    { command: "unlink",   description: "Unlink your Telegram account" },
   ]).catch((e) => console.error("[bot] setMyCommands error:", e.message));
 
   // Clear any webhook that might be blocking long-polling
