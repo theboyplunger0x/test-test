@@ -467,9 +467,33 @@ async function poll() {
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
+async function debugApiTest() {
+  // Test 1: search a known popular term to verify search works at all
+  const r1 = await fetch("https://api.twitterapi.io/twitter/tweet/advanced_search?query=bitcoin&queryType=Latest", {
+    headers: { "X-API-Key": TWITTERAPI_KEY },
+  });
+  const d1 = await r1.json() as any;
+  console.log(`[x-agent] DEBUG bitcoin search: status=${r1.status} tweets=${(d1.tweets ?? []).length}`);
+
+  // Test 2: user/mentions for @FUDmarkets
+  const r2 = await fetch(`https://api.twitterapi.io/twitter/user/mentions?userName=${FUDMARKETS_USERNAME}`, {
+    headers: { "X-API-Key": TWITTERAPI_KEY },
+  });
+  const d2 = await r2.json() as any;
+  console.log(`[x-agent] DEBUG user/mentions: status=${r2.status} body=${JSON.stringify(d2).slice(0, 200)}`);
+
+  // Test 3: user info to confirm account exists
+  const r3 = await fetch(`https://api.twitterapi.io/twitter/user/info?userName=${FUDMARKETS_USERNAME}`, {
+    headers: { "X-API-Key": TWITTERAPI_KEY },
+  });
+  const d3 = await r3.json() as any;
+  console.log(`[x-agent] DEBUG user/info: status=${r3.status} id=${d3.data?.id ?? d3.id ?? "?"} followers=${d3.data?.public_metrics?.followers_count ?? d3.followers_count ?? "?"}`);
+}
+
 export async function startXAgent() {
   if (!TWITTERAPI_KEY) { console.log("[x-agent] TWITTERAPI_KEY not set — skipping"); return; }
   console.log("[x-agent] Starting — monitoring @FUDmarkets");
+  await debugApiTest();
   await poll();
   setInterval(poll, 30_000);
 }
