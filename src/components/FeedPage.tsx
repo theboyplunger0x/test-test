@@ -775,7 +775,8 @@ export default function FeedPage() {
             <div className="hidden md:flex">
               <TapeSidebar challenges={allChallenges} onViewCoin={handleCoinClick} dk={dk}
                 tapeBorder={T.sidebarBorder} sidebarLabel={T.sidebarLabel} tapeColLabel={T.tapeColLabel}
-                open={tapeOpen} onToggle={() => setTapeOpen(o => !o)} />
+                open={tapeOpen} onToggle={() => setTapeOpen(o => !o)}
+                onViewProfile={(u) => setProfileUser(u)} />
             </div>
           </motion.div>
         )}
@@ -1676,9 +1677,10 @@ type TapeEntry = {
   isOpen: boolean;
 };
 
-function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle }: {
+function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle, onViewProfile }: {
   challenges: Challenge[]; onViewCoin: (symbol: string) => void; dk: boolean;
   tapeBorder: string; sidebarLabel: string; tapeColLabel: string; open: boolean; onToggle: () => void;
+  onViewProfile?: (username: string) => void;
 }) {
   const toEntries = (cs: Challenge[]) =>
     [...cs].reverse().slice(0, 40).map(c => ({
@@ -1739,7 +1741,10 @@ function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tap
                 </div>
                 <div className="flex items-center gap-2">
                   <p className={`text-[11px] italic truncate leading-snug flex-1 ${msgTxt}`}>"{e.message}"</p>
-                  <span className={`text-[10px] font-bold shrink-0 ${userTxt}`}>{e.user}</span>
+                  <span
+                    className={`text-[10px] font-bold shrink-0 ${userTxt} ${onViewProfile ? "cursor-pointer hover:opacity-60 transition-opacity" : ""}`}
+                    onClick={(ev) => { ev.stopPropagation(); if (onViewProfile && e.user) onViewProfile(e.user); }}
+                  >{e.user}</span>
                 </div>
               </motion.div>
             ))}
