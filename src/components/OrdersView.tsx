@@ -237,79 +237,146 @@ function TierBadge({ tier }: { tier: string }) {
   return null;
 }
 
-function ProfileEditSection({ dk }: { dk: boolean }) {
-  const [avatar, setAvatar] = useState("");
-  const [bio, setBio]       = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved]   = useState(false);
-  const [open, setOpen]     = useState(false);
+const PencilIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
+function ProfileHeader({ dk }: { dk: boolean }) {
+  const [username, setUsername]     = useState<string | null>(null);
+  const [tier, setTier]             = useState<string | undefined>(undefined);
+  const [avatar, setAvatar]         = useState("");
+  const [bio, setBio]               = useState("");
+  const [editingAvatar, setEditingAvatar] = useState(false);
+  const [editingBio, setEditingBio]       = useState(false);
+  const [avatarInput, setAvatarInput]     = useState("");
+  const [bioInput, setBioInput]           = useState("");
+  const [saving, setSaving]         = useState(false);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     if (!token) return;
     api.me().then(u => {
+      setUsername(u.username);
+      setTier(u.tier);
       setAvatar(u.avatar_url ?? "");
       setBio(u.bio ?? "");
+      setAvatarInput(u.avatar_url ?? "");
+      setBioInput(u.bio ?? "");
     }).catch(() => {});
   }, []);
 
-  async function save() {
+  async function saveAvatar() {
     setSaving(true);
     try {
-      await api.updateProfile(avatar, bio);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      await api.updateProfile(avatarInput, bio);
+      setAvatar(avatarInput);
+      setEditingAvatar(false);
     } catch {}
     setSaving(false);
   }
 
+  async function saveBio() {
+    setSaving(true);
+    try {
+      await api.updateProfile(avatar, bioInput);
+      setBio(bioInput);
+      setEditingBio(false);
+    } catch {}
+    setSaving(false);
+  }
+
+  if (!username) return null;
+
+  const muted    = dk ? "text-white/40"  : "text-gray-400";
+  const strong   = dk ? "text-white"     : "text-gray-900";
   const inputCls = dk
     ? "bg-white/5 border-white/10 text-white placeholder:text-white/20"
     : "bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400";
 
+  // Tier badge inline
+  const SEAL  = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.233-.784.187-1.324.068-1.934-.234-1.173-1.044-2.053-2.176-2.413-.564-.18-1.167-.17-1.726.028-.56.197-1.053.556-1.411 1.032C12.56 3.09 11.68 2.595 10.75 2.5c-1.077-.109-2.096.41-2.698 1.332-.285.434-.431.942-.421 1.456.01.514.178 1.015.484 1.437-.634.2-1.204.571-1.648 1.072-.444.502-.74 1.11-.853 1.765-.138.78-.017 1.587.346 2.291.363.704.939 1.266 1.644 1.603-.12.59-.15 1.196-.086 1.796.113 1.065.565 2.067 1.287 2.854.722.787 1.685 1.32 2.738 1.52.488.092.99.1 1.485.023.447 1.017 1.275 1.835 2.311 2.299 1.037.465 2.208.538 3.296.203.548-.17 1.048-.466 1.461-.862.413-.395.728-.879.919-1.414.19-.534.249-1.106.172-1.669.577-.265 1.074-.675 1.44-1.19.366-.513.588-1.112.644-1.737.056-.625-.056-1.254-.325-1.82-.269-.565-.682-1.05-1.197-1.406z";
+  const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
+
   return (
-    <div className={`rounded-2xl border overflow-hidden ${dk ? "border-white/8" : "border-gray-200"}`}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center justify-between px-4 py-3 text-[12px] font-black ${dk ? "text-white/50 hover:text-white/70" : "text-gray-500 hover:text-gray-700"} transition-colors`}
-      >
-        <span>Edit Profile</span>
-        <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
-      </button>
-      {open && (
-        <div className={`px-4 pb-4 space-y-2.5 border-t ${dk ? "border-white/8" : "border-gray-100"}`}>
-          <div className="pt-2.5">
-            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${dk ? "text-white/30" : "text-gray-400"}`}>Avatar URL</label>
+    <div className={`flex flex-col items-center pt-5 pb-4 px-5 border-b ${dk ? "border-white/5" : "border-gray-100"}`}>
+      {/* Avatar */}
+      <div className="relative group mb-3">
+        {editingAvatar ? (
+          <div className="flex items-center gap-2 w-full">
             <input
-              value={avatar}
-              onChange={e => setAvatar(e.target.value)}
-              placeholder="https://..."
-              className={`w-full rounded-xl border px-3 py-2 text-[12px] outline-none ${inputCls}`}
+              value={avatarInput}
+              onChange={e => setAvatarInput(e.target.value)}
+              placeholder="https://image-url..."
+              autoFocus
+              className={`flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none ${inputCls}`}
             />
+            <button onClick={saveAvatar} disabled={saving} className="text-emerald-400 font-black text-[13px] hover:opacity-70">✓</button>
+            <button onClick={() => { setEditingAvatar(false); setAvatarInput(avatar); }} className={`font-black text-[13px] ${muted} hover:opacity-70`}>✕</button>
           </div>
-          <div>
-            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${dk ? "text-white/30" : "text-gray-400"}`}>Bio</label>
-            <textarea
-              value={bio}
-              onChange={e => setBio(e.target.value)}
-              placeholder="Your bio..."
-              maxLength={120}
-              rows={2}
-              className={`w-full rounded-xl border px-3 py-2 text-[12px] outline-none resize-none ${inputCls}`}
-            />
+        ) : (
+          <>
+            {avatar ? (
+              <img src={avatar} alt="" className="w-16 h-16 rounded-full object-cover" />
+            ) : (
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-[26px] font-black ${dk ? "bg-white/10 text-white/40" : "bg-gray-100 text-gray-400"}`}>
+                {username.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <button
+              onClick={() => setEditingAvatar(true)}
+              className={`absolute inset-0 rounded-full flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity ${muted}`}
+            >
+              <PencilIcon />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Username + tier */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className={`text-[15px] font-black ${strong}`}>{username}</span>
+        {tier === "top" && (
+          <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
+            <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
+          </svg>
+        )}
+        {tier === "normal" && (
+          <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
+            <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
+          </svg>
+        )}
+      </div>
+
+      {/* Bio */}
+      {editingBio ? (
+        <div className="w-full space-y-2">
+          <textarea
+            value={bioInput}
+            onChange={e => setBioInput(e.target.value)}
+            placeholder="Write a short bio..."
+            maxLength={120}
+            rows={2}
+            autoFocus
+            className={`w-full rounded-xl border px-3 py-2 text-[12px] outline-none resize-none text-center ${inputCls}`}
+          />
+          <div className="flex gap-2">
+            <button onClick={saveBio} disabled={saving} className={`flex-1 py-1.5 rounded-lg text-[11px] font-black ${dk ? "bg-white text-black" : "bg-gray-900 text-white"}`}>
+              {saving ? "…" : "Save"}
+            </button>
+            <button onClick={() => { setEditingBio(false); setBioInput(bio); }} className={`flex-1 py-1.5 rounded-lg text-[11px] font-black ${dk ? "bg-white/5 text-white/50" : "bg-gray-100 text-gray-500"}`}>
+              Cancel
+            </button>
           </div>
-          <button
-            onClick={save}
-            disabled={saving}
-            className={`w-full py-2.5 rounded-xl text-[12px] font-black transition-all ${
-              saved    ? "bg-emerald-500 text-white" :
-              saving   ? (dk ? "bg-white/10 text-white/30" : "bg-gray-100 text-gray-400") :
-              dk       ? "bg-white text-black hover:bg-white/90" :
-                         "bg-gray-900 text-white hover:bg-gray-700"
-            }`}
-          >
-            {saved ? "✓ Saved!" : saving ? "Saving…" : "Save"}
-          </button>
+        </div>
+      ) : (
+        <div className="group flex items-center gap-1.5 cursor-pointer" onClick={() => setEditingBio(true)}>
+          <span className={`text-[12px] text-center ${bio ? muted : (dk ? "text-white/20" : "text-gray-300")}`}>
+            {bio || "Add a bio..."}
+          </span>
+          <span className={`opacity-0 group-hover:opacity-100 transition-opacity ${muted}`}><PencilIcon /></span>
         </div>
       )}
     </div>
@@ -443,6 +510,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
   return (
     <>
+      <ProfileHeader dk={dk} />
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
         {/* Balance + P&L */}
@@ -593,9 +661,6 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
             Connect X
           </button>
         )}
-
-        {/* Edit Profile */}
-        <ProfileEditSection dk={dk} />
 
         {/* Open positions */}
         <div>

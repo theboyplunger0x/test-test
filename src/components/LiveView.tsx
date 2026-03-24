@@ -21,43 +21,28 @@ type Activity = {
   ts: number;
 };
 
-const FAKE_USERS = ["0xa3…f1", "moon_bro", "0xc9…22", "ape_lord", "bear_gang", "sol_maxi", "0x77…bc", "degen.sol"];
-
 export default function LiveView({ challenges, onAdd, onViewCoin }: Props) {
   const [activity, setActivity] = useState<Activity[]>(() =>
     [...challenges].reverse().map((c) => ({
       uid: `init-${c.id}`,
       type: "new" as const,
       challenge: c,
-      user: c.user,
+      user: c.openerUsername ?? c.user,
       ts: Date.now() - c.openedAt * 1000,
     }))
   );
 
-  // Simulate new activity every few seconds
+  // Update activity when new challenges come in
   useEffect(() => {
-    const interval = setInterval(() => {
-      const c = challenges[Math.floor(Math.random() * challenges.length)];
-      const side = Math.random() > 0.5 ? "short" : "long";
-      const amounts = [10, 25, 50, 100, 200];
-      const amount = amounts[Math.floor(Math.random() * amounts.length)];
-      const user = FAKE_USERS[Math.floor(Math.random() * FAKE_USERS.length)];
-
-      setActivity((prev) => [
-        {
-          uid: `live-${Date.now()}`,
-          type: "join",
-          challenge: c,
-          side,
-          amount,
-          user,
-          ts: Date.now(),
-        },
-        ...prev.slice(0, 29), // keep max 30
-      ]);
-    }, 2200);
-
-    return () => clearInterval(interval);
+    setActivity(
+      [...challenges].reverse().map((c) => ({
+        uid: `init-${c.id}`,
+        type: "new" as const,
+        challenge: c,
+        user: c.openerUsername ?? c.user,
+        ts: Date.now() - c.openedAt * 1000,
+      }))
+    );
   }, [challenges]);
 
   return (
