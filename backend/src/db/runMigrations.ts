@@ -163,6 +163,11 @@ CREATE TABLE IF NOT EXISTS follows (
 CREATE INDEX IF NOT EXISTS idx_follows_follower  ON follows(follower_id);
 CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
 
+CREATE TABLE IF NOT EXISTS bot_kv (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

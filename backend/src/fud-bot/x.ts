@@ -33,6 +33,24 @@ const pending = new Map<string, {
 }>();
 
 let lastMentionId: string | null = null;
+const processedIds = new Set<string>(); // dedup within a session
+
+async function loadLastMentionId() {
+  try {
+    const { rows } = await db.query(`SELECT value FROM bot_kv WHERE key = 'x_last_mention_id'`);
+    if (rows[0]) { lastMentionId = rows[0].value; console.log(`[x-agent] Loaded lastMentionId=${lastMentionId}`); }
+  } catch {}
+}
+
+async function saveLastMentionId(id: string) {
+  try {
+    await db.query(
+      `INSERT INTO bot_kv (key, value) VALUES ('x_last_mention_id', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [id]
+    );
+  } catch {}
+}
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
@@ -448,17 +466,28 @@ async function poll() {
       return;
     }
     const data = await res.json() as any;
-    // Log full raw response on every poll so we can diagnose shape issues
-    console.log(`[x-agent] raw response: ${JSON.stringify(data).slice(0, 500)}`);
     const mentions: any[] = data.tweets ?? data.data ?? data.results ?? [];
     console.log(`[x-agent] ${new Date().toISOString()} — ${mentions.length} tweet(s) (sinceId=${lastMentionId ?? "none"})`);
     if (!mentions.length) return;
     console.log(`[x-agent] first: id=${mentions[0].id} text="${(mentions[0].text ?? "").slice(0, 80)}"`);
-    lastMentionId = mentions.reduce((max: string, t: any) => (t.id > max ? t.id : max), mentions[0].id);
-    // Skip our own tweets
-    const toProcess = mentions.filter((t: any) =>
-      (t.author?.userName ?? t.user?.screen_name ?? "").toLowerCase() !== FUDMARKETS_USERNAME.toLowerCase()
-    );
+    const newLastId = mentions.reduce((max: string, t: any) => (t.id > max ? t.id : max), mentions[0].id);
+    if (newLastId !== lastMentionId) {
+      lastMentionId = newLastId;
+      await saveLastMentionId(lastMentionId);
+    }
+    // Skip own tweets and already-processed IDs
+    const toProcess = mentions.filter((t: any) => {
+      const author = (t.author?.userName ?? t.user?.screen_name ?? "").toLowerCase();
+      if (author === FUDMARKETS_USERNAME.toLowerCase()) return false;
+      if (processedIds.has(t.id)) return false;
+      processedIds.add(t.id);
+      return true;
+    });
+    if (processedIds.size > 500) {
+      // Trim oldest entries to avoid unbounded memory growth
+      const arr = [...processedIds];
+      arr.slice(0, arr.length - 500).forEach(id => processedIds.delete(id));
+    }
     for (const tweet of [...toProcess].reverse()) await processMention(tweet);
   } catch (e: any) {
     console.error(`[x-agent] Poll error: ${e.message}`);
@@ -467,33 +496,10 @@ async function poll() {
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
-async function debugApiTest() {
-  // Test 1: search a known popular term to verify search works at all
-  const r1 = await fetch("https://api.twitterapi.io/twitter/tweet/advanced_search?query=bitcoin&queryType=Latest", {
-    headers: { "X-API-Key": TWITTERAPI_KEY },
-  });
-  const d1 = await r1.json() as any;
-  console.log(`[x-agent] DEBUG bitcoin search: status=${r1.status} tweets=${(d1.tweets ?? []).length}`);
-
-  // Test 2: user/mentions for @FUDmarkets
-  const r2 = await fetch(`https://api.twitterapi.io/twitter/user/mentions?userName=${FUDMARKETS_USERNAME}`, {
-    headers: { "X-API-Key": TWITTERAPI_KEY },
-  });
-  const d2 = await r2.json() as any;
-  console.log(`[x-agent] DEBUG user/mentions: status=${r2.status} body=${JSON.stringify(d2).slice(0, 200)}`);
-
-  // Test 3: user info to confirm account exists
-  const r3 = await fetch(`https://api.twitterapi.io/twitter/user/info?userName=${FUDMARKETS_USERNAME}`, {
-    headers: { "X-API-Key": TWITTERAPI_KEY },
-  });
-  const d3 = await r3.json() as any;
-  console.log(`[x-agent] DEBUG user/info: status=${r3.status} id=${d3.data?.id ?? d3.id ?? "?"} followers=${d3.data?.public_metrics?.followers_count ?? d3.followers_count ?? "?"}`);
-}
-
 export async function startXAgent() {
   if (!TWITTERAPI_KEY) { console.log("[x-agent] TWITTERAPI_KEY not set — skipping"); return; }
   console.log("[x-agent] Starting — monitoring @FUDmarkets");
-  await debugApiTest();
+  await loadLastMentionId();
   await poll();
   setInterval(poll, 30_000);
 }
