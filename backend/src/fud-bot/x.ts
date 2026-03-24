@@ -581,9 +581,11 @@ export async function startXAgent() {
   console.log("[x-agent] Starting — monitoring @FUDmarkets");
   await loadLastMentionId();
   // Ensure we have login cookies ready
+  console.log(`[x-agent] TW_PASSWORD set: ${!!TW_PASSWORD} | TW_PROXY set: ${!!TW_PROXY}`);
   if (TW_PASSWORD) {
     const cookies = await loadCookies();
     if (!cookies) await twitterLogin();
+    else console.log("[x-agent] Cookies loaded from DB — skipping login");
   }
   await poll();
   setInterval(poll, 30_000);
