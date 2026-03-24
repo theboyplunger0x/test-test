@@ -1,13 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { TwitterApi } from "twitter-api-v2";
 import { db } from "../db/client.js";
 import { createHmac } from "node:crypto";
 
-const TWITTERAPI_KEY = process.env.TWITTERAPI_KEY!;
-const API            = process.env.BACKEND_URL || "http://localhost:3001";
-const FUDMARKETS_USERNAME = "FUDmarkets"; // @FUDmarkets X handle
+const TWITTERAPI_KEY      = process.env.TWITTERAPI_KEY!;
+const API                 = process.env.BACKEND_URL || "http://localhost:3001";
+const FUDMARKETS_USERNAME = "FUDmarkets";
+const TW_USERNAME         = process.env.X_TWITTER_USERNAME || FUDMARKETS_USERNAME;
+const TW_PASSWORD         = process.env.X_TWITTER_PASSWORD!;
 
-// Support up to 2 admin Telegram chat IDs (comma-separated or separate env vars)
+// Support up to 2 admin Telegram chat IDs
 const ADMIN_TG_IDS: string[] = [
   process.env.ADMIN_TG_ID,
   process.env.ADMIN_TG_ID_2,
@@ -15,13 +16,77 @@ const ADMIN_TG_IDS: string[] = [
 
 const anthropic = new Anthropic();
 
-// X client for posting replies
-const xClient = new TwitterApi({
-  appKey:       process.env.X_API_KEY!,
-  appSecret:    process.env.X_API_SECRET!,
-  accessToken:  process.env.X_ACCESS_TOKEN!,
-  accessSecret: process.env.X_ACCESS_TOKEN_SECRET!,
-});
+// ─── twitterapi.io cookie-based posting ──────────────────────────────────────
+
+let cachedCookies: string | null = null;
+
+async function loadCookies(): Promise<string | null> {
+  if (cachedCookies) return cachedCookies;
+  try {
+    const { rows } = await db.query(`SELECT value FROM bot_kv WHERE key = 'x_login_cookies'`);
+    if (rows[0]) { cachedCookies = rows[0].value; return cachedCookies; }
+  } catch {}
+  return null;
+}
+
+async function saveCookies(cookies: string) {
+  cachedCookies = cookies;
+  await db.query(
+    `INSERT INTO bot_kv (key, value) VALUES ('x_login_cookies', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [cookies]
+  );
+}
+
+async function twitterLogin(): Promise<string | null> {
+  console.log("[x-agent] Logging in to Twitter via twitterapi.io...");
+  try {
+    const res = await fetch("https://api.twitterapi.io/twitter/user_login_v2", {
+      method:  "POST",
+      headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+      body:    JSON.stringify({ username: TW_USERNAME, password: TW_PASSWORD }),
+    });
+    const data = await res.json() as any;
+    if (!res.ok || !data.login_cookies) {
+      console.error(`[x-agent] Login failed: ${JSON.stringify(data)}`);
+      return null;
+    }
+    console.log("[x-agent] Twitter login successful — cookies saved");
+    await saveCookies(data.login_cookies);
+    return data.login_cookies;
+  } catch (e: any) {
+    console.error(`[x-agent] Login error: ${e.message}`);
+    return null;
+  }
+}
+
+async function postReply(text: string, replyToId: string): Promise<void> {
+  let cookies = await loadCookies() ?? await twitterLogin();
+  if (!cookies) throw new Error("Could not obtain Twitter login cookies");
+
+  const res = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
+    method:  "POST",
+    headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+    body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId }),
+  });
+  const data = await res.json() as any;
+
+  // If session expired, re-login once and retry
+  if (!res.ok && (res.status === 401 || data?.error?.includes?.("auth") || data?.error?.includes?.("session"))) {
+    console.warn("[x-agent] Cookies expired — re-logging in");
+    cookies = await twitterLogin() ?? "";
+    if (!cookies) throw new Error("Re-login failed");
+    const res2 = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
+      method:  "POST",
+      headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+      body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId }),
+    });
+    const data2 = await res2.json() as any;
+    if (!res2.ok) throw new Error(JSON.stringify(data2));
+    return;
+  }
+  if (!res.ok) throw new Error(JSON.stringify(data));
+}
 
 // Pending approvals: callbackId → { tweetId, xUsername, replies, timeout, msgIds }
 const pending = new Map<string, {
@@ -184,14 +249,7 @@ export async function handleXPost(callbackId: string, replyIndex: number): Promi
   pending.delete(callbackId);
   const reply = entry.replies[replyIndex] ?? entry.replies[0];
   try {
-    try {
-      await xClient.v2.reply(reply, entry.tweetId);
-    } catch (e2: any) {
-      if (e2?.code === 402 || String(e2?.message).includes("402")) {
-        // v2 requires paid plan — fallback to v1.1
-        await (xClient as any).v1.tweet(reply, { in_reply_to_status_id: entry.tweetId, auto_populate_reply_metadata: true });
-      } else throw e2;
-    }
+    await postReply(reply, entry.tweetId);
     console.log(`[x-agent] Posted opt ${replyIndex + 1} to @${entry.xUsername}`);
     await editAdminMessages(entry.msgIds, `✅ *Posted* (opt ${replyIndex + 1})\n\n_${reply}_`);
     return "posted";
@@ -209,13 +267,7 @@ export async function handleXPostCustom(callbackId: string, customReply: string)
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
   try {
-    try {
-      await xClient.v2.reply(customReply, entry.tweetId);
-    } catch (e2: any) {
-      if (e2?.code === 402 || String(e2?.message).includes("402")) {
-        await (xClient as any).v1.tweet(customReply, { in_reply_to_status_id: entry.tweetId, auto_populate_reply_metadata: true });
-      } else throw e2;
-    }
+    await postReply(customReply, entry.tweetId);
     console.log(`[x-agent] Posted custom reply to @${entry.xUsername}`);
     await editAdminMessages(entry.msgIds, `✅ *Posted* (custom)\n\n_${customReply}_`);
     return "posted";
@@ -488,7 +540,7 @@ async function poll() {
     // Never let lastMentionId go backwards — sinceId in twitterapi.io can return older tweets
     if (!lastMentionId || BigInt(newLastId) > BigInt(lastMentionId)) {
       lastMentionId = newLastId;
-      await saveLastMentionId(lastMentionId);
+      await saveLastMentionId(newLastId);
     }
     // Skip own tweets, already-processed IDs, and tweets at/before the previous boundary
     // (twitterapi.io sinceId is inclusive — the boundary tweet always comes back)
@@ -517,6 +569,11 @@ export async function startXAgent() {
   if (!TWITTERAPI_KEY) { console.log("[x-agent] TWITTERAPI_KEY not set — skipping"); return; }
   console.log("[x-agent] Starting — monitoring @FUDmarkets");
   await loadLastMentionId();
+  // Ensure we have login cookies ready
+  if (TW_PASSWORD) {
+    const cookies = await loadCookies();
+    if (!cookies) await twitterLogin();
+  }
   await poll();
   setInterval(poll, 30_000);
 }
