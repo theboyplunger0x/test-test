@@ -12,8 +12,10 @@ export async function marketRoutes(app: FastifyInstance) {
   // GET /markets — list open + recently resolved markets, optionally filter by timeframe
   app.get("/markets", async (req, reply) => {
     const { timeframe } = req.query as any;
-    const base = `SELECT * FROM markets WHERE (status = 'open' OR (status IN ('resolved','cancelled') AND closes_at > NOW() - INTERVAL '24 hours'))`;
-    const query = timeframe ? `${base} AND timeframe = $1 ORDER BY created_at DESC` : `${base} ORDER BY created_at DESC`;
+    const base = `SELECT m.*, u.username AS opener_username, u.avatar_url AS opener_avatar, u.tier AS opener_tier
+      FROM markets m JOIN users u ON m.opener_id = u.id
+      WHERE (m.status = 'open' OR (m.status IN ('resolved','cancelled') AND m.closes_at > NOW() - INTERVAL '24 hours'))`;
+    const query = timeframe ? `${base} AND m.timeframe = $1 ORDER BY m.created_at DESC` : `${base} ORDER BY m.created_at DESC`;
     const { rows } = await db.query(query, timeframe ? [timeframe] : []);
     return rows;
   });

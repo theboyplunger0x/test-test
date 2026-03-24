@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FUD.fun",
+  title: "FUD.",
   description: "Prediction markets for crypto. Long or short any token.",
 };
 

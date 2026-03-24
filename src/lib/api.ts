@@ -28,6 +28,8 @@ export type User = {
   tier?: "" | "normal" | "top";
   x_username?: string;
   telegram_username?: string;
+  avatar_url?: string;
+  bio?: string;
 };
 
 export type ReferralStats = {
@@ -85,6 +87,28 @@ export type LeaderboardEntry = {
   volume: string;
 };
 
+export type UserProfile = {
+  username: string;
+  avatar_url?: string;
+  bio?: string;
+  tier?: string;
+  created_at: string;
+  total_bets: number;
+  wins: number;
+  pnl: string;
+  volume: string;
+  recent_trades: {
+    side: "long" | "short";
+    amount: string;
+    placed_at: string;
+    symbol: string;
+    timeframe: string;
+    status: string;
+    winner_side: "long" | "short" | null;
+    chain: string;
+  }[];
+};
+
 export type Market = {
   id: string;
   symbol: string;
@@ -101,6 +125,9 @@ export type Market = {
   exit_price?: string | null;
   winner_side?: "long" | "short" | null;
   is_paper: boolean;
+  opener_username?: string;
+  opener_avatar?: string;
+  opener_tier?: string;
 };
 
 export const api = {
@@ -209,4 +236,13 @@ export const api = {
 
   tgInitLink: () =>
     req<{ token: string }>("/auth/tg-init-link", { method: "POST", body: "{}" }),
+
+  getUserProfile: (username: string) =>
+    req<UserProfile>(`/users/${encodeURIComponent(username)}`),
+
+  updateProfile: (avatar_url: string, bio: string) =>
+    req<User>("/auth/update-profile", {
+      method: "POST",
+      body: JSON.stringify({ avatar_url, bio }),
+    }),
 };

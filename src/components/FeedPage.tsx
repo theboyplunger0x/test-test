@@ -14,6 +14,7 @@ import OpenMarketModal from "./OpenMarketModal";
 import CASearchModal from "./CASearchModal";
 import ReferralModal from "./ReferralModal";
 import LeaderboardView from "./LeaderboardView";
+import ProfileModal from "./ProfileModal";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
@@ -56,7 +57,10 @@ function marketToChallenge(m: Market): Challenge {
   const openedSecsAgo = Math.floor((Date.now() - new Date(m.created_at).getTime()) / 1000);
   return {
     id: m.id,
-    user: m.opener_id.slice(0, 8) + "…",
+    user: m.opener_username ?? m.opener_id.slice(0, 8) + "…",
+    openerUsername: m.opener_username,
+    openerAvatar: m.opener_avatar,
+    openerTier: m.opener_tier,
     symbol: m.symbol,
     chain: m.chain.toUpperCase() as "SOL" | "ETH" | "BASE",
     timeframe: m.timeframe,
@@ -120,6 +124,7 @@ export default function FeedPage() {
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
   const [paperCreditLoading, setPaperCreditLoading] = useState(false);
   const [settingsOpen, setSettingsOpen]             = useState(false);
+  const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [xInput, setXInput]                         = useState("");
   const [xSaving, setXSaving]                       = useState(false);
   const [xMsg, setXMsg]                             = useState("");
@@ -1077,12 +1082,40 @@ export default function FeedPage() {
                 <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled}
                   xUsername={user?.x_username}
                   telegramUsername={user?.telegram_username}
-                  onDisconnectX={async () => { await api.disconnectX(); setUser(u => u ? { ...u, x_username: undefined } : null); }}
-                  onDisconnectTelegram={async () => { await api.disconnectTelegram(); setUser(u => u ? { ...u, telegram_username: undefined } : null); }}
+                  onDisconnectX={async () => {
+                    try { await api.disconnectX(); setUser(u => u ? { ...u, x_username: undefined } : null); }
+                    catch (e: any) { alert(e.message ?? "Error disconnecting X"); }
+                  }}
+                  onDisconnectTelegram={async () => {
+                    try { await api.disconnectTelegram(); setUser(u => u ? { ...u, telegram_username: undefined } : null); }
+                    catch (e: any) { alert(e.message ?? "Error disconnecting Telegram"); }
+                  }}
+                  onTelegramConnect={() => {
+                    // Poll /auth/me until telegram_username is populated (up to 60s)
+                    let attempts = 0;
+                    const poll = setInterval(async () => {
+                      attempts++;
+                      try {
+                        const fresh = await api.me();
+                        if (fresh.telegram_username) {
+                          setUser(fresh);
+                          clearInterval(poll);
+                        }
+                      } catch {}
+                      if (attempts >= 20) clearInterval(poll);
+                    }, 3000);
+                  }}
                 />
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {profileUser && (
+          <ProfileModal username={profileUser} dk={dk} onClose={() => setProfileUser(null)} />
         )}
       </AnimatePresence>
     </div>
@@ -1269,7 +1302,19 @@ function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, dk, livePrice, 
       </div>
 
       <div className={`flex justify-between text-[10px] font-bold ${metaTxt}`}>
-        <span>{c.user}</span>
+        <button
+          onClick={(e) => { e.stopPropagation(); if (c.openerUsername) setProfileUser(c.openerUsername); }}
+          className={`flex items-center gap-1.5 hover:opacity-70 transition-opacity ${c.openerUsername ? "cursor-pointer" : "cursor-default"}`}
+        >
+          {c.openerAvatar ? (
+            <img src={c.openerAvatar} alt="" className="w-4 h-4 rounded-full object-cover" />
+          ) : (
+            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500"}`}>
+              {(c.openerUsername ?? c.user).charAt(0).toUpperCase()}
+            </span>
+          )}
+          <span>{c.user}</span>
+        </button>
         <span>{formatAgo(c.openedAt)}</span>
       </div>
 

@@ -13,6 +13,9 @@ export type Challenge = {
   status?: "open" | "resolved" | "cancelled";
   exitPrice?: number | null;
   winnerSide?: "long" | "short" | null;
+  openerUsername?: string;
+  openerAvatar?: string;
+  openerTier?: string;
 };
 
 export const MOCK_CHALLENGES: Challenge[] = [

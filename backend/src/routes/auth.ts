@@ -418,4 +418,19 @@ export async function authRoutes(app: FastifyInstance) {
     );
     return { token };
   });
+
+  // POST /auth/update-profile — update avatar and bio
+  app.post("/auth/update-profile", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const userId = (req as any).user.userId;
+    const { avatar_url, bio } = req.body as any;
+    await db.query(
+      `UPDATE users SET avatar_url = $1, bio = $2 WHERE id = $3`,
+      [avatar_url ?? null, bio ?? null, userId]
+    );
+    const { rows: [updated] } = await db.query(
+      `SELECT id, username, balance_usd, paper_balance_usd, tier, x_username, telegram_username, avatar_url, bio FROM users WHERE id = $1`,
+      [userId]
+    );
+    return updated;
+  });
 }

@@ -237,7 +237,86 @@ function TierBadge({ tier }: { tier: string }) {
   return null;
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void }) {
+function ProfileEditSection({ dk }: { dk: boolean }) {
+  const [avatar, setAvatar] = useState("");
+  const [bio, setBio]       = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+  const [open, setOpen]     = useState(false);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+    api.me().then(u => {
+      setAvatar(u.avatar_url ?? "");
+      setBio(u.bio ?? "");
+    }).catch(() => {});
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.updateProfile(avatar, bio);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {}
+    setSaving(false);
+  }
+
+  const inputCls = dk
+    ? "bg-white/5 border-white/10 text-white placeholder:text-white/20"
+    : "bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400";
+
+  return (
+    <div className={`rounded-2xl border overflow-hidden ${dk ? "border-white/8" : "border-gray-200"}`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center justify-between px-4 py-3 text-[12px] font-black ${dk ? "text-white/50 hover:text-white/70" : "text-gray-500 hover:text-gray-700"} transition-colors`}
+      >
+        <span>Edit Profile</span>
+        <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
+      </button>
+      {open && (
+        <div className={`px-4 pb-4 space-y-2.5 border-t ${dk ? "border-white/8" : "border-gray-100"}`}>
+          <div className="pt-2.5">
+            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${dk ? "text-white/30" : "text-gray-400"}`}>Avatar URL</label>
+            <input
+              value={avatar}
+              onChange={e => setAvatar(e.target.value)}
+              placeholder="https://..."
+              className={`w-full rounded-xl border px-3 py-2 text-[12px] outline-none ${inputCls}`}
+            />
+          </div>
+          <div>
+            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${dk ? "text-white/30" : "text-gray-400"}`}>Bio</label>
+            <textarea
+              value={bio}
+              onChange={e => setBio(e.target.value)}
+              placeholder="Your bio..."
+              maxLength={120}
+              rows={2}
+              className={`w-full rounded-xl border px-3 py-2 text-[12px] outline-none resize-none ${inputCls}`}
+            />
+          </div>
+          <button
+            onClick={save}
+            disabled={saving}
+            className={`w-full py-2.5 rounded-xl text-[12px] font-black transition-all ${
+              saved    ? "bg-emerald-500 text-white" :
+              saving   ? (dk ? "bg-white/10 text-white/30" : "bg-gray-100 text-gray-400") :
+              dk       ? "bg-white text-black hover:bg-white/90" :
+                         "bg-gray-900 text-white hover:bg-gray-700"
+            }`}
+          >
+            {saved ? "✓ Saved!" : saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -462,6 +541,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
               try {
                 const { token } = await api.tgInitLink();
                 window.open(`https://t.me/FUDmarkets_BOT?start=link_${token}`, "_blank");
+                onTelegramConnect?.();
               } catch (e: any) {
                 alert(e.message ?? "Error connecting Telegram");
               }
@@ -513,6 +593,9 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
             Connect X
           </button>
         )}
+
+        {/* Edit Profile */}
+        <ProfileEditSection dk={dk} />
 
         {/* Open positions */}
         <div>

@@ -148,6 +148,8 @@ CREATE TABLE IF NOT EXISTS tg_link_tokens (
 );
 ALTER TABLE tg_link_tokens ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE tg_link_tokens ALTER COLUMN tg_id DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
 `;
 
 export async function runMigrations() {

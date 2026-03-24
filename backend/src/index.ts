@@ -12,6 +12,7 @@ import { leaderboardRoutes } from "./routes/leaderboard.js";
 import { referralRoutes }    from "./routes/referral.js";
 import { depositRoutes }     from "./routes/deposits.js";
 import { activityRoutes }    from "./routes/activity.js";
+import { userRoutes }        from "./routes/users.js";
 import { scheduleAllPendingMarkets } from "./workers/resolver.js";
 import { pollDeposits }              from "./workers/depositPoller.js";
 import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
@@ -54,6 +55,7 @@ await app.register(leaderboardRoutes);
 await app.register(referralRoutes);
 await app.register(depositRoutes);
 await app.register(activityRoutes);
+await app.register(userRoutes);
 
 // Health check
 app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString() }));
