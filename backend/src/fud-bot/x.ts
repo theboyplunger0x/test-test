@@ -533,8 +533,8 @@ async function poll() {
     const now = Math.floor(Date.now() / 1000);
     // Use mentions endpoint — returns ALL direct mentions, no search index limitations
     const sinceTime = lastPollTime - 60; // 60s overlap to avoid missing tweets at boundaries
-    const url = `https://api.twitterapi.io/twitter/user/mentions?userName=${FUDMARKETS_USERNAME}&sinceTime=${sinceTime}`;
-    console.log(`[x-agent] polling mentions: sinceTime=${sinceTime} (${new Date(sinceTime * 1000).toISOString()})`);
+    const url = `https://api.twitterapi.io/twitter/user/mentions?userName=${FUDMARKETS_USERNAME}`;
+    console.log(`[x-agent] polling mentions (no sinceTime filter — DEBUG): sinceTime would be ${sinceTime}`);
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
     if (!res.ok) {
       const body = await res.text();
