@@ -513,7 +513,7 @@ export default function FeedPage() {
   const MAIN_TABS: { key: MainTab; label: string }[] = [
     { key: "feed",  label: "Feed" },
     { key: "trending", label: "Trending" },
-    { key: "ranks", label: "Ranks" },
+    { key: "ranks", label: "Leaderboard" },
   ];
 
 
