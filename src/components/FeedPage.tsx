@@ -509,86 +509,99 @@ export default function FeedPage() {
     <div className={`flex flex-col h-[100dvh] ${T.root}`}>
 
       {/* Top bar */}
-      <div className={`flex items-center justify-between px-4 md:px-6 py-3 border-b-2 ${T.topBorder} shrink-0`}>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[16px] md:text-[17px] font-black tracking-tight">FUD.</span><span className="text-[16px] md:text-[17px] font-light tracking-tight opacity-30 ml-1">Markets</span>
+      <div className={`flex items-center gap-3 px-4 md:px-5 py-2.5 border-b-2 ${T.topBorder} shrink-0`}>
+        {/* Logo */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[16px] md:text-[17px] font-black tracking-tight">FUD.</span>
+          <span className="text-[16px] md:text-[17px] font-light tracking-tight opacity-30">Markets</span>
         </div>
 
-        {/* Live dot — minimal center indicator on desktop */}
-        <div className="hidden md:flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className={`text-[11px] font-bold ${T.statMuted}`}>{allChallenges.length} live</span>
-        </div>
+        {/* Search bar */}
+        <button
+          onClick={() => setCASearchOpen(true)}
+          className={`flex-1 flex items-center gap-2 px-3.5 py-2 rounded-xl border text-left transition-all ${dk ? "bg-white/[0.03] border-white/10 hover:border-white/20" : "bg-gray-50 border-gray-200 hover:border-gray-300"}`}
+        >
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 opacity-40">
+            <circle cx="8.5" cy="8.5" r="5.75" stroke="currentColor" strokeWidth="1.8"/>
+            <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+          <span className={`text-[12px] font-bold ${dk ? "text-white/25" : "text-gray-400"}`}>Search / CA</span>
+          <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded border ${dk ? "border-white/10 text-white/20" : "border-gray-200 text-gray-400"}`}>/</span>
+        </button>
 
-        <div className="flex items-center gap-1.5 md:gap-2">
-          {/* CA search icon */}
-          <motion.button whileTap={{ scale: 0.94 }}
-            onClick={() => setCASearchOpen(true)}
-            className={`text-[14px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
-            ⌕
-          </motion.button>
-
-          {/* Theme toggle */}
-          <motion.button whileTap={{ scale: 0.94 }}
-            onClick={() => setTheme(dk ? "light" : "dark")}
-            className={`text-[13px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
-            {dk ? "☀" : "☽"}
-          </motion.button>
-
-          {/* Referral button — only when logged in */}
-          {user && (
-            <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
-              title="Referrals & Cashback"
-              className={`flex items-center gap-1 border text-[12px] font-black px-2.5 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
-              <span>🔗</span>
-            </motion.button>
-          )}
-
+        {/* Right side */}
+        <div className="flex items-center gap-1.5 shrink-0">
           {user ? (
             <>
-              {/* Paper / Real toggle */}
-              <div className={`flex rounded-xl p-0.5 border text-[11px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
-                <button onClick={() => setPaperMode(false)}
-                  className={`px-2.5 py-1.5 rounded-[10px] transition-all ${!paperMode ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
-                  Real
-                </button>
-                <button onClick={() => setPaperMode(true)}
-                  className={`px-2.5 py-1.5 rounded-[10px] transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
-                  Paper
-                </button>
+              {/* Balance */}
+              <div className="hidden sm:flex flex-col items-end leading-none">
+                <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
+                  {paperMode ? "Paper" : "Balance"}
+                </span>
+                <span className={`text-[13px] font-black ${paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
+                  ${Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd).toFixed(2)}
+                </span>
               </div>
 
-              {/* Balance — click to deposit/credit */}
-              <motion.button whileTap={{ scale: 0.94 }}
+              {/* Deposit button */}
+              <motion.button whileTap={{ scale: 0.96 }}
                 onClick={() => paperMode ? setPaperCreditOpen(true) : setDepositOpen(true)}
-                className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
-                {paperMode ? (
-                  <span className="text-yellow-400">${Number(user.paper_balance_usd ?? 0).toFixed(2)} +</span>
-                ) : (
-                  <span className="text-emerald-400">${Number(user.balance_usd).toFixed(2)} +</span>
-                )}
+                className="px-3.5 py-2 rounded-xl text-[12px] font-black bg-blue-500 hover:bg-blue-400 text-white transition-all">
+                {paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
-              {/* Portfolio */}
+              {/* Referral */}
+              <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
+                title="Referrals & Cashback"
+                className={`flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${T.portfolioBtn}`}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <path d="M20 12v7a1 1 0 01-1 1H5a1 1 0 01-1-1v-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  <path d="M22 9H2v3h20V9z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M12 22V9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  <path d="M12 9C12 9 9 7 9 4.5a3 3 0 016 0C15 7 12 9 12 9z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </motion.button>
+
+              {/* Notifications */}
+              <motion.button whileTap={{ scale: 0.94 }}
+                onClick={() => setSettingsOpen(true)}
+                title="Notifications"
+                className={`flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${T.portfolioBtn}`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </motion.button>
+
+              {/* User avatar + username */}
               <motion.button whileTap={{ scale: 0.94 }} onClick={() => setOrdersOpen(true)}
-                className={`flex items-center gap-1.5 border text-[12px] font-black px-3 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
-                {tierBadge(user.tier) ?? <span>⬡</span>}
-                <span className="hidden md:inline">{user.username}</span>
+                className={`flex items-center gap-1.5 border px-2 py-1.5 rounded-xl transition-all ${T.portfolioBtn}`}>
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${dk ? "bg-white/15 text-white/70" : "bg-gray-200 text-gray-600"}`}>
+                    {user.username.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className={`text-[12px] font-black hidden sm:inline ${dk ? "text-white/80" : "text-gray-700"}`}>{user.username}</span>
+                {tierBadge(user.tier) && <span className="shrink-0">{tierBadge(user.tier)}</span>}
               </motion.button>
             </>
           ) : (
             <motion.button whileTap={{ scale: 0.94 }} onClick={() => setAuthOpen(true)}
-              className={`flex items-center gap-2 border text-[12px] font-black px-4 py-2 rounded-xl transition-all ${T.portfolioBtn}`}>
-              <span>→</span>
-              <span>Sign In</span>
+              className="flex items-center gap-2 border text-[12px] font-black px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-white border-transparent transition-all">
+              Sign In
             </motion.button>
           )}
 
-          {/* Settings — always far right */}
+          {/* Settings */}
           <motion.button whileTap={{ scale: 0.94 }}
             onClick={() => setSettingsOpen(true)}
-            className={`text-[13px] font-black px-2.5 py-2 rounded-xl border transition-all ${T.portfolioBtn}`}>
-            ⚙
+            className={`flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${T.portfolioBtn}`}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="1.8"/>
+            </svg>
           </motion.button>
         </div>
       </div>
@@ -937,117 +950,137 @@ export default function FeedPage() {
               onClick={() => setSettingsOpen(false)} className="fixed inset-0 bg-black/60 z-40" />
             <motion.div key="settings-drawer" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className={`fixed right-0 top-0 h-full w-full md:w-[340px] border-l z-50 flex flex-col ${T.drawerBg}`}>
+              className={`fixed right-0 top-0 h-full w-full md:w-[320px] border-l z-50 flex flex-col ${T.drawerBg}`}>
+
+              {/* Header — avatar + username */}
               <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
-                <span className="text-[15px] font-black">Settings</span>
+                <div className="flex items-center gap-3">
+                  {user ? (
+                    <>
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[15px] font-black ${dk ? "bg-white/10 text-white/60" : "bg-gray-200 text-gray-500"}`}>
+                          {user.username.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className={`text-[14px] font-black ${dk ? "text-white" : "text-gray-900"}`}>{user.username}</p>
+                        <p className={`text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>
+                          ${Number(user.balance_usd).toFixed(2)} real · ${Number(user.paper_balance_usd ?? 0).toFixed(2)} paper
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <p className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>Settings</p>
+                  )}
+                </div>
                 <button onClick={() => setSettingsOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
 
-                {/* Notifications */}
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Notifications</p>
-                  <div className={`flex items-center justify-between p-4 rounded-2xl border ${dk ? "border-white/8 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
-                    <div>
-                      <p className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>Position alerts</p>
-                      <p className={`text-[11px] font-bold mt-0.5 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                        Notify when a market resolves
-                      </p>
-                    </div>
+              <div className="flex-1 overflow-y-auto">
+
+                {/* Main menu items */}
+                <div className={`border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
+
+                  {/* Leaderboard */}
+                  <button onClick={() => { setMainTab("ranks"); setSettingsOpen(false); }}
+                    className={`w-full flex items-center gap-3.5 px-5 py-4 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
+                    <span className="text-[20px] w-7 text-center">🏆</span>
+                    <span className={`text-[14px] font-bold flex-1 text-left ${dk ? "text-white" : "text-gray-900"}`}>Leaderboard</span>
+                  </button>
+
+                  {/* Referrals */}
+                  <button onClick={() => { setReferralOpen(true); setSettingsOpen(false); }}
+                    className={`w-full flex items-center gap-3.5 px-5 py-4 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
+                    <span className="text-[20px] w-7 text-center">🎁</span>
+                    <span className={`text-[14px] font-bold flex-1 text-left ${dk ? "text-white" : "text-gray-900"}`}>Referrals & Cashback</span>
+                  </button>
+
+                  {/* Notifications */}
+                  <div className={`flex items-center gap-3.5 px-5 py-4`}>
+                    <span className="text-[20px] w-7 text-center">🔔</span>
+                    <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Position alerts</span>
                     <button
                       onClick={toggleNotifications}
-                      className={`relative w-11 h-6 rounded-full transition-all duration-200 ${notificationsEnabled ? "bg-emerald-500" : (dk ? "bg-white/10" : "bg-gray-200")}`}
-                    >
+                      className={`relative w-11 h-6 rounded-full transition-all duration-200 shrink-0 ${notificationsEnabled ? "bg-emerald-500" : (dk ? "bg-white/10" : "bg-gray-200")}`}>
                       <motion.span
                         animate={{ x: notificationsEnabled ? 20 : 2 }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block"
-                      />
+                        className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block" />
                     </button>
                   </div>
                   {typeof window !== "undefined" && Notification.permission === "denied" && (
-                    <p className={`text-[11px] font-bold mt-2 text-amber-400`}>
-                      Notifications blocked in browser. Enable them in your browser settings.
-                    </p>
+                    <p className="text-[11px] font-bold px-5 pb-2 text-amber-400">Notifications blocked — enable in browser settings.</p>
                   )}
-                </div>
 
-                {/* Theme */}
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Appearance</p>
-                  <div className={`flex rounded-xl p-0.5 border text-[12px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
-                    <button onClick={() => setTheme("dark")}
-                      className={`flex-1 py-2 rounded-[10px] transition-all ${theme === "dark" ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
-                      ☽ Dark
-                    </button>
-                    <button onClick={() => setTheme("light")}
-                      className={`flex-1 py-2 rounded-[10px] transition-all ${theme === "light" ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
-                      ☀ Light
+                  {/* Dark mode */}
+                  <div className={`flex items-center gap-3.5 px-5 py-4`}>
+                    <span className="text-[20px] w-7 text-center">🌙</span>
+                    <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Dark mode</span>
+                    <button
+                      onClick={() => setTheme(dk ? "light" : "dark")}
+                      className={`relative w-11 h-6 rounded-full transition-all duration-200 shrink-0 ${dk ? "bg-emerald-500" : "bg-gray-200"}`}>
+                      <motion.span
+                        animate={{ x: dk ? 20 : 2 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block" />
                     </button>
                   </div>
-                </div>
 
-                {/* Trading Mode */}
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Trading Mode</p>
-                  <div className={`flex rounded-xl p-0.5 border text-[12px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
-                    <button onClick={() => setPaperMode(false)}
-                      className={`flex-1 py-2 rounded-[10px] transition-all ${!paperMode ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
-                      Real
-                    </button>
-                    <button onClick={() => setPaperMode(true)}
-                      className={`flex-1 py-2 rounded-[10px] transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700")}`}>
-                      Paper
-                    </button>
-                  </div>
-                </div>
-
-                {/* Trade Presets */}
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Quick Bet Amounts</p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {tradePresets.map((v, i) => (
-                      <div key={i} className="relative">
-                        <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
-                        <input
-                          type="number"
-                          value={v}
-                          onChange={(e) => {
-                            const n = parseFloat(e.target.value);
-                            if (!isNaN(n) && n > 0) setTradePresets(prev => prev.map((p, j) => j === i ? n : p));
-                          }}
-                          className={`w-full pl-5 pr-2 py-2.5 rounded-2xl text-[12px] font-black text-center border outline-none transition-all ${
-                            dk ? "bg-white/[0.03] border-white/8 text-white focus:border-white/20" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-gray-400"
-                          }`}
-                        />
+                  {/* Trading Mode */}
+                  {user && (
+                    <div className={`flex items-center gap-3.5 px-5 py-4`}>
+                      <span className="text-[20px] w-7 text-center">🃏</span>
+                      <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Trading mode</span>
+                      <div className={`flex rounded-lg p-0.5 border text-[11px] font-black shrink-0 ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
+                        <button onClick={() => setPaperMode(false)}
+                          className={`px-2.5 py-1 rounded-md transition-all ${!paperMode ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+                          Real
+                        </button>
+                        <button onClick={() => setPaperMode(true)}
+                          className={`px-2.5 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+                          Paper
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                  <p className={`text-[10px] font-bold mt-2 ${dk ? "text-white/20" : "text-gray-400"}`}>These appear as preset buttons when placing trades.</p>
-                </div>
+                    </div>
+                  )}
 
-                {/* Account — last, only if logged in */}
-                {user && (
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${dk ? "text-white/20" : "text-gray-400"}`}>Account</p>
-                    <div className={`rounded-2xl border ${dk ? "border-white/8 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
-                      <div className={`flex items-center gap-3 px-4 py-3 border-b ${dk ? "border-white/6" : "border-gray-100"}`}>
-                        <span className="text-[16px]">⬡</span>
-                        <div>
-                          <p className={`text-[13px] font-black flex items-center gap-1.5 ${dk ? "text-white" : "text-gray-900"}`}>{user.username}{tierBadge(user.tier)}</p>
-                          <p className={`text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>
-                            ${Number(user.balance_usd).toFixed(2)} real · ${Number(user.paper_balance_usd ?? 0).toFixed(2)} paper
-                          </p>
+                  {/* Quick Bet Amounts */}
+                  <div className={`px-5 py-4`}>
+                    <div className="flex items-center gap-3.5 mb-3">
+                      <span className="text-[20px] w-7 text-center">💰</span>
+                      <span className={`text-[14px] font-bold ${dk ? "text-white" : "text-gray-900"}`}>Quick bet amounts</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 pl-[2.75rem]">
+                      {tradePresets.map((v, i) => (
+                        <div key={i} className="relative">
+                          <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                          <input
+                            type="number"
+                            value={v}
+                            onChange={(e) => {
+                              const n = parseFloat(e.target.value);
+                              if (!isNaN(n) && n > 0) setTradePresets(prev => prev.map((p, j) => j === i ? n : p));
+                            }}
+                            className={`w-full pl-4 pr-1 py-2 rounded-xl text-[11px] font-black text-center border outline-none transition-all ${
+                              dk ? "bg-white/[0.03] border-white/8 text-white focus:border-white/20" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-gray-400"
+                            }`}
+                          />
                         </div>
-                      </div>
-                      <button
-                        onClick={() => { handleLogout(); setSettingsOpen(false); }}
-                        className={`w-full px-4 py-3 text-left text-[12px] font-black transition-all rounded-b-2xl ${dk ? "text-red-400/70 hover:text-red-400 hover:bg-red-500/8" : "text-red-500 hover:bg-red-50"}`}
-                      >
-                        ↩ Sign out
-                      </button>
+                      ))}
                     </div>
                   </div>
+                </div>
+
+                {/* Sign out */}
+                {user && (
+                  <button
+                    onClick={() => { handleLogout(); setSettingsOpen(false); }}
+                    className={`w-full flex items-center gap-3.5 px-5 py-4 transition-all ${dk ? "hover:bg-red-500/8" : "hover:bg-red-50"}`}>
+                    <span className="text-[20px] w-7 text-center">↩</span>
+                    <span className="text-[14px] font-bold text-red-500">Sign out</span>
+                  </button>
                 )}
 
               </div>
