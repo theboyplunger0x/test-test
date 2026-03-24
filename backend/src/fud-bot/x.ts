@@ -436,10 +436,9 @@ async function processMention(tweet: any) {
 
 async function poll() {
   try {
-    const query  = `@${FUDMARKETS_USERNAME}`;
-    const params = new URLSearchParams({ query, queryType: "Latest" });
-    if (lastMentionId) params.set("sinceId", lastMentionId);
-    const url = `https://api.twitterapi.io/twitter/tweet/advanced_search?${params}`;
+    // Build URL manually — URLSearchParams encodes @ as %40 which breaks the search
+    let url = `https://api.twitterapi.io/twitter/tweet/advanced_search?query=@${FUDMARKETS_USERNAME}&queryType=Latest`;
+    if (lastMentionId) url += `&sinceId=${lastMentionId}`;
     console.log(`[x-agent] polling URL: ${url}`);
     const res  = await fetch(url, { headers: { "X-API-Key": TWITTERAPI_KEY } });
     if (!res.ok) {
