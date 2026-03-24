@@ -566,17 +566,17 @@ export default function FeedPage() {
               <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
                 title="Referrals & Cashback"
                 className={`flex items-center justify-center w-9 h-9 transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
                   {/* Box body */}
-                  <rect x="3" y="11" width="18" height="10" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="3" y="12" width="18" height="9" rx="1.5" stroke="currentColor" strokeWidth="2"/>
                   {/* Lid */}
-                  <rect x="2" y="8" width="20" height="4" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="2" y="9" width="20" height="4" rx="1.5" stroke="currentColor" strokeWidth="2"/>
                   {/* Vertical ribbon */}
-                  <line x1="12" y1="8" x2="12" y2="21" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="12" y1="9" x2="12" y2="21" stroke="currentColor" strokeWidth="2"/>
                   {/* Bow — left loop */}
-                  <path d="M12 8 C12 5, 8 4, 8 6 C8 8, 12 8, 12 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M12 9 C12 6 6 5 7 8 C7.5 9.5 12 9 12 9Z" stroke="currentColor" strokeWidth="1.8"/>
                   {/* Bow — right loop */}
-                  <path d="M12 8 C12 5, 16 4, 16 6 C16 8, 12 8, 12 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M12 9 C12 6 18 5 17 8 C16.5 9.5 12 9 12 9Z" stroke="currentColor" strokeWidth="1.8"/>
                 </svg>
               </motion.button>
 
