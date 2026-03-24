@@ -1064,7 +1064,7 @@ export default function FeedPage() {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className={`fixed right-0 top-0 h-full w-full md:w-[420px] border-l z-50 flex flex-col ${T.drawerBg}`}>
               <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
-                <span className="text-[15px] font-black">Account</span>
+                <span className="text-[15px] font-black">Your Profile</span>
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
               <div className="flex-1 overflow-hidden">
