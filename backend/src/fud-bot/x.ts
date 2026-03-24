@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { db } from "./db/client.js";
+import { db } from "../db/client.js";
 import { createHmac } from "node:crypto";
 
 const TWITTERAPI_KEY  = process.env.TWITTERAPI_KEY!;

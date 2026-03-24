@@ -1,6 +1,6 @@
 import { Telegraf, Markup } from "telegraf";
 import { message } from "telegraf/filters";
-import { db } from "./db/client.js";
+import { db } from "../db/client.js";
 import { createHmac, randomBytes } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 

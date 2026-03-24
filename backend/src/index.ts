@@ -16,8 +16,7 @@ import { scheduleAllPendingMarkets } from "./workers/resolver.js";
 import { pollDeposits }              from "./workers/depositPoller.js";
 import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
 import { runMigrations }             from "./db/runMigrations.js";
-import { startBot }                  from "./telegram-bot.js";
-import { startXAgent }               from "./x-agent.js";
+import { startBot, startXAgent }     from "./fud-bot/index.js";
 
 const app = Fastify({ logger: true });
 
