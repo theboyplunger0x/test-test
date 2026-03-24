@@ -475,11 +475,14 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
         {/* Connect X */}
         {xUsername ? (
-          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center gap-2 ${
+          <div className={`w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between ${
             dk ? "border-white/8 bg-white/[0.02] text-white/60" : "border-gray-200 bg-gray-50 text-gray-500"
           }`}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-            @{xUsername} connected
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              @{xUsername}
+            </span>
+            <span className={`text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>connected ✓</span>
           </div>
         ) : (
           <button
