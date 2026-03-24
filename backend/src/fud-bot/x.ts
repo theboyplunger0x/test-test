@@ -44,7 +44,7 @@ async function twitterLogin(): Promise<string | null> {
     const res = await fetch("https://api.twitterapi.io/twitter/user_login_v2", {
       method:  "POST",
       headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify({ username: TW_USERNAME, password: TW_PASSWORD }),
+      body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD }),
     });
     const data = await res.json() as any;
     if (!res.ok || !data.login_cookies) {
