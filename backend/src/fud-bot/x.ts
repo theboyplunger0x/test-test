@@ -580,5 +580,5 @@ export async function startXAgent() {
     else console.log("[x-agent] Cookies loaded from DB — skipping login");
   }
   await poll();
-  setInterval(poll, 30_000);
+  setInterval(poll, 60_000); // 60s — ~1440 requests/day vs 2880 at 30s
 }
