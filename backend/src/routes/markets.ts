@@ -73,7 +73,7 @@ export async function marketRoutes(app: FastifyInstance) {
   // POST /markets/:id/bet — 30 bets / minute per IP
   app.post("/markets/:id/bet", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const { id }   = req.params as any;
-    const { side, amount } = req.body as any;
+    const { side, amount, message } = req.body as any;
     const user     = (req as any).user;
 
     if (!["long", "short"].includes(side)) return reply.status(400).send({ error: "side must be long or short" });
@@ -113,8 +113,8 @@ export async function marketRoutes(app: FastifyInstance) {
 
       // Record position with is_paper matching the market
       const { rows: [position] } = await client.query(
-        `INSERT INTO positions (user_id, market_id, side, amount, is_paper) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [user.userId, id, side, amount, isPaper]
+        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, message) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [user.userId, id, side, amount, isPaper, message?.trim() || null]
       );
 
       await client.query("COMMIT");

@@ -52,7 +52,7 @@ interface Props {
   timeframe: string;
   theme: "dark" | "light";
   markets: Market[];        // live markets for this symbol
-  onBet: (marketId: string, side: "long" | "short", amount: number) => Promise<string | null>;
+  onBet: (marketId: string, side: "long" | "short", amount: number, message?: string) => Promise<string | null>;
   onAutoTrade?: (side: "long" | "short", amount: number, timeframe: string, tagline?: string) => Promise<string | null>;
   onOpenMarket: () => void;
   loggedIn: boolean;
@@ -193,7 +193,7 @@ export default function CoinDetail({
         return;
       }
     } else {
-      err = await onBet(activeMarket.id, side!, finalAmount!);
+      err = await onBet(activeMarket.id, side!, finalAmount!, tagline.trim() || undefined);
     }
     setBetLoading(false);
     if (err) setBetError(err);
@@ -398,20 +398,18 @@ export default function CoinDetail({
           </div>
         </div>
 
-        {/* Message / tagline (only for new markets) */}
-        {!activeMarket && (
-          <div className="px-4 pb-4">
-            <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${T.sectionLbl}`}>Your message</p>
-            <textarea
-              value={tagline}
-              onChange={(e) => setTagline(e.target.value)}
-              maxLength={80}
-              placeholder={`${symbol} to the moon!`}
-              rows={2}
-              className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${T.input} placeholder:opacity-30`}
-            />
-          </div>
-        )}
+        {/* Message */}
+        <div className="px-4 pb-4">
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${T.sectionLbl}`}>Your message <span className="opacity-40 normal-case font-bold">(optional)</span></p>
+          <textarea
+            value={tagline}
+            onChange={(e) => setTagline(e.target.value)}
+            maxLength={80}
+            placeholder={`${symbol} to the moon!`}
+            rows={2}
+            className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${T.input} placeholder:opacity-30`}
+          />
+        </div>
 
         {/* To win */}
         <div className="px-4 pb-4">

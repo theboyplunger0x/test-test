@@ -66,6 +66,7 @@ export type Position = {
   long_pool: string;
   short_pool: string;
   opener_id: string;
+  message: string | null;
 };
 
 export type PortfolioResponse = {
@@ -222,10 +223,10 @@ export const api = {
       body: JSON.stringify({ symbol, chain, timeframe, tagline, paper, ca }),
     }),
 
-  placeBet: (marketId: string, side: "long" | "short", amount: number, paper = false) =>
+  placeBet: (marketId: string, side: "long" | "short", amount: number, paper = false, message?: string) =>
     req<{ position: object; new_balance: string; new_paper_balance: string }>(`/markets/${marketId}/bet`, {
       method: "POST",
-      body: JSON.stringify({ side, amount, paper }),
+      body: JSON.stringify({ side, amount, paper, message }),
     }),
 
   forgotPassword: (email?: string, username?: string) =>

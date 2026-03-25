@@ -329,13 +329,13 @@ export default function FeedPage() {
     setOpenMarketCoin(coin);
   }
 
-  async function handleAdd(id: string, side: "short" | "long", amount: number): Promise<string | null> {
+  async function handleAdd(id: string, side: "short" | "long", amount: number, message?: string): Promise<string | null> {
     if (!user) { setAuthOpen(true); return null; }
     // Mock challenges have simple numeric IDs; real markets have UUIDs
     const isRealMarket = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isRealMarket) return "Demo data — open a real market on any coin to trade.";
     try {
-      const result = await api.placeBet(id, side, amount, paperMode);
+      const result = await api.placeBet(id, side, amount, paperMode, message);
       setMarkets(prev => prev.map(m =>
         m.id === id ? {
           ...m,
