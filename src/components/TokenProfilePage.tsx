@@ -36,6 +36,28 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function CopyCA({ ca, dk }: { ca: string; dk: boolean }) {
+  const [copied, setCopied] = useState(false);
+  if (!ca) return null;
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(ca); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      title={ca}
+      className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-mono transition-colors ${dk ? "text-white/25 hover:text-white/60 hover:bg-white/6" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+    >
+      {copied ? (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      ) : (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+          <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
+          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2"/>
+        </svg>
+      )}
+      {copied ? "copied!" : `${ca.slice(0, 5)}…${ca.slice(-4)}`}
+    </button>
+  );
+}
+
 // Mini sparkline SVG
 function Sparkline({ candles, dk }: { candles: { close: number }[]; dk: boolean }) {
   if (candles.length < 2) return null;
@@ -188,7 +210,10 @@ export default function TokenProfilePage({
                 {token.change24h >= 0 ? "+" : ""}{token.change24h.toFixed(1)}%
               </span>
             </div>
-            <p className={`text-[12px] ${muted}`}>{token.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className={`text-[12px] ${muted}`}>{token.name}</p>
+              <CopyCA ca={token.address} dk={dk} />
+            </div>
           </div>
           <div className="text-right">
             <p className={`text-[18px] font-black font-mono ${strong}`}>${formatPrice(token.price)}</p>
