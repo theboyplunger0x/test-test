@@ -71,48 +71,46 @@ async function twitterLogin(retries = 5): Promise<string | null> {
   return null;
 }
 
-// ─── Post via Twitter API v2 (OAuth 1.0a) ─────────────────────────────────────
-// Uses official credentials — more reliable than cookie-based twitterapi.io posting
-
-const TW_API_KEY    = process.env.X_API_KEY!;
-const TW_API_SECRET = process.env.X_API_SECRET!;
-const TW_ACCESS_TOKEN        = process.env.X_ACCESS_TOKEN!;
-const TW_ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET!;
-
-function buildOAuthHeader(method: string, url: string): string {
-  const nonce     = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const params: Record<string, string> = {
-    oauth_consumer_key:     TW_API_KEY,
-    oauth_nonce:            nonce,
-    oauth_signature_method: "HMAC-SHA1",
-    oauth_timestamp:        timestamp,
-    oauth_token:            TW_ACCESS_TOKEN,
-    oauth_version:          "1.0",
-  };
-  const paramStr = Object.entries(params).sort()
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
-  const base = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(paramStr)}`;
-  const key  = `${encodeURIComponent(TW_API_SECRET)}&${encodeURIComponent(TW_ACCESS_TOKEN_SECRET)}`;
-  params.oauth_signature = createHmac("sha1", key).update(base).digest("base64");
-  return "OAuth " + Object.entries(params).sort()
-    .map(([k, v]) => `${encodeURIComponent(k)}="${encodeURIComponent(v)}"`).join(", ");
-}
-
 async function postReply(text: string, replyToId: string): Promise<void> {
-  const url  = "https://api.twitter.com/2/tweets";
-  const body: any = { text };
-  if (replyToId) body.reply = { in_reply_to_tweet_id: replyToId };
+  let cookies = await loadCookies() ?? await twitterLogin();
+  if (!cookies) throw new Error("Could not obtain Twitter login cookies");
 
-  console.log(`[x-agent] Twitter API v2 posting: replyToId=${replyToId} text="${text.slice(0, 120)}"`);
-  const res  = await fetch(url, {
-    method:  "POST",
-    headers: { Authorization: buildOAuthHeader("POST", url), "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
-  });
-  const data = await res.json() as any;
-  console.log(`[x-agent] Twitter API v2 status=${res.status} response=${JSON.stringify(data).slice(0, 300)}`);
-  if (!res.ok) throw new Error(JSON.stringify(data));
+  const doPost = async (c: string, withReply: boolean) => {
+    const body: any = { login_cookies: c, tweet_text: text, proxy: TW_PROXY };
+    if (withReply) body.reply_to_tweet_id = replyToId;
+    console.log(`[x-agent] create_tweet_v2 withReply=${withReply} replyToId=${replyToId} text="${text.slice(0, 100)}"`);
+    const r = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
+      method:  "POST",
+      headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+      body:    JSON.stringify(body),
+    });
+    const d = await r.json() as any;
+    console.log(`[x-agent] create_tweet_v2 status=${r.status} response=${JSON.stringify(d).slice(0, 300)}`);
+    return { r, d };
+  };
+
+  // 1. Try as reply
+  let { r, d } = await doPost(cookies, true);
+  const ok = (status: number, data: any) => status < 300 && (!data?.status || data.status === "success");
+
+  if (ok(r.status, d)) return;
+
+  // 2. On failure, re-login once (in case cookies expired)
+  const is422 = r.status === 422 || d?.message?.includes?.("422");
+  if (!is422) {
+    console.warn(`[x-agent] Post failed — re-logging in`);
+    cachedCookies = null;
+    cookies = await twitterLogin() ?? cookies;
+    const r2 = await doPost(cookies, true);
+    if (ok(r2.r.status, r2.d)) return;
+    d = r2.d;
+  }
+
+  // 3. If reply still fails (422 = Twitter rejecting the reply_to_tweet_id), try standalone
+  console.warn(`[x-agent] Reply failed — trying standalone post`);
+  const r3 = await doPost(cookies, false);
+  if (!ok(r3.r.status, r3.d)) throw new Error(JSON.stringify(r3.d));
+  console.log(`[x-agent] Posted as standalone (reply failed with 422)`);
 }
 
 // Pending approvals: callbackId → { tweetId, xUsername, replies, timeout, msgIds }
