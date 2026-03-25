@@ -224,4 +224,70 @@ export async function marketRoutes(app: FastifyInstance) {
       client.release();
     }
   });
+
+  // GET /markets/:id/positions — positions for a market with user info
+  app.get("/markets/:id/positions", async (req, reply) => {
+    const { id } = req.params as any;
+    const { rows } = await db.query(
+      `SELECT p.id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
+              u.username, u.avatar_url, u.tier,
+              m.opener_id,
+              (m.opener_id = p.user_id) AS is_opener
+       FROM positions p
+       JOIN users u ON p.user_id = u.id
+       JOIN markets m ON p.market_id = m.id
+       WHERE p.market_id = $1
+       ORDER BY p.amount DESC, p.placed_at ASC`,
+      [id]
+    );
+    return rows;
+  });
+
+  // GET /tokens/:symbol/feed — all markets + positions for a token symbol
+  app.get("/tokens/:symbol/feed", async (req, reply) => {
+    const { symbol } = req.params as any;
+    const { rows: markets } = await db.query(
+      `SELECT m.id, m.timeframe, m.entry_price, m.exit_price, m.status, m.opens_at, m.closes_at,
+              m.long_pool, m.short_pool, m.winner_side, m.is_paper, m.tagline,
+              m.opener_id, u.username AS opener_username, u.avatar_url AS opener_avatar, u.tier AS opener_tier
+       FROM markets m JOIN users u ON m.opener_id = u.id
+       WHERE UPPER(m.symbol) = UPPER($1)
+         AND (m.status = 'open' OR (m.status = 'resolved' AND m.closes_at > NOW() - INTERVAL '24 hours'))
+       ORDER BY m.created_at DESC
+       LIMIT 20`,
+      [symbol]
+    );
+    if (markets.length === 0) return { markets: [], positions: [] };
+
+    const marketIds = markets.map((m: any) => m.id);
+    const { rows: positions } = await db.query(
+      `SELECT p.id, p.market_id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
+              u.username, u.avatar_url, u.tier,
+              (m.opener_id = p.user_id) AS is_opener
+       FROM positions p
+       JOIN users u ON p.user_id = u.id
+       JOIN markets m ON p.market_id = m.id
+       WHERE p.market_id = ANY($1)
+       ORDER BY p.amount DESC, p.placed_at ASC`,
+      [marketIds]
+    );
+    return { markets, positions };
+  });
+
+  // GET /positions/recent — latest positions with messages for the tape
+  app.get("/positions/recent", async (req, reply) => {
+    const { rows } = await db.query(
+      `SELECT p.id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
+              u.username, u.avatar_url, u.tier,
+              m.symbol, m.chain, m.timeframe, m.status,
+              (m.opener_id = p.user_id) AS is_opener
+       FROM positions p
+       JOIN users u ON p.user_id = u.id
+       JOIN markets m ON p.market_id = m.id
+       WHERE p.placed_at > NOW() - INTERVAL '48 hours'
+       ORDER BY p.placed_at DESC
+       LIMIT 60`
+    );
+    return rows;
+  });
 }

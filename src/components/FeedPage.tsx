@@ -17,6 +17,7 @@ import LeaderboardView from "./LeaderboardView";
 import ProfileModal from "./ProfileModal";
 import ProfilePage from "./ProfilePage";
 import NotificationsPanel from "./NotificationsPanel";
+import TokenProfilePage from "./TokenProfilePage";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
@@ -112,6 +113,7 @@ export default function FeedPage() {
   const [referralOpen, setReferralOpen]     = useState(false);
   const [tradePresets, setTradePresets]     = useState([5, 25, 100, 500]);
   const [selectedTokenInfo, setSelectedTokenInfo] = useState<TokenInfo | null>(null);
+  const [tokenProfileToken, setTokenProfileToken] = useState<TokenInfo | null>(null);
   const [marketCapMax, setMarketCapMax]     = useState<number | null>(null);
   const [minPool, setMinPool]               = useState<number | null>(null);
   const [poolSortDir, setPoolSortDir]       = useState<"asc" | "desc" | null>(null);
@@ -383,7 +385,8 @@ export default function FeedPage() {
 
   function handleCATradeResult(token: TokenInfo) {
     setSelectedTokenInfo(token);
-    setSelectedCoin(token.symbol);
+    setTokenProfileToken(token);
+    setSelectedCoin(null); // don't go to chart view — go to token profile
   }
 
   async function handleCAQuickTrade(token: TokenInfo, side: "long" | "short", timeframe: string, amount: number, message?: string): Promise<string | null> {
@@ -635,7 +638,7 @@ export default function FeedPage() {
       {/* Nav bar */}
       <div className={`flex items-center justify-between px-6 py-2.5 border-b ${T.navBorder} shrink-0`}>
         <AnimatePresence mode="wait">
-          {!selectedCoin ? (
+          {!selectedCoin && !tokenProfileToken ? (
             <motion.div key="tabs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1">
               {/* Main tabs */}
               {MAIN_TABS.map(t => (
@@ -647,7 +650,7 @@ export default function FeedPage() {
             </motion.div>
           ) : (
             <motion.button key="back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSelectedCoin(null)}
+              onClick={() => { setSelectedCoin(null); setTokenProfileToken(null); }}
               className={`text-[12px] font-bold transition-colors ${T.backBtn}`}>
               ← Back
             </motion.button>
@@ -657,6 +660,47 @@ export default function FeedPage() {
 
       {/* Content */}
       <AnimatePresence mode="wait">
+
+        {/* TOKEN PROFILE PAGE */}
+        {tokenProfileToken && !selectedCoin && (
+          <motion.div key={`token-profile-${tokenProfileToken.symbol}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex-1 overflow-hidden flex">
+            <TokenProfilePage
+              token={tokenProfileToken}
+              dk={dk}
+              onClose={() => setTokenProfileToken(null)}
+              onViewChart={() => {
+                setSelectedCoin(tokenProfileToken.symbol);
+                setTokenProfileToken(null);
+              }}
+              onBet={handleAdd}
+              onOpenMarket={() => {
+                const coin = liveCoins.find(c => c.symbol === tokenProfileToken.symbol);
+                if (coin) {
+                  handleOpenMarket(coin);
+                } else {
+                  handleOpenMarket({
+                    id:        tokenProfileToken.address,
+                    symbol:    tokenProfileToken.symbol,
+                    name:      tokenProfileToken.name,
+                    price:     tokenProfileToken.price,
+                    change24h: tokenProfileToken.change24h,
+                    marketCap: tokenProfileToken.marketCap,
+                    volume24h: tokenProfileToken.volume24h,
+                    liquidity: tokenProfileToken.liquidity,
+                    age:       "—",
+                    migrated:  true,
+                    chain:     tokenProfileToken.chainLabel as Coin["chain"],
+                    ca:        tokenProfileToken.address,
+                  });
+                }
+              }}
+              loggedIn={!!user}
+              onAuthRequired={() => setAuthOpen(true)}
+              paperMode={paperMode}
+              presets={tradePresets}
+            />
+          </motion.div>
+        )}
 
         {/* COIN DETAIL */}
         {selectedCoin && (
@@ -699,7 +743,7 @@ export default function FeedPage() {
         )}
 
         {/* FEED TAB */}
-        {!selectedCoin && mainTab === "feed" && (
+        {!selectedCoin && !tokenProfileToken && mainTab === "feed" && (
           <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex overflow-hidden">
             {/* Timeframe sidebar — desktop only */}
             <div style={{ width: "220px", minWidth: "220px" }} className={`hidden md:flex border-r ${T.sidebarBorder} flex-col py-4 px-3 shrink-0 overflow-y-auto`}>
@@ -750,7 +794,24 @@ export default function FeedPage() {
                 {filtered.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {filtered.map((c, i) => (
-                      <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => handleCoinClick(c.symbol)} onViewProfile={setProfileUser} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
+                      <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => {
+                          const t: TokenInfo = {
+                            symbol:    c.symbol,
+                            name:      c.symbol,
+                            address:   "",
+                            chainId:   c.chain.toLowerCase(),
+                            chainLabel: c.chain,
+                            price:     c.entryPrice,
+                            change24h: 0,
+                            liquidity: 0,
+                            volume24h: 0,
+                            marketCap: 0,
+                            pairAddress: "",
+                          };
+                          // Use selectedTokenInfo if we already have richer data
+                          const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === c.symbol.toUpperCase());
+                          handleCATradeResult(rich ?? t);
+                        }} onViewProfile={setProfileUser} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
                     ))}
                   </div>
                 ) : (
@@ -820,7 +881,7 @@ export default function FeedPage() {
         )}
 
         {/* TRENDING TAB */}
-        {!selectedCoin && mainTab === "trending" && (() => {
+        {!selectedCoin && !tokenProfileToken && mainTab === "trending" && (() => {
           let displayed = trendingTokens;
           if (trendingChain) displayed = displayed.filter(t => t.chainLabel === trendingChain);
           if (trendingSort === "mcap-desc") displayed = [...displayed].sort((a, b) => b.marketCap - a.marketCap);
@@ -862,7 +923,7 @@ export default function FeedPage() {
                         rank={i + 1}
                         dk={dk}
                         onOpenMarket={() => handleOpenMarket({ symbol: token.symbol, chain: token.chainLabel, marketCap: token.marketCap, ca: token.address, price: token.price } as any)}
-                        onViewCoin={() => handleCoinClick(token.symbol)}
+                        onViewCoin={() => handleCATradeResult(token)}
                       />
                     ))}
                   </div>
@@ -873,7 +934,7 @@ export default function FeedPage() {
         })()}
 
         {/* RANKS TAB */}
-        {!selectedCoin && mainTab === "ranks" && (
+        {!selectedCoin && !tokenProfileToken && mainTab === "ranks" && (
           <motion.div key="ranks" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
             <LeaderboardView dk={dk} onViewProfile={(u) => setProfilePageUser(u)} />
           </motion.div>
@@ -1170,7 +1231,8 @@ export default function FeedPage() {
         )}
         {profilePageUser && (
           <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)}
-            currentUser={user?.username} />
+            currentUser={user?.username} currentUserObj={user ?? undefined}
+            onUserUpdate={(u) => setUser(u)} />
         )}
       </AnimatePresence>
 
@@ -1332,7 +1394,18 @@ function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, onViewProfile, 
         </div>
       </div>
 
-      <p className={`text-[12px] italic ${tagline}`}>"{c.tagline}"</p>
+      {c.tagline && (
+        <div className="flex items-start gap-2">
+          {c.openerAvatar ? (
+            <img src={c.openerAvatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0 mt-0.5" />
+          ) : (
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 mt-0.5 ${dk ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"}`}>
+              {(c.openerUsername ?? c.user).charAt(0).toUpperCase()}
+            </span>
+          )}
+          <p className={`text-[12px] leading-snug font-bold ${dk ? "text-yellow-400/80" : "text-yellow-600"}`}>"{c.tagline}"</p>
+        </div>
+      )}
 
       <div className={`rounded-xl p-3 space-y-2.5 ${poolBox}`}>
         <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
@@ -1748,7 +1821,7 @@ function TrendingTokenCard({ token, rank, dk, onOpenMarket, onViewCoin }: {
 type TapeEntry = {
   uid: string; symbol: string; side: "short" | "long";
   amount: number; message: string; user: string; ts: number;
-  isOpen: boolean;
+  isOpen: boolean; isOpener?: boolean;
 };
 
 function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle, onViewProfile }: {
@@ -1766,10 +1839,42 @@ function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tap
       user: c.openerUsername ?? c.user,
       ts: Date.now() - c.openedAt * 1000,
       isOpen: c.status === "open",
+      isOpener: true,
     }));
 
   const [entries, setEntries] = useState<TapeEntry[]>(() => toEntries(challenges));
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Merge in real position messages from /positions/recent
+  useEffect(() => {
+    async function loadPositions() {
+      try {
+        const recent = await api.getRecentPositions();
+        const posEntries: TapeEntry[] = recent.map(p => ({
+          uid: `pos-${p.id}`,
+          symbol: p.symbol,
+          side: p.side,
+          amount: Math.round(parseFloat(p.amount)),
+          message: p.message ?? "",
+          user: p.username,
+          ts: new Date(p.placed_at).getTime(),
+          isOpen: p.status === "open",
+          isOpener: p.is_opener,
+        }));
+        // Merge: position entries + market-level entries (taglines), deduplicate by uid, sort by time desc
+        setEntries(prev => {
+          const marketEntries = toEntries(challenges);
+          const all = [...posEntries, ...marketEntries];
+          const seen = new Set<string>();
+          const deduped = all.filter(e => { if (seen.has(e.uid)) return false; seen.add(e.uid); return true; });
+          return deduped.sort((a, b) => b.ts - a.ts).slice(0, 60);
+        });
+      } catch {}
+    }
+    loadPositions();
+    const iv = setInterval(loadPositions, 30_000);
+    return () => clearInterval(iv);
+  }, []);
 
   useEffect(() => {
     setEntries(toEntries(challenges));
@@ -1813,13 +1918,15 @@ function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tap
                   }`}>{e.isOpen ? "open" : "closed"}</span>
                   <span className={`text-[12px] font-bold ml-auto ${amtTxt}`}>${e.amount}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <p className={`text-[11px] italic truncate leading-snug flex-1 ${msgTxt}`}>"{e.message}"</p>
-                  <span
-                    className={`text-[10px] font-bold shrink-0 ${userTxt} ${onViewProfile ? "cursor-pointer hover:opacity-60 transition-opacity" : ""}`}
-                    onClick={(ev) => { ev.stopPropagation(); if (onViewProfile && e.user) onViewProfile(e.user); }}
-                  >{e.user}</span>
-                </div>
+                {e.message && (
+                  <div className="flex items-center gap-2">
+                    <p className={`text-[11px] italic truncate leading-snug flex-1 ${e.isOpener ? (dk ? "text-yellow-400/70" : "text-yellow-600") : msgTxt}`}>"{e.message}"</p>
+                    <span
+                      className={`text-[10px] font-bold shrink-0 ${userTxt} ${onViewProfile ? "cursor-pointer hover:opacity-60 transition-opacity" : ""}`}
+                      onClick={(ev) => { ev.stopPropagation(); if (onViewProfile && e.user) onViewProfile(e.user); }}
+                    >{e.user}</span>
+                  </div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

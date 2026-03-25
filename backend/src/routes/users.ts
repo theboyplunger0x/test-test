@@ -17,7 +17,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.get("/users/:username", async (req, reply) => {
     const { username } = req.params as any;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, avatar_url, bio, tier, created_at FROM users WHERE username = $1`,
+      `SELECT id, username, avatar_url, bio, tier, created_at, x_username FROM users WHERE username = $1`,
       [username]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
@@ -73,6 +73,7 @@ export async function userRoutes(app: FastifyInstance) {
       avatar_url: user.avatar_url,
       bio: user.bio,
       tier: user.tier,
+      x_username: user.x_username,
       created_at: user.created_at,
       total_bets: stats?.total_bets ?? 0,
       wins: stats?.wins ?? 0,

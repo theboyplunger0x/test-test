@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { api, UserProfile, FollowStatus } from "../lib/api";
+import { api, UserProfile, FollowStatus, User } from "../lib/api";
 
 const SEAL = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.266.14-1.897-.131-.63-.437-1.208-.882-1.671-.445-.464-1.011-.79-1.638-.944-.627-.155-1.284-.127-1.895.082-.274-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.61-.209-1.265-.237-1.892-.082-.627.155-1.193.48-1.639.944-.445.463-.749 1.04-.878 1.671-.13.63-.083 1.29.141 1.897-.587.274-1.086.706-1.44 1.246-.354.54-.551 1.17-.569 1.816.018.647.215 1.276.57 1.817.354.54.852.972 1.438 1.245-.224.607-.27 1.266-.14 1.897.13.63.436 1.208.882 1.671.445.464 1.011.79 1.638.944.627.155 1.284.127 1.895-.082.274.587.704 1.086 1.245 1.44.54.354 1.17.551 1.816.569.647-.016 1.275-.213 1.815-.567s.969-.854 1.24-1.44c.61.21 1.266.238 1.893.083.626-.155 1.192-.48 1.637-.944.445-.463.749-1.041.879-1.672.13-.63.083-1.29-.141-1.896.587-.274 1.086-.706 1.44-1.246.354-.54.551-1.17.569-1.816z";
 const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
@@ -73,11 +73,13 @@ function PnlChart({ trades, period, dk }: {
   );
 }
 
-export default function ProfilePage({ username, dk, onClose, currentUser }: {
+export default function ProfilePage({ username, dk, onClose, currentUser, currentUserObj, onUserUpdate }: {
   username: string;
   dk: boolean;
   onClose: () => void;
   currentUser?: string;
+  currentUserObj?: User;
+  onUserUpdate?: (u: User) => void;
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,11 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
   const [followStatus, setFollowStatus] = useState<FollowStatus>({ following: false, notify_trades: false });
   const [followLoading, setFollowLoading] = useState(false);
   const [followHovered, setFollowHovered] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editAvatar, setEditAvatar] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const isOwnProfile = currentUser === username;
   const loggedIn = typeof window !== "undefined" && !!localStorage.getItem("token");
@@ -120,6 +127,21 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
       }
     } catch {} finally {
       setFollowLoading(false);
+    }
+  };
+
+  const handleEditSave = async () => {
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const updated = await api.updateProfile(editAvatar.trim(), editBio.trim());
+      setProfile(p => p ? { ...p, avatar_url: updated.avatar_url, bio: updated.bio } : p);
+      if (onUserUpdate) onUserUpdate(updated);
+      setEditMode(false);
+    } catch (e: any) {
+      setEditError(e.message ?? "Failed to save");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -220,16 +242,28 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
             <div className="flex gap-3">
               {/* Profile card */}
               <div className={`flex-1 rounded-2xl border p-4 ${card}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  {profile.avatar_url ? (
-                    <img src={profile.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-[20px] font-black shrink-0 ${dk ? "bg-white/10 text-white/40" : "bg-gray-100 text-gray-400"}`}>
-                      {username.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-1.5">
+                <div className="flex items-start gap-3 mb-4">
+                  {/* Avatar — clickable for own profile edit */}
+                  <div className="relative shrink-0 group">
+                    {(editMode ? editAvatar : profile.avatar_url) ? (
+                      <img src={editMode ? editAvatar : profile.avatar_url!} alt="" className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-[20px] font-black ${dk ? "bg-white/10 text-white/40" : "bg-gray-100 text-gray-400"}`}>
+                        {username.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    {isOwnProfile && !editMode && (
+                      <button onClick={() => { setEditAvatar(profile.avatar_url ?? ""); setEditBio(profile.bio ?? ""); setEditMode(true); setEditError(""); }}
+                        className={`absolute inset-0 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${dk ? "bg-black/60" : "bg-white/70"}`}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={`text-[14px] font-black ${strong}`}>{username}</span>
                       {profile.tier === "top" && (
                         <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
@@ -241,9 +275,53 @@ export default function ProfilePage({ username, dk, onClose, currentUser }: {
                           <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
                         </svg>
                       )}
+                      {profile.x_username && (
+                        <a href={`https://x.com/${profile.x_username}`} target="_blank" rel="noopener noreferrer"
+                          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black transition-opacity hover:opacity-70 ${dk ? "bg-white/10 text-white/60" : "bg-gray-100 text-gray-600"}`}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.741l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                          </svg>
+                          @{profile.x_username}
+                        </a>
+                      )}
                     </div>
                     <p className={`text-[11px] mt-0.5 ${muted}`}>Joined {joinDate}</p>
-                    {profile.bio && <p className={`text-[11px] mt-1 ${sub}`}>{profile.bio}</p>}
+
+                    {/* Bio — editable for own profile */}
+                    {editMode ? (
+                      <div className="mt-2 space-y-2">
+                        <div>
+                          <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${muted}`}>Avatar URL</p>
+                          <input value={editAvatar} onChange={e => setEditAvatar(e.target.value)}
+                            placeholder="https://..."
+                            className={`w-full text-[11px] px-2 py-1.5 rounded-lg border outline-none transition-all ${dk ? "bg-white/5 border-white/10 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+                        </div>
+                        <div>
+                          <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${muted}`}>Bio</p>
+                          <textarea value={editBio} onChange={e => setEditBio(e.target.value)} maxLength={120} rows={2}
+                            placeholder="Short bio…"
+                            className={`w-full text-[11px] px-2 py-1.5 rounded-lg border outline-none resize-none transition-all ${dk ? "bg-white/5 border-white/10 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+                        </div>
+                        {editError && <p className="text-[10px] text-red-400">{editError}</p>}
+                        <div className="flex gap-2">
+                          <button onClick={handleEditSave} disabled={editSaving}
+                            className={`flex-1 py-1.5 rounded-lg text-[11px] font-black transition-all disabled:opacity-50 ${dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white"}`}>
+                            {editSaving ? "Saving…" : "Save"}
+                          </button>
+                          <button onClick={() => setEditMode(false)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${muted} hover:opacity-70`}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {profile.bio && <p className={`text-[11px] mt-1 ${sub}`}>{profile.bio}</p>}
+                        {isOwnProfile && !profile.bio && (
+                          <button onClick={() => { setEditAvatar(profile.avatar_url ?? ""); setEditBio(""); setEditMode(true); setEditError(""); }}
+                            className={`text-[10px] font-bold mt-1 transition-opacity hover:opacity-60 ${muted}`}>
+                            + Add bio
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className={`border-t pt-3 ${border} grid grid-cols-3 gap-2`}>

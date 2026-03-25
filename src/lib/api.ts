@@ -106,6 +106,7 @@ export type UserProfile = {
   avatar_url?: string;
   bio?: string;
   tier?: string;
+  x_username?: string;
   created_at: string;
   total_bets: number;
   wins: number;
@@ -228,6 +229,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ side, amount, paper, message }),
     }),
+
+  getTokenFeed: (symbol: string) =>
+    req<{ markets: any[]; positions: any[] }>(`/tokens/${symbol}/feed`),
+
+  getMarketPositions: (marketId: string) =>
+    req<any[]>(`/markets/${marketId}/positions`),
+
+  getRecentPositions: () =>
+    req<{ id: string; side: "long" | "short"; amount: string; message: string | null; placed_at: string; is_paper: boolean; username: string; avatar_url: string | null; tier: string; symbol: string; chain: string; timeframe: string; status: string; is_opener: boolean }[]>("/positions/recent"),
 
   forgotPassword: (email?: string, username?: string) =>
     req<{ ok: true }>("/auth/forgot-password", {

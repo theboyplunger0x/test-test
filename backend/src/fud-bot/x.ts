@@ -401,8 +401,8 @@ What you can do:
 
 When a user wants to trade (e.g. "long $PEPE 1h $25"):
 1. Search the token to get live price and chain
-2. Create the market if none exists for that symbol/timeframe
-3. Place the bet on that market
+2. Create the market if none exists for that symbol/timeframe — include a punchy, sensationalist tagline derived from the user's tweet (e.g. "PEPE about to rip or get rekt?"). Keep it under 60 chars, provocative but not profane.
+3. Place the bet on that market — include the user's tweet as the trader message (stripped of @mentions and trimmed to 80 chars)
 4. Confirm the result — include token, side, amount, timeframe, and entry price
 
 Timeframe rules:
@@ -444,6 +444,7 @@ const TOOLS: Anthropic.Tool[] = [
         symbol:    { type: "string" },
         chain:     { type: "string", description: "SOL, BASE, ETH, BSC" },
         timeframe: { type: "string", description: "1m, 5m, 15m, 1h, 4h, 12h, 24h" },
+        tagline:   { type: "string", description: "Punchy opener message derived from the tweet, max 60 chars" },
         paper:     { type: "boolean" },
       },
       required: ["symbol", "chain", "timeframe"],
@@ -458,6 +459,7 @@ const TOOLS: Anthropic.Tool[] = [
         marketId: { type: "string" },
         side:     { type: "string", description: "long or short" },
         amount:   { type: "number" },
+        message:  { type: "string", description: "Trader message derived from the tweet, max 80 chars" },
         paper:    { type: "boolean" },
       },
       required: ["marketId", "side", "amount"],
@@ -489,7 +491,7 @@ async function runTool(name: string, input: any, fudUser: any, token: string | n
     if (!token || !fudUser) return "Cannot create market: no linked FUD account";
     const market = await apiFetch("/markets", token, {
       method: "POST",
-      body: JSON.stringify({ symbol: input.symbol, chain: input.chain, timeframe: input.timeframe, paper: input.paper ?? false }),
+      body: JSON.stringify({ symbol: input.symbol, chain: input.chain, timeframe: input.timeframe, tagline: input.tagline ?? "", paper: input.paper ?? false }),
     });
     return `Market created — ID: ${market.id} | ${market.symbol} ${market.timeframe} | entry: $${market.entry_price}`;
   }
@@ -497,9 +499,9 @@ async function runTool(name: string, input: any, fudUser: any, token: string | n
     if (!token || !fudUser) return "Cannot place bet: no linked FUD account";
     const bet = await apiFetch(`/markets/${input.marketId}/bet`, token, {
       method: "POST",
-      body: JSON.stringify({ side: input.side, amount: input.amount, paper: input.paper ?? false }),
+      body: JSON.stringify({ side: input.side, amount: input.amount, message: input.message ?? undefined, paper: input.paper ?? false }),
     });
-    return `Bet placed — ${input.side.toUpperCase()} $${input.amount} | multiplier: ${bet.multiplier}x`;
+    return `Bet placed — ${input.side.toUpperCase()} $${input.amount} | new balance: $${bet.new_balance}`;
   }
   return "Unknown tool";
 }
