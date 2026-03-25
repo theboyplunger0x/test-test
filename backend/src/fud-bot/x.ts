@@ -71,60 +71,48 @@ async function twitterLogin(retries = 5): Promise<string | null> {
   return null;
 }
 
-async function postReply(text: string, replyToId: string): Promise<void> {
-  let cookies = await loadCookies() ?? await twitterLogin();
-  if (!cookies) throw new Error("Could not obtain Twitter login cookies");
+// ─── Post via Twitter API v2 (OAuth 1.0a) ─────────────────────────────────────
+// Uses official credentials — more reliable than cookie-based twitterapi.io posting
 
-  const doPost = async (c: string) => {
-    const body: any = { login_cookies: c, tweet_text: text, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) };
-    if (replyToId) body.reply_to_tweet_id = replyToId;
-    console.log(`[x-agent] create_tweet_v2 sending: replyToId=${replyToId ?? "none"} text="${text.slice(0, 120)}"`);
-    const r = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
-      method:  "POST",
-      headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify(body),
-    });
-    const d = await r.json() as any;
-    console.log(`[x-agent] create_tweet_v2 status=${r.status} response: ${JSON.stringify(d).slice(0, 400)}`);
-    return { r, d };
+const TW_API_KEY    = process.env.X_API_KEY!;
+const TW_API_SECRET = process.env.X_API_SECRET!;
+const TW_ACCESS_TOKEN        = process.env.X_ACCESS_TOKEN!;
+const TW_ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET!;
+
+function buildOAuthHeader(method: string, url: string): string {
+  const nonce     = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const params: Record<string, string> = {
+    oauth_consumer_key:     TW_API_KEY,
+    oauth_nonce:            nonce,
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp:        timestamp,
+    oauth_token:            TW_ACCESS_TOKEN,
+    oauth_version:          "1.0",
   };
+  const paramStr = Object.entries(params).sort()
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+  const base = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(paramStr)}`;
+  const key  = `${encodeURIComponent(TW_API_SECRET)}&${encodeURIComponent(TW_ACCESS_TOKEN_SECRET)}`;
+  params.oauth_signature = createHmac("sha1", key).update(base).digest("base64");
+  return "OAuth " + Object.entries(params).sort()
+    .map(([k, v]) => `${encodeURIComponent(k)}="${encodeURIComponent(v)}"`).join(", ");
+}
 
-  let { r: res, d: data } = await doPost(cookies);
+async function postReply(text: string, replyToId: string): Promise<void> {
+  const url  = "https://api.twitter.com/2/tweets";
+  const body: any = { text };
+  if (replyToId) body.reply = { in_reply_to_tweet_id: replyToId };
 
-  // Treat as expired if: HTTP non-ok OR status field is not "success" OR no tweet_id returned
-  const isFailed = !res.ok || (data?.status && data.status !== "success") || (!data?.tweet_id && !data?.id);
-  if (isFailed) {
-    const is422 = res.status === 422 || data?.message?.includes?.("422");
-    // 422 = Twitter rejected the reply (account restricted or tweet deleted)
-    // Try once to re-login in case of auth issues; skip re-login for 422
-    if (!is422) {
-      console.warn(`[x-agent] Post failed (status=${res.status}) — forcing re-login`);
-      cachedCookies = null;
-      cookies = await twitterLogin() ?? "";
-      if (!cookies) throw new Error(`Re-login failed. Original error: ${JSON.stringify(data)}`);
-      const { r: res2, d: data2 } = await doPost(cookies);
-      const still422 = res2.status === 422 || data2?.message?.includes?.("422");
-      if (!still422 && (res2.ok || data2?.tweet_id || data2?.id)) return;
-      // If still failing after re-login, fall through to standalone attempt
-      data = data2;
-    }
-    // Last resort: post as standalone tweet (not a reply) — happens when account
-    // is restricted from replying (new accounts often have this limitation)
-    console.warn(`[x-agent] Reply rejected (422/restricted) — posting as standalone tweet`);
-    const { r: res3, d: data3 } = await (async () => {
-      const body3: any = { login_cookies: cookies, tweet_text: text, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) };
-      console.log(`[x-agent] create_tweet_v2 standalone: text="${text.slice(0, 120)}"`);
-      const r3 = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
-        method:  "POST",
-        headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-        body:    JSON.stringify(body3),
-      });
-      const d3 = await r3.json() as any;
-      console.log(`[x-agent] standalone status=${r3.status} response: ${JSON.stringify(d3).slice(0, 400)}`);
-      return { r: r3, d: d3 };
-    })();
-    if (!res3.ok && !data3?.tweet_id && !data3?.id) throw new Error(JSON.stringify(data3));
-  }
+  console.log(`[x-agent] Twitter API v2 posting: replyToId=${replyToId} text="${text.slice(0, 120)}"`);
+  const res  = await fetch(url, {
+    method:  "POST",
+    headers: { Authorization: buildOAuthHeader("POST", url), "Content-Type": "application/json" },
+    body:    JSON.stringify(body),
+  });
+  const data = await res.json() as any;
+  console.log(`[x-agent] Twitter API v2 status=${res.status} response=${JSON.stringify(data).slice(0, 300)}`);
+  if (!res.ok) throw new Error(JSON.stringify(data));
 }
 
 // Pending approvals: callbackId → { tweetId, xUsername, replies, timeout, msgIds }
