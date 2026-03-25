@@ -115,6 +115,13 @@ export default function ProfileModal({
               <div className="flex items-center gap-1.5">
                 <button onClick={onViewProfile} className={`text-[16px] font-black ${strong} hover:opacity-70 transition-opacity`}>{username}</button>
                 <TierBadge tier={profile?.tier} />
+                {profile?.x_username && (
+                  <a href={`https://x.com/${profile.x_username}`} target="_blank" rel="noopener noreferrer"
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black transition-colors ${dk ? "bg-white/8 text-white/50 hover:text-white/80" : "bg-gray-100 text-gray-500 hover:text-gray-700"}`}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835-8.163-10.666h7.372l4.256 5.634L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/></svg>
+                    @{profile.x_username}
+                  </a>
+                )}
               </div>
               {profile?.bio && (
                 <p className={`text-[12px] mt-0.5 max-w-[180px] ${muted}`}>{profile.bio}</p>

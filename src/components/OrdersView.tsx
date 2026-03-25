@@ -377,7 +377,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
   );
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -667,7 +667,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
             <p className={`text-[13px] font-bold ${T.muted}`}>No open positions.</p>
           ) : (
             <div className="space-y-2">
-              {active.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} />)}
+              {active.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
             </div>
           )}
         </div>
@@ -677,7 +677,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           <div>
             <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>History</p>
             <div className="space-y-2">
-              {settled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} />)}
+              {settled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
             </div>
           </div>
         )}
@@ -689,8 +689,8 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
               Paper Trading {paperActive.length > 0 && <span className={`ml-1 ${T.muted}`}>· {paperActive.length} open</span>}
             </p>
             <div className="space-y-2">
-              {paperActive.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} />)}
-              {paperSettled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} />)}
+              {paperActive.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
+              {paperSettled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
             </div>
           </div>
         )}
@@ -722,11 +722,12 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
 // ─── position row ──────────────────────────────────────────────────────────────
 
-function PositionRow({ order: o, tick, dk, T }: {
+function PositionRow({ order: o, tick, dk, T, onViewToken }: {
   order: Order;
   tick: number;
   dk: boolean;
   T: Record<string, string>;
+  onViewToken?: (symbol: string) => void;
 }) {
   const isShort    = o.direction === "short";
   const timeLeft   = o.expiresAt - Date.now();
@@ -751,7 +752,7 @@ function PositionRow({ order: o, tick, dk, T }: {
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className={`text-[15px] font-black ${T.strong}`}>${o.symbol}</span>
+          <button onClick={() => onViewToken?.(o.symbol)} className={`text-[15px] font-black transition-opacity hover:opacity-60 ${T.strong} ${onViewToken ? "cursor-pointer" : "cursor-default"}`}>${o.symbol}</button>
           <span className={`text-[11px] font-black ${isShort ? "text-red-400" : "text-emerald-400"}`}>
             {isShort ? "▼ SHORT" : "▲ LONG"}
           </span>

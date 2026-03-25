@@ -1008,7 +1008,19 @@ export default function FeedPage() {
       </AnimatePresence>
       <AnimatePresence>
         {openMarketCoin && (
-          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} />
+          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode}
+            onViewToken={() => {
+              const c = openMarketCoin;
+              setOpenMarketCoin(null);
+              const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === c.symbol.toUpperCase());
+              handleCATradeResult(rich ?? {
+                address: c.ca ?? c.symbol, symbol: c.symbol, name: c.name ?? c.symbol,
+                price: c.price ?? 0, change24h: c.change24h ?? 0, marketCap: c.marketCap ?? 0,
+                volume24h: c.volume24h ?? 0, liquidity: c.liquidity ?? 0,
+                chainLabel: c.chain ?? "SOL", pairAddress: "", chainId: "",
+              });
+            }}
+          />
         )}
       </AnimatePresence>
       <AnimatePresence>
@@ -1189,6 +1201,18 @@ export default function FeedPage() {
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
                 <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled}
+                  onViewToken={(symbol) => {
+                    setOrdersOpen(false);
+                    const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+                    if (rich) { handleCATradeResult(rich); return; }
+                    const coin = liveCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase());
+                    handleCATradeResult({
+                      address: coin?.ca ?? symbol, symbol, name: coin?.name ?? symbol,
+                      price: coin?.price ?? 0, change24h: coin?.change24h ?? 0, marketCap: coin?.marketCap ?? 0,
+                      volume24h: coin?.volume24h ?? 0, liquidity: coin?.liquidity ?? 0,
+                      chainLabel: coin?.chain ?? "SOL", pairAddress: "", chainId: "",
+                    });
+                  }}
                   xUsername={user?.x_username}
                   telegramUsername={user?.telegram_username}
                   onDisconnectX={async () => {

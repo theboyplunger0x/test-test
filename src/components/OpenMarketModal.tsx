@@ -13,12 +13,14 @@ export default function OpenMarketModal({
   dk,
   onClose,
   onSuccess,
+  onViewToken,
   paperMode = false,
 }: {
   coin: Coin;
   dk: boolean;
   onClose: () => void;
   onSuccess: (market: Market) => void;
+  onViewToken?: () => void;
   paperMode?: boolean;
 }) {
   const [tf, setTf] = useState("1h");
@@ -83,7 +85,7 @@ export default function OpenMarketModal({
         <div className="flex items-center gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className={`text-[20px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${coin.symbol}</span>
+              <button onClick={onViewToken} className={`text-[20px] font-black transition-opacity hover:opacity-60 ${dk ? "text-white" : "text-gray-900"} ${onViewToken ? "cursor-pointer" : "cursor-default"}`}>${coin.symbol}</button>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${chainPill}`}>{coin.chain}</span>
             </div>
             <p className={`text-[12px] font-mono mt-0.5 ${labelCls}`}>${formatPrice(coin.price)}</p>
