@@ -5,9 +5,10 @@ import { Challenge } from "@/lib/mockChallenges";
 interface Props {
   challenges: Challenge[];
   dk?: boolean;
+  onViewToken?: (symbol: string) => void;
 }
 
-export default function LiveTicker({ challenges, dk = true }: Props) {
+export default function LiveTicker({ challenges, dk = true, onViewToken }: Props) {
   // Duplicate for seamless loop
   const items = [...challenges, ...challenges];
 
@@ -32,7 +33,10 @@ export default function LiveTicker({ challenges, dk = true }: Props) {
               <span className={isShort ? "text-red-400" : "text-emerald-400"}>
                 {isShort ? "↓" : "↑"}
               </span>
-              <span className={symCls}>${c.symbol}</span>
+              <button
+                onClick={e => { e.stopPropagation(); onViewToken?.(c.symbol); }}
+                className={`${symCls} ${onViewToken ? "hover:opacity-60 transition-opacity cursor-pointer" : "cursor-default"}`}
+              >${c.symbol}</button>
               <span className={totalCls}>
                 ${(c.shortPool + c.longPool).toLocaleString()}
               </span>

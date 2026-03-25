@@ -633,7 +633,12 @@ export default function FeedPage() {
       </div>
 
       {/* Ticker */}
-      <LiveTicker challenges={allChallenges} dk={dk} />
+      <LiveTicker challenges={allChallenges} dk={dk} onViewToken={(symbol) => {
+        const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+        if (rich) { handleCATradeResult(rich); return; }
+        const coin = liveCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase());
+        handleCATradeResult({ address: coin?.ca ?? symbol, symbol, name: coin?.name ?? symbol, price: coin?.price ?? 0, change24h: coin?.change24h ?? 0, marketCap: coin?.marketCap ?? 0, volume24h: coin?.volume24h ?? 0, liquidity: coin?.liquidity ?? 0, chainLabel: coin?.chain ?? "SOL", pairAddress: "", chainId: "" });
+      }} />
 
       {/* Nav bar */}
       <div className={`flex items-center justify-between px-6 py-2.5 border-b ${T.navBorder} shrink-0`}>
@@ -738,6 +743,15 @@ export default function FeedPage() {
               onAuthRequired={() => setAuthOpen(true)}
               tokenInfo={selectedTokenInfo ?? undefined}
               presets={tradePresets}
+              onViewToken={() => {
+                if (selectedTokenInfo) { setSelectedCoin(null); handleCATradeResult(selectedTokenInfo); }
+                else {
+                  const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === selectedCoin?.toUpperCase());
+                  const coin = liveCoins.find(c => c.symbol.toUpperCase() === selectedCoin?.toUpperCase());
+                  setSelectedCoin(null);
+                  handleCATradeResult(rich ?? { address: coin?.ca ?? selectedCoin ?? "", symbol: selectedCoin ?? "", name: coin?.name ?? selectedCoin ?? "", price: coin?.price ?? 0, change24h: coin?.change24h ?? 0, marketCap: coin?.marketCap ?? 0, volume24h: coin?.volume24h ?? 0, liquidity: coin?.liquidity ?? 0, chainLabel: coin?.chain ?? "SOL", pairAddress: "", chainId: "" });
+                }
+              }}
             />
           </motion.div>
         )}
@@ -872,7 +886,12 @@ export default function FeedPage() {
 
             {/* Tape — desktop only */}
             <div className="hidden md:flex">
-              <TapeSidebar challenges={allChallenges} onViewCoin={handleCoinClick} dk={dk}
+              <TapeSidebar challenges={allChallenges} onViewCoin={handleCoinClick} onViewToken={(symbol) => {
+                  const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+                  if (rich) { handleCATradeResult(rich); return; }
+                  const coin = liveCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase());
+                  handleCATradeResult({ address: coin?.ca ?? symbol, symbol, name: coin?.name ?? symbol, price: coin?.price ?? 0, change24h: coin?.change24h ?? 0, marketCap: coin?.marketCap ?? 0, volume24h: coin?.volume24h ?? 0, liquidity: coin?.liquidity ?? 0, chainLabel: coin?.chain ?? "SOL", pairAddress: "", chainId: "" });
+                }} dk={dk}
                 tapeBorder={T.sidebarBorder} sidebarLabel={T.sidebarLabel} tapeColLabel={T.tapeColLabel}
                 open={tapeOpen} onToggle={() => setTapeOpen(o => !o)}
                 onViewProfile={(u) => setProfileUser(u)} />
@@ -1849,8 +1868,8 @@ type TapeEntry = {
   isOpen: boolean; isOpener?: boolean;
 };
 
-function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle, onViewProfile }: {
-  challenges: Challenge[]; onViewCoin: (symbol: string) => void; dk: boolean;
+function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle, onViewProfile }: {
+  challenges: Challenge[]; onViewCoin: (symbol: string) => void; onViewToken?: (symbol: string) => void; dk: boolean;
   tapeBorder: string; sidebarLabel: string; tapeColLabel: string; open: boolean; onToggle: () => void;
   onViewProfile?: (username: string) => void;
 }) {
@@ -1935,7 +1954,10 @@ function TapeSidebar({ challenges, onViewCoin, dk, tapeBorder, sidebarLabel, tap
                 onClick={() => onViewCoin(e.symbol)}>
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`text-[12px] font-black ${e.side === "long" ? "text-emerald-400" : "text-red-400"}`}>{e.side === "long" ? "▲" : "▼"}</span>
-                  <span className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${e.symbol}</span>
+                  <button
+                    onClick={ev => { ev.stopPropagation(); onViewToken?.(e.symbol); }}
+                    className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"} ${onViewToken ? "hover:opacity-60 transition-opacity" : ""}`}
+                  >${e.symbol}</button>
                   <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ml-0.5 ${
                     e.isOpen
                       ? dk ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-50 text-emerald-600"

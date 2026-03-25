@@ -55,6 +55,7 @@ interface Props {
   onBet: (marketId: string, side: "long" | "short", amount: number, message?: string) => Promise<string | null>;
   onAutoTrade?: (side: "long" | "short", amount: number, timeframe: string, tagline?: string) => Promise<string | null>;
   onOpenMarket: () => void;
+  onViewToken?: () => void;
   loggedIn: boolean;
   onAuthRequired: () => void;
   tokenInfo?: TokenInfo;    // pre-fetched (from CA search); skips symbol lookup
@@ -63,7 +64,7 @@ interface Props {
 
 export default function CoinDetail({
   symbol, chain, timeframe: initialTf, theme,
-  markets, onBet, onAutoTrade, onOpenMarket, loggedIn, onAuthRequired,
+  markets, onBet, onAutoTrade, onOpenMarket, onViewToken, loggedIn, onAuthRequired,
   tokenInfo: tokenInfoProp,
   presets = DEFAULT_AMOUNTS,
 }: Props) {
@@ -244,7 +245,7 @@ export default function CoinDetail({
         <div className="px-5 pt-4 pb-3 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
-              <span className={`text-[20px] font-black ${T.textPrimary}`}>${symbol}</span>
+              <button onClick={onViewToken} className={`text-[20px] font-black ${T.textPrimary} ${onViewToken ? "hover:opacity-60 transition-opacity cursor-pointer" : "cursor-default"}`}>${symbol}</button>
               {tokenInfo && (
                 <span className={`text-[12px] font-black px-2 py-0.5 rounded-full ${T.changePill(tokenInfo.change24h >= 0)}`}>
                   {tokenInfo.change24h >= 0 ? "+" : ""}{tokenInfo.change24h.toFixed(1)}%
