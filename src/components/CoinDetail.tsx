@@ -339,8 +339,8 @@ export default function CoinDetail({
                 side === "long" ? "bg-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.35)]" : T.upIdle
               }`}>
               <p className={`text-[12px] font-black tracking-wide ${side === "long" ? "text-emerald-100" : "text-emerald-400"}`}>▲ LONG</p>
-              <p className={`text-[26px] font-black leading-tight ${side === "long" ? "text-white" : "text-emerald-300"}`}>{longPct}%</p>
-              <p className={`text-[11px] font-bold ${side === "long" ? "text-emerald-100/70" : "text-emerald-500/60"}`}>{longMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
+              <p className={`text-[26px] font-black leading-tight ${side === "long" ? "text-white" : "text-emerald-300"}`}>{longMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
+              <p className={`text-[11px] font-bold ${side === "long" ? "text-emerald-100/70" : "text-emerald-500/60"}`}>${longPool.toLocaleString()}</p>
             </motion.button>
 
             <motion.button whileTap={{ scale: 0.96 }}
@@ -349,8 +349,8 @@ export default function CoinDetail({
                 side === "short" ? "bg-red-500 shadow-[0_0_24px_rgba(239,68,68,0.35)]" : T.downIdle
               }`}>
               <p className={`text-[12px] font-black tracking-wide ${side === "short" ? "text-red-100" : "text-red-400"}`}>▼ SHORT</p>
-              <p className={`text-[26px] font-black leading-tight ${side === "short" ? "text-white" : "text-red-300"}`}>{shortPct}%</p>
-              <p className={`text-[11px] font-bold ${side === "short" ? "text-red-100/70" : "text-red-500/60"}`}>{shortMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
+              <p className={`text-[26px] font-black leading-tight ${side === "short" ? "text-white" : "text-red-300"}`}>{shortMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
+              <p className={`text-[11px] font-bold ${side === "short" ? "text-red-100/70" : "text-red-500/60"}`}>${shortPool.toLocaleString()}</p>
             </motion.button>
           </div>
 
