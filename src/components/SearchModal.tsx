@@ -205,21 +205,18 @@ export default function SearchModal({ dk, onClose, onViewToken, onOpenMarket, on
                   </span>
                 </div>
                 <div className={`flex items-center gap-2 text-[10px] font-bold ${muted}`}>
-                  <span>{t.name}</span>
+                  <span className="font-mono">${formatPrice(t.price)}</span>
                   {t.marketCap > 0 && <span>· MC ${formatNum(t.marketCap)}</span>}
                 </div>
               </div>
 
-              {/* Price + actions */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className={`text-[12px] font-black font-mono ${strong}`}>${formatPrice(t.price)}</span>
+              {/* Actions */}
+              <div className="flex items-center gap-3 shrink-0">
                 <button
                   onClick={e => { e.stopPropagation(); onViewToken(t); onClose(); }}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                    dk ? "bg-white/8 hover:bg-white/16 text-white/60 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-600"
-                  }`}
+                  className={`text-[10px] font-bold transition-opacity hover:opacity-60 ${muted}`}
                 >
-                  Chart
+                  Chart →
                 </button>
                 <button
                   onClick={e => { e.stopPropagation(); onOpenMarket(tokenToCoin(t)); onClose(); }}
