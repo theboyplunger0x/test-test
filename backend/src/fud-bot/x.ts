@@ -435,7 +435,8 @@ async function runTool(name: string, input: any, fudUser: any, token: string | n
 async function processMention(tweet: any) {
   const xUsername = (tweet.author?.userName ?? "").toLowerCase();
   const text      = tweet.text?.replace(/@FUDmarkets/gi, "").trim() ?? "";
-  const tweetId   = tweet.id;
+  // Use id_str to avoid JS float64 precision loss on 19-digit Twitter snowflake IDs
+  const tweetId   = tweet._safeId ?? tweet.id_str ?? String(tweet.id);
   const tweetUrl  = `https://x.com/${xUsername}/status/${tweetId}`;
 
   // ── Filter ──
@@ -554,11 +555,14 @@ async function poll() {
     if (mentions.length === 0 && data.status !== "success") console.log(`[x-agent] raw response: ${JSON.stringify(data).slice(0, 300)}`);
 
     // Skip own tweets and already-processed IDs (processedIds handles dedup across polls)
+    // Use id_str to avoid JS float64 precision loss on 19-digit Twitter snowflake IDs
     const toProcess = mentions.filter((t: any) => {
       const author = (t.author?.userName ?? t.user?.screen_name ?? "").toLowerCase();
       if (author === FUDMARKETS_USERNAME.toLowerCase()) return false;
-      if (processedIds.has(t.id)) return false;
-      processedIds.add(t.id);
+      const tid = t.id_str ?? String(t.id);
+      t._safeId = tid; // cache so processMention doesn't re-derive
+      if (processedIds.has(tid)) return false;
+      processedIds.add(tid);
       return true;
     });
     if (processedIds.size > 500) {
