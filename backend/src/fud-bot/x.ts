@@ -10,6 +10,10 @@ const TW_PASSWORD         = process.env.X_TWITTER_PASSWORD!;
 const TW_EMAIL            = process.env.X_TWITTER_EMAIL!;
 const TW_PROXY            = process.env.X_PROXY_URL;
 const TW_TOTP_SECRET      = process.env.X_TWITTER_TOTP_SECRET;
+const X_API_KEY           = process.env.X_API_KEY!;
+const X_API_SECRET        = process.env.X_API_SECRET!;
+const X_ACCESS_TOKEN      = process.env.X_ACCESS_TOKEN!;
+const X_ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET!;
 
 // Support up to 2 admin Telegram chat IDs
 const ADMIN_TG_IDS: string[] = [
@@ -72,49 +76,43 @@ async function twitterLogin(retries = 5): Promise<string | null> {
   return null;
 }
 
-async function postReply(text: string, replyToId: string): Promise<void> {
-  let cookies = await loadCookies() ?? await twitterLogin();
-  if (!cookies) throw new Error("Could not obtain Twitter login cookies");
-
-  const doPost = async (c: string, withReply: boolean) => {
-    const body: any = { login_cookies: c, tweet_text: text, proxy: TW_PROXY };
-    if (withReply) body.reply_to_tweet_id = replyToId;
-    console.log(`[x-agent] create_tweet_v2 withReply=${withReply} replyToId=${replyToId} text="${text.slice(0, 100)}"`);
-    const r = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
-      method:  "POST",
-      headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify(body),
-    });
-    const d = await r.json() as any;
-    console.log(`[x-agent] create_tweet_v2 status=${r.status} response=${JSON.stringify(d).slice(0, 300)}`);
-    return { r, d };
+function buildOAuthHeader(method: string, url: string): string {
+  const nonce     = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key:     X_API_KEY,
+    oauth_nonce:            nonce,
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp:        timestamp,
+    oauth_token:            X_ACCESS_TOKEN,
+    oauth_version:          "1.0",
   };
+  const sortedParams = Object.keys(oauthParams).sort()
+    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`)
+    .join("&");
+  const base      = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;
+  const signingKey = `${encodeURIComponent(X_API_SECRET)}&${encodeURIComponent(X_ACCESS_TOKEN_SECRET)}`;
+  const signature  = createHmac("sha1", signingKey).update(base).digest("base64");
+  oauthParams.oauth_signature = signature;
+  return "OAuth " + Object.keys(oauthParams).sort()
+    .map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
+    .join(", ");
+}
 
-  // 1. Try as reply
-  let { r, d } = await doPost(cookies, true);
-  const ok = (status: number, data: any) => status < 300 && (!data?.status || data.status === "success");
+async function postReply(text: string, replyToId: string): Promise<void> {
+  const url  = "https://api.twitter.com/2/tweets";
+  const body: any = { text };
+  if (replyToId) body.reply = { in_reply_to_tweet_id: replyToId };
 
-  if (ok(r.status, d)) return;
-
-  // 2. On failure, re-login once (in case cookies expired)
-  const is422 = r.status === 422 || d?.message?.includes?.("422");
-  if (!is422) {
-    console.warn(`[x-agent] Post failed — re-logging in`);
-    cachedCookies = null;
-    cookies = await twitterLogin() ?? cookies;
-    const r2 = await doPost(cookies, true);
-    if (ok(r2.r.status, r2.d)) return;
-    d = r2.d;
-  }
-
-  // 3. Try standalone v2 post
-  console.warn(`[x-agent] Reply failed — trying standalone v2 post`);
-  const r3 = await doPost(cookies, false);
-  if (ok(r3.r.status, r3.d)) { console.log(`[x-agent] Posted as standalone v2`); return; }
-
-  // 4. Fall back to v3 (server-side session, different auth path)
-  console.warn(`[x-agent] v2 failed entirely — falling back to v3`);
-  await postV3(text);
+  console.log(`[x-agent] POST /2/tweets replyToId=${replyToId} text="${text.slice(0, 100)}"`);
+  const res  = await fetch(url, {
+    method:  "POST",
+    headers: { "Authorization": buildOAuthHeader("POST", url), "Content-Type": "application/json" },
+    body:    JSON.stringify(body),
+  });
+  const data = await res.json() as any;
+  console.log(`[x-agent] POST /2/tweets status=${res.status} response=${JSON.stringify(data).slice(0, 300)}`);
+  if (!res.ok) throw new Error(JSON.stringify(data));
 }
 
 // ─── twitterapi.io v3 (server-side session, no cookie needed for posting) ────
@@ -657,14 +655,6 @@ export async function startXAgent() {
   if (!TWITTERAPI_KEY) { console.log("[x-agent] TWITTERAPI_KEY not set — skipping"); return; }
   console.log("[x-agent] Starting — monitoring @FUDmarkets");
   await loadLastPollTime();
-  // Ensure we have login cookies ready
-  if (TW_PASSWORD) {
-    const cookies = await loadCookies();
-    if (!cookies) await twitterLogin();
-    else console.log("[x-agent] Cookies loaded from DB — skipping login");
-    // Also initiate v3 session in background (fallback for 422 on v2)
-    loginV3().catch(e => console.error("[x-agent] v3 login error:", e.message));
-  }
   await poll();
-  setInterval(poll, 60_000); // 60s — ~1440 requests/day vs 2880 at 30s
+  setInterval(poll, 60_000);
 }
