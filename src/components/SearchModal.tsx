@@ -216,7 +216,7 @@ export default function SearchModal({ dk, onClose, onViewToken, onViewChart, onO
               <div className="flex items-center gap-3 shrink-0">
                 <button
                   onClick={e => { e.stopPropagation(); onViewChart(t); onClose(); }}
-                  className={`text-[10px] font-bold transition-opacity hover:opacity-60 ${muted}`}
+                  className={`text-[10px] font-bold transition-colors ${dk ? "text-white/35 hover:text-white/80" : "text-gray-400 hover:text-gray-700"}`}
                 >
                   Chart →
                 </button>
