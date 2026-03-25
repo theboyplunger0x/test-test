@@ -75,29 +75,32 @@ async function postReply(text: string, replyToId: string): Promise<void> {
   let cookies = await loadCookies() ?? await twitterLogin();
   if (!cookies) throw new Error("Could not obtain Twitter login cookies");
 
-  const res = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
-    method:  "POST",
-    headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-    body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
-  });
-  const data = await res.json() as any;
-
-  // If session expired, re-login once and retry
-  if (!res.ok && (res.status === 401 || data?.error?.includes?.("auth") || data?.error?.includes?.("session"))) {
-    console.warn("[x-agent] Cookies expired — re-logging in");
-    cookies = await twitterLogin() ?? "";
-    if (!cookies) throw new Error("Re-login failed");
-    const res2 = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
+  const doPost = async (c: string) => {
+    const r = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
       method:  "POST",
       headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify({ login_cookies: cookies, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
+      body:    JSON.stringify({ login_cookies: c, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
     });
-    const data2 = await res2.json() as any;
-    if (!res2.ok) throw new Error(JSON.stringify(data2));
+    const d = await r.json() as any;
+    console.log(`[x-agent] create_tweet_v2 status=${r.status} response: ${JSON.stringify(d).slice(0, 400)}`);
+    return { r, d };
+  };
+
+  let { r: res, d: data } = await doPost(cookies);
+
+  // Treat as expired if: HTTP non-ok OR status field is not "success" OR no tweet_id returned
+  const isExpired = !res.ok || (data?.status && data.status !== "success") || (!data?.tweet_id && !data?.id);
+  if (isExpired) {
+    console.warn(`[x-agent] Post failed (status=${res.status}, body.status=${data?.status}) — forcing re-login`);
+    cachedCookies = null; // clear cache so twitterLogin fetches fresh
+    cookies = await twitterLogin() ?? "";
+    if (!cookies) throw new Error(`Re-login failed. Original error: ${JSON.stringify(data)}`);
+    const { r: res2, d: data2 } = await doPost(cookies);
+    if (!res2.ok || (data2?.status && data2.status !== "success")) {
+      throw new Error(JSON.stringify(data2));
+    }
     return;
   }
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  console.log(`[x-agent] create_tweet_v2 response: ${JSON.stringify(data).slice(0, 300)}`);
 }
 
 // Pending approvals: callbackId → { tweetId, xUsername, replies, timeout, msgIds }
