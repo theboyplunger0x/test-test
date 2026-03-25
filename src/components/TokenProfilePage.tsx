@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
-import { TokenInfo, getOHLCV, resolutionForTf } from "@/lib/chartData";
+import { TokenInfo, getOHLCV, resolutionForTf, searchBySymbol } from "@/lib/chartData";
 
 const TFS = ["1m", "5m", "15m", "1h", "4h", "24h"];
 
@@ -137,6 +137,16 @@ export default function TokenProfilePage({
   const [betLoading, setBetLoading] = useState(false);
   const [betError, setBetError]   = useState<string | null>(null);
   const [betDone, setBetDone]     = useState(false);
+  const [resolvedCA, setResolvedCA] = useState(token.address ?? "");
+
+  // If address is empty (navigated from feed card), look it up
+  useEffect(() => {
+    if (!token.address && token.symbol) {
+      searchBySymbol(token.symbol, token.chainLabel).then(info => {
+        if (info?.address) setResolvedCA(info.address);
+      }).catch(() => {});
+    }
+  }, [token.address, token.symbol, token.chainLabel]);
 
   const bg      = dk ? "bg-[#0c0c0c]" : "bg-white";
   const border  = dk ? "border-white/8" : "border-gray-100";
@@ -212,7 +222,7 @@ export default function TokenProfilePage({
             </div>
             <div className="flex items-center gap-1.5">
               <p className={`text-[12px] ${muted}`}>{token.name}</p>
-              <CopyCA ca={token.address} dk={dk} />
+              <CopyCA ca={resolvedCA} dk={dk} />
             </div>
           </div>
           <div className="text-right">
