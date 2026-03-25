@@ -9,6 +9,7 @@ const TW_USERNAME         = process.env.X_TWITTER_USERNAME || FUDMARKETS_USERNAM
 const TW_PASSWORD         = process.env.X_TWITTER_PASSWORD!;
 const TW_EMAIL            = process.env.X_TWITTER_EMAIL!;
 const TW_PROXY            = process.env.X_PROXY_URL;
+const TW_TOTP_SECRET      = process.env.X_TWITTER_TOTP_SECRET;
 
 // Support up to 2 admin Telegram chat IDs
 const ADMIN_TG_IDS: string[] = [
@@ -47,7 +48,7 @@ async function twitterLogin(retries = 5): Promise<string | null> {
       const res = await fetch("https://api.twitterapi.io/twitter/user_login_v2", {
         method:  "POST",
         headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-        body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD, email: TW_EMAIL, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
+        body:    JSON.stringify({ user_name: TW_USERNAME, password: TW_PASSWORD, email: TW_EMAIL, ...(TW_PROXY ? { proxy: TW_PROXY } : {}), ...(TW_TOTP_SECRET ? { totp_secret: TW_TOTP_SECRET } : {}) }),
       });
       const data = await res.json() as any;
       if (res.status === 429) {
@@ -106,11 +107,74 @@ async function postReply(text: string, replyToId: string): Promise<void> {
     d = r2.d;
   }
 
-  // 3. If reply still fails (422 = Twitter rejecting the reply_to_tweet_id), try standalone
-  console.warn(`[x-agent] Reply failed — trying standalone post`);
+  // 3. Try standalone v2 post
+  console.warn(`[x-agent] Reply failed — trying standalone v2 post`);
   const r3 = await doPost(cookies, false);
-  if (!ok(r3.r.status, r3.d)) throw new Error(JSON.stringify(r3.d));
-  console.log(`[x-agent] Posted as standalone (reply failed with 422)`);
+  if (ok(r3.r.status, r3.d)) { console.log(`[x-agent] Posted as standalone v2`); return; }
+
+  // 4. Fall back to v3 (server-side session, different auth path)
+  console.warn(`[x-agent] v2 failed entirely — falling back to v3`);
+  await postV3(text);
+}
+
+// ─── twitterapi.io v3 (server-side session, no cookie needed for posting) ────
+
+let v3LoginDone = false;
+
+async function loginV3(): Promise<boolean> {
+  console.log("[x-agent] Initiating v3 login...");
+  try {
+    const res = await fetch("https://api.twitterapi.io/twitter/user_login_v3", {
+      method:  "POST",
+      headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        user_name: TW_USERNAME,
+        email:     TW_EMAIL,
+        password:  TW_PASSWORD,
+        proxy:     TW_PROXY,
+        ...(TW_TOTP_SECRET ? { totp_code: TW_TOTP_SECRET } : {}),
+      }),
+    });
+    const data = await res.json() as any;
+    console.log(`[x-agent] v3 login init: ${JSON.stringify(data).slice(0, 200)}`);
+    if (!res.ok || data.status !== "success") return false;
+
+    // Poll until Active (max 60s)
+    for (let i = 0; i < 12; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      const poll = await fetch(`https://api.twitterapi.io/twitter/get_my_x_account_detail_v3?user_name=${TW_USERNAME}`, {
+        headers: { "X-API-Key": TWITTERAPI_KEY },
+      });
+      const pd = await poll.json() as any;
+      console.log(`[x-agent] v3 poll ${i + 1}: status=${pd.data?.status}`);
+      if (pd.data?.status === "Active") {
+        console.log("[x-agent] v3 session active");
+        v3LoginDone = true;
+        return true;
+      }
+    }
+    console.error("[x-agent] v3 login timed out");
+    return false;
+  } catch (e: any) {
+    console.error("[x-agent] v3 login error:", e.message);
+    return false;
+  }
+}
+
+async function postV3(text: string): Promise<void> {
+  if (!v3LoginDone) {
+    const ok = await loginV3();
+    if (!ok) throw new Error("v3 login failed");
+  }
+  console.log(`[x-agent] send_tweet_v3 text="${text.slice(0, 100)}"`);
+  const res = await fetch("https://api.twitterapi.io/twitter/send_tweet_v3", {
+    method:  "POST",
+    headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+    body:    JSON.stringify({ user_name: TW_USERNAME, text }),
+  });
+  const data = await res.json() as any;
+  console.log(`[x-agent] send_tweet_v3 status=${res.status} response=${JSON.stringify(data).slice(0, 300)}`);
+  if (!res.ok || data.status !== "success") throw new Error(JSON.stringify(data));
 }
 
 // Pending approvals: callbackId → { tweetId, xUsername, replies, timeout, msgIds }
@@ -599,6 +663,8 @@ export async function startXAgent() {
     const cookies = await loadCookies();
     if (!cookies) await twitterLogin();
     else console.log("[x-agent] Cookies loaded from DB — skipping login");
+    // Also initiate v3 session in background (fallback for 422 on v2)
+    loginV3().catch(e => console.error("[x-agent] v3 login error:", e.message));
   }
   await poll();
   setInterval(poll, 60_000); // 60s — ~1440 requests/day vs 2880 at 30s
