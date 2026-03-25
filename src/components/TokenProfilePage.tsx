@@ -43,17 +43,18 @@ function Sparkline({ candles, dk }: { candles: { close: number }[]; dk: boolean 
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  const W = 240, H = 48;
+  const W = 600, H = 80;
+  const pad = 4;
   const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * W;
-    const y = H - ((v - min) / range) * H;
+    const x = (i / (values.length - 1)) * (W - pad * 2) + pad;
+    const y = H - pad - ((v - min) / range) * (H - pad * 2);
     return `${x},${y}`;
   }).join(" ");
   const isUp = values[values.length - 1] >= values[0];
   const color = isUp ? "#34d399" : "#f87171";
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="none">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -196,7 +197,7 @@ export default function TokenProfilePage({
         </div>
 
         {/* Mini chart */}
-        <div className="mb-3 h-12">
+        <div className="mb-3 h-16">
           <Sparkline candles={candles} dk={dk} />
         </div>
 
