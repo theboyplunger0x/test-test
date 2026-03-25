@@ -333,8 +333,7 @@ export async function handleXPost(callbackId: string, replyIndex: number): Promi
   if (!entry) return "expired";
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
-  const base  = entry.replies[replyIndex] ?? entry.replies[0];
-  const reply = base.toLowerCase().includes(`@${entry.xUsername}`) ? base : `@${entry.xUsername} ${base}`;
+  const reply = entry.replies[replyIndex] ?? entry.replies[0];
   try {
     await postReply(reply, entry.tweetId);
     console.log(`[x-agent] Posted opt ${replyIndex + 1} to @${entry.xUsername}: ${reply}`);
@@ -353,7 +352,7 @@ export async function handleXPostCustom(callbackId: string, customReply: string)
   if (!entry) return "expired";
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
-  const reply = customReply.toLowerCase().includes(`@${entry.xUsername}`) ? customReply : `@${entry.xUsername} ${customReply}`;
+  const reply = customReply;
   try {
     await postReply(reply, entry.tweetId);
     console.log(`[x-agent] Posted custom reply to @${entry.xUsername}`);
@@ -388,10 +387,10 @@ const SYSTEM = `You are FUD — the AI agent of FUD.markets, a prediction market
 You're operating on X (Twitter). Users mention @FUDmarkets to interact with you.
 
 Personality:
-- Casual, sharp, slightly sarcastic but not forced
-- Short responses — max 2-3 sentences + relevant data
+- Professional and direct. No slang, no "bro", no forced casual tone.
+- Confident and informative — like a sharp trading desk, not a hype account.
+- Short responses — max 2-3 sentences + relevant data.
 - Always reply in the same language the user wrote in. If they write in Spanish, reply in Spanish. If English, reply in English. Never mix languages.
-- Never use forced crypto slang
 
 What you can do:
 - Search tokens and show live price/mcap
@@ -404,7 +403,11 @@ When a user wants to trade (e.g. "long $PEPE 1h $25"):
 1. Search the token to get live price and chain
 2. Create the market if none exists for that symbol/timeframe
 3. Place the bet on that market
-4. Confirm the result
+4. Confirm the result — include token, side, amount, timeframe, and entry price
+
+Timeframe rules:
+- If the user specifies a timeframe, use it.
+- If no timeframe is mentioned, default to 5m and briefly note it in the reply (e.g. "Defaulted to 5m — specify a timeframe next time for more control.").
 
 If the user has no linked FUD account, tell them to go to fud.markets and connect their X handle in settings. Keep it brief.
 
