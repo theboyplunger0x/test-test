@@ -262,10 +262,11 @@ export async function handleXPost(callbackId: string, replyIndex: number): Promi
   if (!entry) return "expired";
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
-  const reply = entry.replies[replyIndex] ?? entry.replies[0];
+  const base  = entry.replies[replyIndex] ?? entry.replies[0];
+  const reply = base.toLowerCase().includes(`@${entry.xUsername}`) ? base : `@${entry.xUsername} ${base}`;
   try {
     await postReply(reply, entry.tweetId);
-    console.log(`[x-agent] Posted opt ${replyIndex + 1} to @${entry.xUsername}`);
+    console.log(`[x-agent] Posted opt ${replyIndex + 1} to @${entry.xUsername}: ${reply}`);
     await editAdminMessages(entry.msgIds, `✅ *Posted* (opt ${replyIndex + 1})\n\n_${reply}_`);
     return "posted";
   } catch (e: any) {
@@ -281,8 +282,9 @@ export async function handleXPostCustom(callbackId: string, customReply: string)
   if (!entry) return "expired";
   clearTimeout(entry.timeout);
   pending.delete(callbackId);
+  const reply = customReply.toLowerCase().includes(`@${entry.xUsername}`) ? customReply : `@${entry.xUsername} ${customReply}`;
   try {
-    await postReply(customReply, entry.tweetId);
+    await postReply(reply, entry.tweetId);
     console.log(`[x-agent] Posted custom reply to @${entry.xUsername}`);
     await editAdminMessages(entry.msgIds, `✅ *Posted* (custom)\n\n_${customReply}_`);
     return "posted";
