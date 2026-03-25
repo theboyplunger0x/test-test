@@ -76,7 +76,8 @@ async function postReply(text: string, replyToId: string): Promise<void> {
   if (!cookies) throw new Error("Could not obtain Twitter login cookies");
 
   const doPost = async (c: string) => {
-    const body = { login_cookies: c, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) };
+    // Note: proxy intentionally omitted for posting — datacenter proxies can cause 422
+    const body = { login_cookies: c, tweet_text: text, reply_to_tweet_id: replyToId };
     console.log(`[x-agent] create_tweet_v2 sending: replyToId=${replyToId} text="${text.slice(0, 120)}"`);
     const r = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
       method:  "POST",
