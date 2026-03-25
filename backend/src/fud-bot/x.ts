@@ -76,9 +76,9 @@ async function postReply(text: string, replyToId: string): Promise<void> {
   if (!cookies) throw new Error("Could not obtain Twitter login cookies");
 
   const doPost = async (c: string) => {
-    // Note: proxy intentionally omitted for posting — datacenter proxies can cause 422
-    const body = { login_cookies: c, tweet_text: text, reply_to_tweet_id: replyToId };
-    console.log(`[x-agent] create_tweet_v2 sending: replyToId=${replyToId} text="${text.slice(0, 120)}"`);
+    const body: any = { login_cookies: c, tweet_text: text, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) };
+    if (replyToId) body.reply_to_tweet_id = replyToId;
+    console.log(`[x-agent] create_tweet_v2 sending: replyToId=${replyToId ?? "none"} text="${text.slice(0, 120)}"`);
     const r = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
       method:  "POST",
       headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
@@ -92,17 +92,38 @@ async function postReply(text: string, replyToId: string): Promise<void> {
   let { r: res, d: data } = await doPost(cookies);
 
   // Treat as expired if: HTTP non-ok OR status field is not "success" OR no tweet_id returned
-  const isExpired = !res.ok || (data?.status && data.status !== "success") || (!data?.tweet_id && !data?.id);
-  if (isExpired) {
-    console.warn(`[x-agent] Post failed (status=${res.status}, body.status=${data?.status}) — forcing re-login`);
-    cachedCookies = null; // clear cache so twitterLogin fetches fresh
-    cookies = await twitterLogin() ?? "";
-    if (!cookies) throw new Error(`Re-login failed. Original error: ${JSON.stringify(data)}`);
-    const { r: res2, d: data2 } = await doPost(cookies);
-    if (!res2.ok || (data2?.status && data2.status !== "success")) {
-      throw new Error(JSON.stringify(data2));
+  const isFailed = !res.ok || (data?.status && data.status !== "success") || (!data?.tweet_id && !data?.id);
+  if (isFailed) {
+    const is422 = res.status === 422 || data?.message?.includes?.("422");
+    // 422 = Twitter rejected the reply (account restricted or tweet deleted)
+    // Try once to re-login in case of auth issues; skip re-login for 422
+    if (!is422) {
+      console.warn(`[x-agent] Post failed (status=${res.status}) — forcing re-login`);
+      cachedCookies = null;
+      cookies = await twitterLogin() ?? "";
+      if (!cookies) throw new Error(`Re-login failed. Original error: ${JSON.stringify(data)}`);
+      const { r: res2, d: data2 } = await doPost(cookies);
+      const still422 = res2.status === 422 || data2?.message?.includes?.("422");
+      if (!still422 && (res2.ok || data2?.tweet_id || data2?.id)) return;
+      // If still failing after re-login, fall through to standalone attempt
+      data = data2;
     }
-    return;
+    // Last resort: post as standalone tweet (not a reply) — happens when account
+    // is restricted from replying (new accounts often have this limitation)
+    console.warn(`[x-agent] Reply rejected (422/restricted) — posting as standalone tweet`);
+    const { r: res3, d: data3 } = await (async () => {
+      const body3: any = { login_cookies: cookies, tweet_text: text, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) };
+      console.log(`[x-agent] create_tweet_v2 standalone: text="${text.slice(0, 120)}"`);
+      const r3 = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
+        method:  "POST",
+        headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
+        body:    JSON.stringify(body3),
+      });
+      const d3 = await r3.json() as any;
+      console.log(`[x-agent] standalone status=${r3.status} response: ${JSON.stringify(d3).slice(0, 400)}`);
+      return { r: r3, d: d3 };
+    })();
+    if (!res3.ok && !data3?.tweet_id && !data3?.id) throw new Error(JSON.stringify(data3));
   }
 }
 
