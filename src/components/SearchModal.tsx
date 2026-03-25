@@ -205,7 +205,8 @@ export default function SearchModal({ dk, onClose, onViewToken, onOpenMarket, on
                   </span>
                 </div>
                 <div className={`flex items-center gap-2 text-[10px] font-bold ${muted}`}>
-                  <span className="font-mono">${formatPrice(t.price)}</span>
+                  <span className="truncate max-w-[80px]">{t.name}</span>
+                  <span className="font-mono">· ${formatPrice(t.price)}</span>
                   {t.marketCap > 0 && <span>· MC ${formatNum(t.marketCap)}</span>}
                 </div>
               </div>
