@@ -225,7 +225,7 @@ export default function SearchModal({ dk, onClose, onViewToken, onOpenMarket, on
                     dk ? "bg-white/8 hover:bg-white/16 text-white/60 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-600"
                   }`}
                 >
-                  Market
+                  Trade
                 </button>
               </div>
             </div>
