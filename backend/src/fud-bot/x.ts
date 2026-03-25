@@ -76,10 +76,12 @@ async function postReply(text: string, replyToId: string): Promise<void> {
   if (!cookies) throw new Error("Could not obtain Twitter login cookies");
 
   const doPost = async (c: string) => {
+    const body = { login_cookies: c, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) };
+    console.log(`[x-agent] create_tweet_v2 sending: replyToId=${replyToId} text="${text.slice(0, 120)}"`);
     const r = await fetch("https://api.twitterapi.io/twitter/create_tweet_v2", {
       method:  "POST",
       headers: { "X-API-Key": TWITTERAPI_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify({ login_cookies: c, tweet_text: text, reply_to_tweet_id: replyToId, ...(TW_PROXY ? { proxy: TW_PROXY } : {}) }),
+      body:    JSON.stringify(body),
     });
     const d = await r.json() as any;
     console.log(`[x-agent] create_tweet_v2 status=${r.status} response: ${JSON.stringify(d).slice(0, 400)}`);
@@ -437,6 +439,7 @@ async function processMention(tweet: any) {
   const text      = tweet.text?.replace(/@FUDmarkets/gi, "").trim() ?? "";
   // Use id_str to avoid JS float64 precision loss on 19-digit Twitter snowflake IDs
   const tweetId   = tweet._safeId ?? tweet.id_str ?? String(tweet.id);
+  console.log(`[x-agent] Tweet raw id=${tweet.id} id_str=${tweet.id_str} _safeId=${tweet._safeId} → using ${tweetId}`);
   const tweetUrl  = `https://x.com/${xUsername}/status/${tweetId}`;
 
   // ── Filter ──
