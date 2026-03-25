@@ -18,13 +18,14 @@ import ProfileModal from "./ProfileModal";
 import ProfilePage from "./ProfilePage";
 import NotificationsPanel from "./NotificationsPanel";
 import TokenProfilePage from "./TokenProfilePage";
+import MarketsView from "./MarketsView";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
 type Filter = "all" | "hot" | "juicy";
 type Theme = "dark" | "light";
-type MainTab = "feed" | "trending" | "ranks";
+type MainTab = "markets" | "feed" | "trending" | "ranks";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
@@ -99,7 +100,7 @@ export default function FeedPage() {
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [filter, setFilter]             = useState<Filter>("all");
   const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
-  const [mainTab, setMainTab]           = useState<MainTab>("feed");
+  const [mainTab, setMainTab]           = useState<MainTab>("markets");
   const [ordersOpen, setOrdersOpen]     = useState(false);
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
   const [selectedTf, setSelectedTf]     = useState<string>("1h");
@@ -514,9 +515,10 @@ export default function FeedPage() {
   }
 
   const MAIN_TABS: { key: MainTab; label: string }[] = [
-    { key: "feed",  label: "Feed" },
+    { key: "markets",  label: "Markets" },
+    { key: "feed",     label: "Trades" },
     { key: "trending", label: "Trending" },
-    { key: "ranks", label: "Leaderboard" },
+    { key: "ranks",    label: "Leaderboard" },
   ];
 
 
@@ -753,6 +755,13 @@ export default function FeedPage() {
                 }
               }}
             />
+          </motion.div>
+        )}
+
+        {/* MARKETS TAB */}
+        {!selectedCoin && !tokenProfileToken && mainTab === "markets" && (
+          <motion.div key="markets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
+            <MarketsView dk={dk} />
           </motion.div>
         )}
 
