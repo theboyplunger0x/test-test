@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { MOCK_MARKETS, CATEGORIES, PMMarket, formatVol } from "@/lib/mockMarkets";
+import type { Market } from "@/lib/api";
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
@@ -301,12 +302,94 @@ function MultiCard({ market, dk }: { market: PMMarket; dk: boolean }) {
   );
 }
 
+// ── Long/Short card for real live markets ─────────────────────────────────────
+function LongShortCard({ market, dk }: { market: Market; dk: boolean }) {
+  const longPool  = parseFloat(market.long_pool);
+  const shortPool = parseFloat(market.short_pool);
+  const total     = longPool + shortPool;
+  const longPct   = total > 0 ? Math.round((longPool  / total) * 100) : 50;
+  const shortPct  = 100 - longPct;
+
+  const border = dk ? "border-white/6"  : "border-gray-200";
+  const bg     = dk ? "bg-[#141414]"    : "bg-white";
+  const strong = dk ? "text-white"      : "text-gray-900";
+  const muted  = dk ? "text-white/35"   : "text-gray-400";
+  const divCls = dk ? "border-white/5"  : "border-gray-100";
+  const barBg  = dk ? "bg-white/6"      : "bg-gray-100";
+
+  const chainColor: Record<string, string> = {
+    sol:  dk ? "bg-purple-500/15 text-purple-300" : "bg-purple-100 text-purple-700",
+    base: dk ? "bg-blue-500/15 text-blue-300"     : "bg-blue-100 text-blue-700",
+    bsc:  dk ? "bg-yellow-500/15 text-yellow-300" : "bg-yellow-100 text-yellow-700",
+    eth:  dk ? "bg-indigo-500/15 text-indigo-300" : "bg-indigo-100 text-indigo-700",
+  };
+  const chainCls = chainColor[market.chain?.toLowerCase()] ?? (dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500");
+
+  return (
+    <div className={`rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-3`}>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className={`text-[15px] font-black ${strong}`}>${market.symbol}</span>
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${chainCls}`}>{market.chain?.toUpperCase()}</span>
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-white/6 text-white/30" : "bg-gray-100 text-gray-400"}`}>{market.timeframe}</span>
+          </div>
+          {market.tagline ? (
+            <p className={`text-[11px] italic ${muted}`}>"{market.tagline}"</p>
+          ) : (
+            <p className={`text-[11px] ${muted}`}>Price prediction market</p>
+          )}
+        </div>
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0 mt-1.5" />
+      </div>
+
+      {/* Bars */}
+      <div className={`space-y-2 pt-1 border-t ${divCls}`}>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black text-emerald-400 w-10 shrink-0">▲ Long</span>
+          <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${barBg}`}>
+            <motion.div initial={{ width: 0 }} animate={{ width: `${longPct}%` }} transition={{ duration: 0.7, ease: "easeOut" }}
+              className="h-full rounded-full bg-emerald-500" />
+          </div>
+          <span className="text-[11px] font-black text-emerald-400 w-8 text-right tabular-nums">{longPct}%</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black text-red-400 w-10 shrink-0">▼ Short</span>
+          <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${barBg}`}>
+            <motion.div initial={{ width: 0 }} animate={{ width: `${shortPct}%` }} transition={{ duration: 0.7, ease: "easeOut", delay: 0.05 }}
+              className="h-full rounded-full bg-red-500" />
+          </div>
+          <span className="text-[11px] font-black text-red-400 w-8 text-right tabular-nums">{shortPct}%</span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className={`flex items-center justify-between pt-2 border-t ${divCls}`}>
+        <span className={`text-[10px] font-bold ${muted}`}>{total > 0 ? `$${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} Vol` : "No bets yet"}</span>
+        {market.opener_username && <span className={`text-[10px] font-bold ${muted}`}>by {market.opener_username}</span>}
+      </div>
+
+      {/* Buttons */}
+      <div className="flex gap-1.5">
+        <button className={`flex-1 py-2 rounded-xl text-[12px] font-black transition-all ${dk ? "bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/20" : "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100"}`}>
+          ▲ Long
+        </button>
+        <button className={`flex-1 py-2 rounded-xl text-[12px] font-black transition-all ${dk ? "bg-red-500/10 border border-red-500/25 text-red-300 hover:bg-red-500/20" : "bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"}`}>
+          ▼ Short
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main MarketsView ──────────────────────────────────────────────────────────
-export default function MarketsView({ dk }: { dk: boolean }) {
+export default function MarketsView({ dk, liveMarkets = [] }: { dk: boolean; liveMarkets?: Market[] }) {
   const [cat, setCat] = useState<string>("All");
 
   const hero = MOCK_MARKETS.find(m => m.featured)!;
   const rest = MOCK_MARKETS.filter(m => !m.featured && (cat === "All" || m.category === cat));
+  const liveFiltered = cat === "All" ? liveMarkets : [];
 
   const strong      = dk ? "text-white"      : "text-gray-900";
   const muted       = dk ? "text-white/35"   : "text-gray-400";
@@ -358,7 +441,25 @@ export default function MarketsView({ dk }: { dk: boolean }) {
           ))}
         </div>
 
-        {/* Markets grid */}
+        {/* Live trades from the Trades tab */}
+        {liveFiltered.length > 0 && (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <p className={`text-[11px] font-black uppercase tracking-widest ${muted}`}>Live trades</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {liveFiltered.map((m, i) => (
+                <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
+                  <LongShortCard market={m} dk={dk} />
+                </motion.div>
+              ))}
+            </div>
+            <div className={`border-t ${divider}`} />
+          </>
+        )}
+
+        {/* Prediction markets grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {rest.length === 0 ? (
             <p className={`col-span-4 text-center py-12 text-[13px] ${muted}`}>No markets in this category yet.</p>

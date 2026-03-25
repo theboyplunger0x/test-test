@@ -761,7 +761,7 @@ export default function FeedPage() {
         {/* MARKETS TAB */}
         {!selectedCoin && !tokenProfileToken && mainTab === "markets" && (
           <motion.div key="markets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
-            <MarketsView dk={dk} />
+            <MarketsView dk={dk} liveMarkets={markets.filter(m => m.status === "open")} />
           </motion.div>
         )}
 
