@@ -97,6 +97,7 @@ async function postReply(text: string, replyToId: string): Promise<void> {
     return;
   }
   if (!res.ok) throw new Error(JSON.stringify(data));
+  console.log(`[x-agent] create_tweet_v2 response: ${JSON.stringify(data).slice(0, 300)}`);
 }
 
 // Pending approvals: callbackId → { tweetId, xUsername, replies, timeout, msgIds }
