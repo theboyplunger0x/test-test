@@ -131,10 +131,11 @@ export default function TokenProfilePage({
   }, [token.symbol]);
 
   useEffect(() => {
-    if (!token.address) return;
+    const addr = token.pairAddress || token.address;
+    if (!addr) return;
     const { resolution, limit } = resolutionForTf(chartTf);
-    getOHLCV(token.address, token.chainLabel ?? "solana", resolution, limit).then(c => setCandles(c)).catch(() => {});
-  }, [token.address, chartTf]);
+    getOHLCV(addr, token.chainLabel ?? "solana", resolution, limit).then(c => setCandles(c)).catch(() => {});
+  }, [token.pairAddress, token.address, chartTf]);
 
   const totalLong  = positions.filter(p => p.side === "long").reduce((s, p) => s + parseFloat(p.amount), 0);
   const totalShort = positions.filter(p => p.side === "short").reduce((s, p) => s + parseFloat(p.amount), 0);
