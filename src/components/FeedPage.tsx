@@ -1017,6 +1017,7 @@ export default function FeedPage() {
             dk={dk}
             onClose={() => setCASearchOpen(false)}
             onViewToken={handleCATradeResult}
+            onViewChart={(token) => { setCASearchOpen(false); setSelectedTokenInfo(token); setSelectedCoin(token.symbol); setTokenProfileToken(null); }}
             onOpenMarket={(coin) => { setCASearchOpen(false); handleOpenMarket(coin); }}
             onViewProfile={(username) => { setCASearchOpen(false); setProfilePageUser(username); }}
           />

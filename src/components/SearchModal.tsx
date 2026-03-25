@@ -65,11 +65,12 @@ interface Props {
   dk: boolean;
   onClose: () => void;
   onViewToken: (token: TokenInfo) => void;
+  onViewChart: (token: TokenInfo) => void;
   onOpenMarket: (coin: Coin) => void;
   onViewProfile: (username: string) => void;
 }
 
-export default function SearchModal({ dk, onClose, onViewToken, onOpenMarket, onViewProfile }: Props) {
+export default function SearchModal({ dk, onClose, onViewToken, onViewChart, onOpenMarket, onViewProfile }: Props) {
   const [query, setQuery]           = useState("");
   const [tab, setTab]               = useState<Tab>("tokens");
   const [tokens, setTokens]         = useState<TokenInfo[]>([]);
@@ -214,7 +215,7 @@ export default function SearchModal({ dk, onClose, onViewToken, onOpenMarket, on
               {/* Actions */}
               <div className="flex items-center gap-3 shrink-0">
                 <button
-                  onClick={e => { e.stopPropagation(); onViewToken(t); onClose(); }}
+                  onClick={e => { e.stopPropagation(); onViewChart(t); onClose(); }}
                   className={`text-[10px] font-bold transition-opacity hover:opacity-60 ${muted}`}
                 >
                   Chart →

@@ -52,7 +52,7 @@ function Sparkline({ candles, dk }: { candles: { close: number }[]; dk: boolean 
   const isUp = values[values.length - 1] >= values[0];
   const color = isUp ? "#34d399" : "#f87171";
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="none">
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
@@ -196,7 +196,7 @@ export default function TokenProfilePage({
         </div>
 
         {/* Mini chart */}
-        <div className="mb-3">
+        <div className="mb-3 h-12">
           <Sparkline candles={candles} dk={dk} />
         </div>
 
