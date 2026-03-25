@@ -132,7 +132,6 @@ async function loginV3(): Promise<boolean> {
         email:     TW_EMAIL,
         password:  TW_PASSWORD,
         proxy:     TW_PROXY,
-        ...(TW_TOTP_SECRET ? { totp_code: TW_TOTP_SECRET } : {}),
       }),
     });
     const data = await res.json() as any;
