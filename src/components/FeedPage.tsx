@@ -545,7 +545,7 @@ export default function FeedPage() {
         </button>
 
         {/* Right side */}
-        <div className="flex items-center gap-3 shrink-0 ml-auto">
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           {user ? (
             <>
               {/* Balance */}
@@ -553,8 +553,8 @@ export default function FeedPage() {
                 <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
                   {paperMode ? "Paper" : "Balance"}
                 </span>
-                <span className={`text-[13px] font-black ${paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
-                  ${Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd).toFixed(2)}
+                <span className={`text-[13px] font-black tabular-nums ${paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
+                  {(() => { const n = Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd); return n >= 10000 ? `$${(n/1000).toFixed(1)}K` : n >= 1000 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`; })()}
                 </span>
               </div>
 
