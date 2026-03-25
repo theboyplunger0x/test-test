@@ -338,9 +338,8 @@ export default function CoinDetail({
               className={`flex-1 rounded-2xl py-4 text-center transition-all duration-150 ${
                 side === "long" ? "bg-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.35)]" : T.upIdle
               }`}>
-              <p className={`text-[12px] font-black tracking-wide ${side === "long" ? "text-emerald-100" : "text-emerald-400"}`}>▲ LONG</p>
-              <p className={`text-[26px] font-black leading-tight ${side === "long" ? "text-white" : "text-emerald-300"}`}>{longMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
-              <p className={`text-[11px] font-bold ${side === "long" ? "text-emerald-100/70" : "text-emerald-500/60"}`}>${longPool.toLocaleString()}</p>
+              <p className={`text-[22px] font-black leading-tight ${side === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
+              <p className={`text-[13px] font-black ${side === "long" ? "text-emerald-100/80" : "text-emerald-400/70"}`}>{longMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
             </motion.button>
 
             <motion.button whileTap={{ scale: 0.96 }}
@@ -348,9 +347,8 @@ export default function CoinDetail({
               className={`flex-1 rounded-2xl py-4 text-center transition-all duration-150 ${
                 side === "short" ? "bg-red-500 shadow-[0_0_24px_rgba(239,68,68,0.35)]" : T.downIdle
               }`}>
-              <p className={`text-[12px] font-black tracking-wide ${side === "short" ? "text-red-100" : "text-red-400"}`}>▼ SHORT</p>
-              <p className={`text-[26px] font-black leading-tight ${side === "short" ? "text-white" : "text-red-300"}`}>{shortMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
-              <p className={`text-[11px] font-bold ${side === "short" ? "text-red-100/70" : "text-red-500/60"}`}>${shortPool.toLocaleString()}</p>
+              <p className={`text-[22px] font-black leading-tight ${side === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
+              <p className={`text-[13px] font-black ${side === "short" ? "text-red-100/80" : "text-red-400/70"}`}>{shortMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
             </motion.button>
           </div>
 
