@@ -224,6 +224,11 @@ const SEAL = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.43
 const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
 
 function TierBadge({ tier, tgUsername }: { tier: string; tgUsername?: string }) {
+  if (tier === "elite") return (
+    <svg aria-label="Elite tier" width="14" height="14" viewBox="0 0 22 22" fill="none" className="inline-block align-middle shrink-0">
+      <path d={SEAL} fill="#8B5CF6"/><path d={CHECK} fill="white"/>
+    </svg>
+  );
   if (tier === "top") return (
     <svg aria-label="Top tier" width="14" height="14" viewBox="0 0 22 22" fill="none" className="inline-block align-middle shrink-0">
       <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
@@ -532,8 +537,8 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         {referral && (() => {
           const claimable = Number(referral.claimable_usd);
           const hasRewards = claimable > 0;
-          const tierLabel = referral.tier === "top" ? "Top" : referral.tier === "pro" ? "Pro" : "Basic";
-          const rebate    = referral.tier === "top" ? "20% fee rebate" : referral.tier === "pro" ? "10% fee rebate" : "5% fee rebate";
+          const tierLabel = referral.tier === "elite" ? "Elite" : referral.tier === "top" ? "Top" : referral.tier === "pro" ? "Pro" : "Basic";
+          const rebate    = referral.tier === "elite" ? "25% fee rebate" : referral.tier === "top" ? "20% fee rebate" : referral.tier === "pro" ? "10% fee rebate" : "5% fee rebate";
           return (
             <div className={`rounded-2xl border px-4 py-3 transition-all ${
               hasRewards

@@ -25,7 +25,7 @@ export type User = {
   balance_usd: string;
   paper_balance_usd: string;
   created_at?: string;
-  tier?: "" | "basic" | "pro" | "top";
+  tier?: "" | "basic" | "pro" | "top" | "elite";
   x_username?: string;
   telegram_username?: string;
   avatar_url?: string;
@@ -35,7 +35,7 @@ export type User = {
 export type ReferralStats = {
   code: string;
   link: string;
-  tier: "" | "basic" | "pro" | "top";
+  tier: "" | "basic" | "pro" | "top" | "elite";
   referral_rate: number;
   cashback_rate: number;
   referred_count: number;

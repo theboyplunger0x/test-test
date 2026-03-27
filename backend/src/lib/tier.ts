@@ -6,7 +6,7 @@ export const TIER_THRESHOLDS = {
   top: { volume_usd: 5_000,  referrals: 10 },
 };
 
-export type Tier = "" | "basic" | "pro" | "top";
+export type Tier = "" | "basic" | "pro" | "top" | "elite";
 
 /**
  * Check if a user qualifies for a higher tier based on volume + referral count.

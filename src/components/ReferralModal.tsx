@@ -178,12 +178,13 @@ export default function ReferralModal({
                 <div className="flex items-center justify-between">
                   <p className={`text-[13px] font-black ${textCls}`}>Your tier</p>
                   <span className={`text-[11px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1.5 ${
-                    userTier === "top" ? "bg-yellow-400 text-black" :
-                    userTier === "pro" ? "bg-blue-500/20 text-blue-400" :
+                    userTier === "elite" ? "bg-violet-500/20 text-violet-400" :
+                    userTier === "top"   ? "bg-yellow-400 text-black" :
+                    userTier === "pro"   ? "bg-blue-500/20 text-blue-400" :
                     (dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500")
                   }`}>
-                    {userTier === "top" ? <VerifiedBadge color="#F4C43B" /> : userTier === "pro" ? <VerifiedBadge color="#1D9BF0" /> : <VerifiedBadge color="#6B7280" />}
-                    {userTier === "top" ? "TOP" : userTier === "pro" ? "PRO" : "BASIC"}
+                    {userTier === "elite" ? <VerifiedBadge color="#8B5CF6" /> : userTier === "top" ? <VerifiedBadge color="#F4C43B" /> : userTier === "pro" ? <VerifiedBadge color="#1D9BF0" /> : <VerifiedBadge color="#6B7280" />}
+                    {userTier === "elite" ? "ELITE" : userTier === "top" ? "TOP" : userTier === "pro" ? "PRO" : "BASIC"}
                   </span>
                 </div>
 
