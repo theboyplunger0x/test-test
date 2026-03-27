@@ -229,7 +229,7 @@ function TierBadge({ tier, tgUsername }: { tier: string; tgUsername?: string }) 
       <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
     </svg>
   );
-  if (tier === "pro" || tier === "normal") return (
+  if (tier === "pro") return (
     <svg aria-label="Pro tier" width="14" height="14" viewBox="0 0 22 22" fill="none" className="inline-block align-middle shrink-0">
       <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
     </svg>
@@ -532,8 +532,8 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         {referral && (() => {
           const claimable = Number(referral.claimable_usd);
           const hasRewards = claimable > 0;
-          const tierLabel = referral.tier === "top" ? "Top" : (referral.tier === "pro" || referral.tier === "normal") ? "Pro" : "Basic";
-          const rebate    = referral.tier === "top" ? "20% fee rebate" : (referral.tier === "pro" || referral.tier === "normal") ? "10% fee rebate" : "5% fee rebate";
+          const tierLabel = referral.tier === "top" ? "Top" : referral.tier === "pro" ? "Pro" : "Basic";
+          const rebate    = referral.tier === "top" ? "20% fee rebate" : referral.tier === "pro" ? "10% fee rebate" : "5% fee rebate";
           return (
             <div className={`rounded-2xl border px-4 py-3 transition-all ${
               hasRewards
