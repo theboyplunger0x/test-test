@@ -266,6 +266,7 @@ const PencilIcon = () => (
 function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onViewProfile?: () => void; onUserUpdate?: () => void }) {
   const [username, setUsername]           = useState<string | null>(null);
   const [tier, setTier]                   = useState<string | undefined>(undefined);
+  const [tgUsername, setTgUsername]       = useState<string | undefined>(undefined);
   const [avatar, setAvatar]               = useState("");
   const [bio, setBio]                     = useState("");
   const [editingBio, setEditingBio]       = useState(false);
@@ -279,6 +280,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
     api.me().then(u => {
       setUsername(u.username);
       setTier(u.tier);
+      setTgUsername(u.telegram_username);
       setAvatar(u.avatar_url ?? "");
       setBio(u.bio ?? "");
       setBioInput(u.bio ?? "");
@@ -351,7 +353,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
       {/* Username + tier */}
       <div className="flex items-center gap-1.5 mb-2">
         <button onClick={onViewProfile} className={`text-[15px] font-black ${strong} cursor-pointer hover:opacity-70 transition-opacity`}>{username}</button>
-        {tier && <TierBadge tier={tier} tgUsername={telegramUsername} />}
+        {tier && <TierBadge tier={tier} tgUsername={tgUsername} />}
       </div>
 
       {/* Bio */}
