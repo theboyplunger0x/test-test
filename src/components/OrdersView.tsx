@@ -223,15 +223,20 @@ function fireNotification(title: string, body: string) {
 const SEAL = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.266.14-1.897-.131-.63-.437-1.208-.882-1.671-.445-.464-1.011-.79-1.638-.944-.627-.155-1.284-.127-1.895.082-.274-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.61-.209-1.265-.237-1.892-.082-.627.155-1.193.48-1.639.944-.445.463-.749 1.04-.878 1.671-.13.63-.083 1.29.141 1.897-.587.274-1.086.706-1.44 1.246-.354.54-.551 1.17-.569 1.816.018.647.215 1.276.57 1.817.354.54.852.972 1.438 1.245-.224.607-.27 1.266-.14 1.897.13.63.436 1.208.882 1.671.445.464 1.011.79 1.638.944.627.155 1.284.127 1.895-.082.274.587.704 1.086 1.245 1.44.54.354 1.17.551 1.816.569.647-.016 1.275-.213 1.815-.567s.969-.854 1.24-1.44c.61.21 1.266.238 1.893.083.626-.155 1.192-.48 1.637-.944.445-.463.749-1.041.879-1.672.13-.63.083-1.29-.141-1.896.587-.274 1.086-.706 1.44-1.246.354-.54.551-1.17.569-1.816z";
 const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
 
-function TierBadge({ tier }: { tier: string }) {
+function TierBadge({ tier, tgUsername }: { tier: string; tgUsername?: string }) {
   if (tier === "top") return (
     <svg aria-label="Top tier" width="14" height="14" viewBox="0 0 22 22" fill="none" className="inline-block align-middle shrink-0">
       <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
     </svg>
   );
-  if (tier === "normal") return (
-    <svg aria-label="Normal tier" width="14" height="14" viewBox="0 0 22 22" fill="none" className="inline-block align-middle shrink-0">
+  if (tier === "pro" || tier === "normal") return (
+    <svg aria-label="Pro tier" width="14" height="14" viewBox="0 0 22 22" fill="none" className="inline-block align-middle shrink-0">
       <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
+    </svg>
+  );
+  if ((tier === "basic" || tier === "") && tgUsername) return (
+    <svg aria-label="Basic tier" width="14" height="14" viewBox="0 0 22 22" fill="none" className="inline-block align-middle shrink-0">
+      <path d={SEAL} fill="#6B7280"/><path d={CHECK} fill="white"/>
     </svg>
   );
   return null;
@@ -527,8 +532,8 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         {referral && (() => {
           const claimable = Number(referral.claimable_usd);
           const hasRewards = claimable > 0;
-          const tierLabel = referral.tier === "top" ? "Top" : referral.tier === "normal" ? "Normal" : "No tier";
-          const rebate    = referral.tier === "top" ? "50% fee rebate" : referral.tier === "normal" ? "30% fee rebate" : "20% fee rebate";
+          const tierLabel = referral.tier === "top" ? "Top" : (referral.tier === "pro" || referral.tier === "normal") ? "Pro" : "Basic";
+          const rebate    = referral.tier === "top" ? "20% fee rebate" : (referral.tier === "pro" || referral.tier === "normal") ? "10% fee rebate" : "5% fee rebate";
           return (
             <div className={`rounded-2xl border px-4 py-3 transition-all ${
               hasRewards
@@ -537,7 +542,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
             }`}>
               {/* tier row */}
               <div className="flex items-center gap-1.5 mb-3">
-                <TierBadge tier={referral.tier} />
+                <TierBadge tier={referral.tier} tgUsername={telegramUsername} />
                 <span className={`text-[11px] font-black ${T.strong}`}>{tierLabel}</span>
                 <span className={`text-[10px] ${T.muted}`}>· {rebate}</span>
               </div>

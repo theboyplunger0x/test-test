@@ -2,11 +2,11 @@ import { db } from "../db/client.js";
 
 // Thresholds to automatically reach a tier
 export const TIER_THRESHOLDS = {
-  normal: { volume_usd: 500,    referrals: 3  },
-  top:    { volume_usd: 5_000,  referrals: 10 },
+  pro: { volume_usd: 500,    referrals: 3  },
+  top: { volume_usd: 5_000,  referrals: 10 },
 };
 
-export type Tier = "" | "normal" | "top";
+export type Tier = "" | "basic" | "pro" | "top";
 
 /**
  * Check if a user qualifies for a higher tier based on volume + referral count.
@@ -33,10 +33,10 @@ export async function checkAndUpgradeTier(userId: string): Promise<void> {
   ) {
     newTier = "top";
   } else if (
-    current === "" &&
-    (volume >= TIER_THRESHOLDS.normal.volume_usd || referrals >= TIER_THRESHOLDS.normal.referrals)
+    (current === "" || current === "basic") &&
+    (volume >= TIER_THRESHOLDS.pro.volume_usd || referrals >= TIER_THRESHOLDS.pro.referrals)
   ) {
-    newTier = "normal";
+    newTier = "pro";
   }
 
   if (newTier !== current) {

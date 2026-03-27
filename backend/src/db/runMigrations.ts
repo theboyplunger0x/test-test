@@ -180,6 +180,10 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user   ON notifications(user_id, cr
 CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read) WHERE read = false;
 
 ALTER TABLE positions ADD COLUMN IF NOT EXISTS message TEXT;
+
+-- Tier rename: "" → basic, "normal" → pro
+UPDATE users SET tier = 'basic' WHERE tier = '';
+UPDATE users SET tier = 'pro'   WHERE tier = 'normal';
 `;
 
 export async function runMigrations() {

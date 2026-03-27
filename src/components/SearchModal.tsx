@@ -54,7 +54,7 @@ const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-
 
 function TierBadge({ tier }: { tier?: string }) {
   if (tier === "top") return <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/></svg>;
-  if (tier === "normal") return <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/></svg>;
+  if (tier === "pro" || tier === "normal") return <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/></svg>;
   return null;
 }
 

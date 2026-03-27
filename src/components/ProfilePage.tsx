@@ -270,9 +270,14 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                           <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
                         </svg>
                       )}
-                      {profile.tier === "normal" && (
+                      {(profile.tier === "pro" || profile.tier === "normal") && (
                         <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
                           <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
+                        </svg>
+                      )}
+                      {(profile.tier === "basic" || profile.tier === "") && profile.telegram_username && (
+                        <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
+                          <path d={SEAL} fill="#6B7280"/><path d={CHECK} fill="white"/>
                         </svg>
                       )}
                       {profile.x_username && (
