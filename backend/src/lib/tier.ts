@@ -2,8 +2,8 @@ import { db } from "../db/client.js";
 
 // Thresholds to automatically reach a tier
 export const TIER_THRESHOLDS = {
-  pro: { volume_usd: 500,    referrals: 3  },
-  top: { volume_usd: 5_000,  referrals: 10 },
+  pro: { volume_usd: 2_500,  referrals: 10 },
+  top: { volume_usd: 25_000, referrals: 50 },
 };
 
 export type Tier = "" | "basic" | "pro" | "top" | "elite";

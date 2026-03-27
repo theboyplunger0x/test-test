@@ -35,8 +35,8 @@ const TIERS = [
     label: "Pro",
     cashback: "10%",
     referral: "10%",
-    desc: "$500 volume or 3 referrals",
-    how: "$500 in real bets or refer 3 people",
+    desc: "$2,500 volume or 10 referrals",
+    how: "$2,500 in real bets or refer 10 people",
   },
   {
     key: "top",
@@ -44,8 +44,8 @@ const TIERS = [
     label: "Top",
     cashback: "20%",
     referral: "20%",
-    desc: "$5,000 volume or 10 referrals",
-    how: "$5,000 in real bets or refer 10 people",
+    desc: "$25,000 volume or 50 referrals",
+    how: "$25,000 in real bets or refer 50 people",
   },
 ];
 
