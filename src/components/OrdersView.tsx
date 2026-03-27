@@ -351,16 +351,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
       {/* Username + tier */}
       <div className="flex items-center gap-1.5 mb-2">
         <button onClick={onViewProfile} className={`text-[15px] font-black ${strong} cursor-pointer hover:opacity-70 transition-opacity`}>{username}</button>
-        {tier === "top" && (
-          <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
-            <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
-          </svg>
-        )}
-        {tier === "normal" && (
-          <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
-            <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
-          </svg>
-        )}
+        {tier && <TierBadge tier={tier} tgUsername={telegramUsername} />}
       </div>
 
       {/* Bio */}
