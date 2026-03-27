@@ -266,24 +266,28 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={`text-[14px] font-black ${strong}`}>{username}</span>
                       {profile.tier === "elite" && (
-                        <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
-                          <path d={SEAL} fill="#8B5CF6"/><path d={CHECK} fill="white"/>
-                        </svg>
+                        <span className="relative group/badge inline-flex items-center shrink-0">
+                          <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#8B5CF6"/><path d={CHECK} fill="white"/></svg>
+                          <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-2 py-1 text-[10px] font-bold text-white opacity-0 group-hover/badge:opacity-100 transition-opacity duration-150 z-50">Not for everyone.</span>
+                        </span>
                       )}
                       {profile.tier === "top" && (
-                        <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
-                          <path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/>
-                        </svg>
+                        <span className="relative group/badge inline-flex items-center shrink-0">
+                          <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/></svg>
+                          <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-2 py-1 text-[10px] font-bold text-white opacity-0 group-hover/badge:opacity-100 transition-opacity duration-150 z-50">Top · 20% fee rebate</span>
+                        </span>
                       )}
                       {(profile.tier === "pro" || profile.tier === "normal") && (
-                        <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
-                          <path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/>
-                        </svg>
+                        <span className="relative group/badge inline-flex items-center shrink-0">
+                          <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/></svg>
+                          <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-2 py-1 text-[10px] font-bold text-white opacity-0 group-hover/badge:opacity-100 transition-opacity duration-150 z-50">Pro · 10% fee rebate</span>
+                        </span>
                       )}
                       {(profile.tier === "basic" || profile.tier === "") && profile.telegram_username && (
-                        <svg width="13" height="13" viewBox="0 0 22 22" fill="none">
-                          <path d={SEAL} fill="#6B7280"/><path d={CHECK} fill="white"/>
-                        </svg>
+                        <span className="relative group/badge inline-flex items-center shrink-0">
+                          <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#6B7280"/><path d={CHECK} fill="white"/></svg>
+                          <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-2 py-1 text-[10px] font-bold text-white opacity-0 group-hover/badge:opacity-100 transition-opacity duration-150 z-50">Basic · Telegram connected</span>
+                        </span>
                       )}
                       {profile.x_username && (
                         <a href={`https://x.com/${profile.x_username}`} target="_blank" rel="noopener noreferrer"

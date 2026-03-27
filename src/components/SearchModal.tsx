@@ -53,9 +53,14 @@ const SEAL = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.43
 const CHECK = "M9.611 12.851L7.29 10.53l-.927.948 3.248 3.2 6.912-6.83-.95-.943-5.962 5.946z";
 
 function TierBadge({ tier }: { tier?: string }) {
-  if (tier === "elite") return <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#8B5CF6"/><path d={CHECK} fill="white"/></svg>;
-  if (tier === "top") return <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/></svg>;
-  if (tier === "pro" || tier === "normal") return <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/></svg>;
+  const tip = (label: string) => (
+    <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-2 py-1 text-[10px] font-bold text-white opacity-0 group-hover/badge:opacity-100 transition-opacity duration-150 z-50">
+      {label}
+    </span>
+  );
+  if (tier === "elite") return <span className="relative group/badge inline-flex items-center shrink-0"><svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#8B5CF6"/><path d={CHECK} fill="white"/></svg>{tip("Not for everyone.")}</span>;
+  if (tier === "top") return <span className="relative group/badge inline-flex items-center shrink-0"><svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/></svg>{tip("Top · 20% fee rebate")}</span>;
+  if (tier === "pro" || tier === "normal") return <span className="relative group/badge inline-flex items-center shrink-0"><svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/></svg>{tip("Pro · 10% fee rebate")}</span>;
   return null;
 }
 
