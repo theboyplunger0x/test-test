@@ -267,7 +267,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                       <span className={`text-[14px] font-black ${strong}`}>{username}</span>
                       {profile.tier === "elite" && (
                         <span className="relative group/badge inline-flex items-center shrink-0">
-                          <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#111827"/><path d={CHECK} fill="#FACC15"/></svg>
+                          <svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#4C1D95"/><path d={CHECK} fill="#FACC15"/></svg>
                           <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-2 py-1 text-[10px] font-bold text-white opacity-0 group-hover/badge:opacity-100 transition-opacity duration-150 z-50">Not for everyone.</span>
                         </span>
                       )}

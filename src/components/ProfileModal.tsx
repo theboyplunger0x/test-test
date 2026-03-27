@@ -15,7 +15,7 @@ function TierBadge({ tier, tgUsername }: { tier?: string; tgUsername?: string })
   );
   if (tier === "elite") return (
     <span className="relative group/badge inline-flex items-center shrink-0">
-      <svg width="15" height="15" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#111827"/><path d={CHECK} fill="#FACC15"/></svg>
+      <svg width="15" height="15" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#4C1D95"/><path d={CHECK} fill="#FACC15"/></svg>
       {tip("Not for everyone.")}
     </span>
   );
