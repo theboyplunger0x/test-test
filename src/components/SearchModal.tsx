@@ -58,7 +58,7 @@ function TierBadge({ tier }: { tier?: string }) {
       {label}
     </span>
   );
-  if (tier === "elite") return <span className="relative group/badge inline-flex items-center shrink-0"><svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#111827" stroke="#F4C43B" strokeWidth="0.8"/><path d={CHECK} fill="#F4C43B"/></svg>{tip("Not for everyone.")}</span>;
+  if (tier === "elite") return <span className="relative group/badge inline-flex items-center shrink-0"><svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#111827"/><path d={CHECK} fill="#FACC15"/></svg>{tip("Not for everyone.")}</span>;
   if (tier === "top") return <span className="relative group/badge inline-flex items-center shrink-0"><svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#F4C43B"/><path d={CHECK} fill="white"/></svg>{tip("Top · 20% fee rebate")}</span>;
   if (tier === "pro" || tier === "normal") return <span className="relative group/badge inline-flex items-center shrink-0"><svg width="13" height="13" viewBox="0 0 22 22" fill="none"><path d={SEAL} fill="#1D9BF0"/><path d={CHECK} fill="white"/></svg>{tip("Pro · 10% fee rebate")}</span>;
   return null;

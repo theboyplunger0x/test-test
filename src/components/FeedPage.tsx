@@ -90,7 +90,7 @@ function tierBadge(tier?: string, telegramUsername?: string) {
   );
   if (tier === "elite") return (
     <span className="relative group/badge inline-flex items-center shrink-0">
-      <svg width="17" height="17" viewBox="0 0 22 22" fill="none" className="inline-block align-middle"><path d={S} fill="#111827" stroke="#F4C43B" strokeWidth="0.8"/><path d={C} fill="#F4C43B"/></svg>
+      <svg width="17" height="17" viewBox="0 0 22 22" fill="none" className="inline-block align-middle"><path d={S} fill="#111827"/><path d={C} fill="#FACC15"/></svg>
       {tip("Not for everyone.")}
     </span>
   );

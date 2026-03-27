@@ -14,8 +14,8 @@ const VerifiedBadge = ({ color }: { color: string }) => (
 );
 const EliteBadge = () => (
   <svg width="15" height="15" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block align-middle flex-shrink-0">
-    <path d={SEAL_PATH} fill="#111827" stroke="#F4C43B" strokeWidth="0.8"/>
-    <path d={CHECK_PATH} fill="#F4C43B"/>
+    <path d={SEAL_PATH} fill="#111827"/>
+    <path d={CHECK_PATH} fill="#FACC15"/>
   </svg>
 );
 
