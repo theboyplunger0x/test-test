@@ -184,6 +184,48 @@ ALTER TABLE positions ADD COLUMN IF NOT EXISTS message TEXT;
 -- Tier rename: "" → basic, "normal" → pro
 UPDATE users SET tier = 'basic' WHERE tier = '';
 UPDATE users SET tier = 'pro'   WHERE tier = 'normal';
+
+-- ── Order Book ────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS orders (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID NOT NULL REFERENCES users(id),
+  symbol           TEXT NOT NULL,
+  chain            TEXT NOT NULL,
+  ca               TEXT,
+  timeframe        TEXT NOT NULL,
+  side             TEXT NOT NULL,           -- 'long' | 'short'
+  amount           NUMERIC(18,6) NOT NULL,
+  remaining_amount NUMERIC(18,6) NOT NULL,  -- decrements on partial fill
+  reserved_amount  NUMERIC(18,6) NOT NULL,  -- balance currently locked
+  status           TEXT NOT NULL DEFAULT 'pending', -- 'pending'|'partially_filled'|'filled'|'cancelled'|'expired'
+  is_paper         BOOLEAN NOT NULL DEFAULT false,
+  auto_reopen      BOOLEAN NOT NULL DEFAULT false,
+  expires_at       TIMESTAMPTZ,
+  tagline          TEXT NOT NULL DEFAULT '',
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user   ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_book   ON orders(symbol, timeframe, side, status);
+CREATE INDEX IF NOT EXISTS idx_orders_pending ON orders(status) WHERE status IN ('pending','partially_filled');
+
+CREATE TABLE IF NOT EXISTS fills (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sweep_id       UUID NOT NULL,
+  maker_order_id UUID NOT NULL REFERENCES orders(id),
+  taker_user_id  UUID NOT NULL REFERENCES users(id),
+  market_id      UUID NOT NULL REFERENCES markets(id),
+  filled_amount  NUMERIC(18,6) NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fills_sweep  ON fills(sweep_id);
+CREATE INDEX IF NOT EXISTS idx_fills_taker  ON fills(taker_user_id);
+CREATE INDEX IF NOT EXISTS idx_fills_order  ON fills(maker_order_id);
+
+ALTER TABLE markets ADD COLUMN IF NOT EXISTS sweep_id UUID;
+CREATE INDEX IF NOT EXISTS idx_markets_sweep ON markets(sweep_id) WHERE sweep_id IS NOT NULL;
 `;
 
 export async function runMigrations() {

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import type { Candle, TokenInfo } from "@/lib/chartData";
 import { searchBySymbol, getOHLCV, resolutionForTf, getPriceByPair } from "@/lib/chartData";
-import { api, Market } from "@/lib/api";
+import { api, Market, OrderBook } from "@/lib/api";
 
 const Chart = dynamic(() => import("./Chart"), { ssr: false });
 
@@ -76,6 +76,8 @@ interface Props {
   markets: Market[];        // live markets for this symbol
   onBet: (marketId: string, side: "long" | "short", amount: number, message?: string) => Promise<string | null>;
   onAutoTrade?: (side: "long" | "short", amount: number, timeframe: string, tagline?: string) => Promise<string | null>;
+  onSweep?: (side: "long" | "short", amount: number, timeframe: string) => Promise<string | null>;
+  onPlaceOrder?: (side: "long" | "short", amount: number, timeframe: string, autoReopen: boolean) => Promise<string | null>;
   onOpenMarket: () => void;
   onViewToken?: () => void;
   loggedIn: boolean;
@@ -86,7 +88,7 @@ interface Props {
 
 export default function CoinDetail({
   symbol, chain, timeframe: initialTf, theme,
-  markets, onBet, onAutoTrade, onOpenMarket, onViewToken, loggedIn, onAuthRequired,
+  markets, onBet, onAutoTrade, onSweep, onPlaceOrder, onOpenMarket, onViewToken, loggedIn, onAuthRequired,
   tokenInfo: tokenInfoProp,
   presets = DEFAULT_AMOUNTS,
 }: Props) {
@@ -184,12 +186,54 @@ export default function CoinDetail({
   const longMult  = total > 0 ? mult(longPool,  shortPool) : DEFAULT_MULT;
   const shortMult = total > 0 ? mult(shortPool, longPool)  : DEFAULT_MULT;
 
+  // ── Order book ──────────────────────────────────────────────────────────────
+  const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
+  const obTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const ob = await api.getOrderBook(symbol, chain.toLowerCase());
+        if (!cancelled) setOrderBook(ob);
+      } catch { /* ignore */ }
+    };
+    fetch();
+    obTimerRef.current = setInterval(fetch, 5_000);
+    return () => { cancelled = true; if (obTimerRef.current) clearInterval(obTimerRef.current); };
+  }, [symbol, chain]);
+
   const [side, setSide]         = useState<"long" | "short" | null>(null);
   const [amount, setAmount]     = useState<number | null>(null);
   const [customAmt, setCustomAmt] = useState("");
   const [tagline, setTagline]   = useState("");
   const [betError, setBetError] = useState("");
   const [betLoading, setBetLoading] = useState(false);
+  const [sweepError, setSweepError] = useState("");
+  const [sweepLoading, setSweepLoading] = useState(false);
+
+  // ── Trade panel tab ─────────────────────────────────────────────────────────
+  const [tradeTab, setTradeTab]         = useState<"market" | "limit">("market");
+  const [makerSide, setMakerSide]       = useState<"long" | "short" | null>(null);
+  const [makerAmt, setMakerAmt]         = useState("");
+  const [autoReopen, setAutoReopen]     = useState(false);
+  const [makerError, setMakerError]     = useState("");
+  const [makerLoading, setMakerLoading] = useState(false);
+  const [makerDone, setMakerDone]       = useState(false);
+
+  async function handlePlaceOrder() {
+    if (!makerSide) return;
+    const amt = parseFloat(makerAmt);
+    if (isNaN(amt) || amt < 5) { setMakerError("Minimum $5"); return; }
+    if (!loggedIn) { onAuthRequired(); return; }
+    if (!onPlaceOrder) return;
+    setMakerLoading(true);
+    setMakerError("");
+    const err = await onPlaceOrder(makerSide, amt, timeframe, autoReopen);
+    setMakerLoading(false);
+    if (err) { setMakerError(err); }
+    else { setMakerDone(true); setMakerAmt(""); setMakerSide(null); setAutoReopen(false); setTimeout(() => setMakerDone(false), 2500); }
+  }
 
   const parsedCustom = customAmt !== "" ? parseFloat(customAmt) : NaN;
   const finalAmount  = customAmt !== "" ? (isNaN(parsedCustom) ? null : parsedCustom) : amount;
@@ -258,81 +302,75 @@ export default function CoinDetail({
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden">
 
-      {/* ── TOP/LEFT: Chart area ─────────────────────────────── */}
-      <div className={`flex-1 flex flex-col overflow-hidden ${T.chartBg}`} style={{ minHeight: 0 }}>
+      {/* ── Stats bar ────────────────────────────────────────────────────────── */}
+      <div className={`flex items-center gap-3 px-4 py-2.5 border-b shrink-0 ${dk ? "border-white/8 bg-[#0a0a0a]" : "border-gray-100 bg-white"}`}>
+        <button onClick={onViewToken} className={`text-[15px] font-black shrink-0 ${T.textPrimary} ${onViewToken ? "hover:opacity-60 cursor-pointer transition-opacity" : "cursor-default"}`}>
+          ${symbol}
+        </button>
+        <span className={`text-[18px] font-black tabular-nums shrink-0 ${T.textPrimary}`}>
+          {tokenInfo ? `$${formatPrice(livePrice ?? tokenInfo.price)}` : "—"}
+        </span>
+        {tokenInfo && (
+          <span className={`shrink-0 text-[11px] font-black px-1.5 py-0.5 rounded ${T.changePill(tokenInfo.change24h >= 0)}`}>
+            {tokenInfo.change24h >= 0 ? "+" : ""}{tokenInfo.change24h.toFixed(2)}%
+          </span>
+        )}
+        <div className={`flex items-center gap-3 flex-1 min-w-0 overflow-x-auto border-l pl-3 ${dk ? "border-white/8" : "border-gray-100"}`}>
+          {tokenInfo?.marketCap ? (
+            <div className="shrink-0">
+              <span className={`text-[9px] uppercase tracking-widest ${T.textMuted}`}>MCap </span>
+              <span className={`text-[11px] font-bold ${T.textPrimary}`}>{formatMcap(tokenInfo.marketCap)}</span>
+            </div>
+          ) : null}
+          <span className={`shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full ${T.chainPill(chain)}`}>{chain}</span>
+          {tokenInfo?.address && <CopyCA ca={tokenInfo.address} dk={dk} />}
+        </div>
+        <div className={`flex rounded-lg overflow-hidden text-[10px] font-black shrink-0 ${T.toggleBase}`}>
+          {(["price", "mcap"] as const).map((v) => (
+            <button key={v} onClick={() => setChartView(v)}
+              className={`px-2.5 py-1.5 transition-all ${chartView === v ? T.toggleActive : T.toggleInact}`}>
+              {v === "price" ? "P" : "M"}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* Header */}
-        <div className="px-5 pt-4 pb-3 flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2.5 mb-1">
-              <button onClick={onViewToken} className={`text-[20px] font-black ${T.textPrimary} ${onViewToken ? "hover:opacity-60 transition-opacity cursor-pointer" : "cursor-default"}`}>${symbol}</button>
-              {tokenInfo && (
-                <span className={`text-[12px] font-black px-2 py-0.5 rounded-full ${T.changePill(tokenInfo.change24h >= 0)}`}>
-                  {tokenInfo.change24h >= 0 ? "+" : ""}{tokenInfo.change24h.toFixed(1)}%
-                </span>
-              )}
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${T.chainPill(chain)}`}>{chain}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className={`text-[11px] font-bold ${T.priceLbl}`}>
-                {tokenInfo ? (
-                  chartView === "price" ? (
-                    <>Price <span className={T.priceVal}>${formatPrice(tokenInfo.price)}</span></>
-                  ) : (
-                    <>MCap <span className={T.priceVal}>{formatMcap(tokenInfo.marketCap)}</span>
-                    {tokenInfo.price > 0 && <span className={`ml-2 ${T.textMuted}`}>@ ${formatPrice(tokenInfo.price)}</span>}</>
-                  )
-                ) : (
-                  <span className={T.textMuted}>Loading…</span>
-                )}
-              </p>
-              {tokenInfo?.address && <CopyCA ca={tokenInfo.address} dk={dk} />}
-            </div>
+      {/* ── Main 3-column area ───────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+
+      {/* ── LEFT: Chart ──────────────────────────────────────────── */}
+      <div className={`flex-1 flex flex-col overflow-hidden min-h-0 ${T.chartBg}`} style={{ minHeight: 0 }}>
+
+        {/* Chart toolbar: TF selector + countdown */}
+        <div className={`flex items-center gap-2 px-3 py-2 border-b shrink-0 ${dk ? "border-white/6" : "border-gray-100"}`}>
+          <div className={`flex rounded-lg overflow-hidden text-[10px] font-black ${T.toggleBase}`}>
+            {["1m","5m","15m","1h","4h","24h"].map((tf) => (
+              <button key={tf} onClick={() => setChartTf(tf)}
+                className={`px-2.5 py-1.5 transition-all ${chartTf === tf ? T.toggleActive : T.toggleInact}`}>
+                {tf}
+              </button>
+            ))}
           </div>
-
-          {/* Chart control toggles */}
-          <div className="flex items-center gap-1.5">
-            {/* Chart TF — independent from trade TF */}
-            <div className={`flex rounded-xl overflow-hidden text-[11px] font-black shrink-0 ${T.toggleBase}`}>
-              {["1m","5m","15m","1h","4h","24h"].map((tf) => (
-                <button key={tf} onClick={() => setChartTf(tf)}
-                  className={`w-9 py-2 text-center transition-all ${chartTf === tf ? T.toggleActive : T.toggleInact}`}>
-                  {tf}
-                </button>
-              ))}
+          {activeMarket ? (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className={`flex-1 h-1 rounded-full overflow-hidden ${T.cdBarBg}`}>
+                <motion.div
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.8, ease: "linear" }}
+                  className={`h-full rounded-full bg-gradient-to-r ${T.cdBarFill}`}
+                />
+              </div>
+              <span className={`text-[11px] font-black tabular-nums shrink-0 ${T.textPrimary}`}>{formatCountdown(msLeft)}</span>
             </div>
-            {/* Price / MCap */}
-            <div className={`flex rounded-xl overflow-hidden text-[10px] font-black ${T.toggleBase}`}>
-              {(["price", "mcap"] as const).map((v) => (
-                <button key={v} onClick={() => setChartView(v)}
-                  className={`px-3 py-1.5 transition-all ${chartView === v ? T.toggleActive : T.toggleInact}`}>
-                  {v === "price" ? "Price" : "MCap"}
-                </button>
-              ))}
-            </div>
-          </div>
+          ) : (
+            <span className={`text-[10px] ml-1 ${T.textMuted}`}>no active market</span>
+          )}
         </div>
 
-        {/* Countdown bar (only when market is active) */}
-        {activeMarket && (
-          <div className="px-5 pb-3 flex items-center gap-3">
-            <span className={`text-[9px] font-black uppercase tracking-widest shrink-0 ${T.textMuted}`}>Closes</span>
-            <span className={`text-[14px] font-black tabular-nums ${T.textPrimary}`}>{formatCountdown(msLeft)}</span>
-            <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${T.cdBarBg}`}>
-              <motion.div
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.8, ease: "linear" }}
-                className={`h-full rounded-full bg-gradient-to-r ${T.cdBarFill}`}
-              />
-            </div>
-            <span className={`text-[9px] font-black shrink-0 ${T.textMuted}`}>{activeMarket.timeframe}</span>
-          </div>
-        )}
-
         {/* Chart */}
-        <div className="flex-1 min-h-0 h-[260px] md:h-auto px-3 pb-3 relative">
+        <div className="flex-1 min-h-0 h-[240px] md:h-auto relative">
           {loading && candles.length === 0 && (
             <div className={`absolute inset-0 flex items-center justify-center ${T.textMuted} text-[12px] font-bold`}>
               Loading chart…
@@ -350,144 +388,319 @@ export default function CoinDetail({
             direction={side}
             dk={dk}
           />
+          {loading && candles.length === 0 && (
+            <div className={`absolute inset-0 flex items-center justify-center ${T.textMuted} text-[12px] font-bold`}>Loading chart…</div>
+          )}
+          {!loading && candles.length === 0 && (
+            <div className={`absolute inset-0 flex items-center justify-center ${T.textMuted} text-[12px] font-bold`}>No chart data</div>
+          )}
         </div>
       </div>
 
-      {/* ── BOTTOM/RIGHT: Order panel ───────────────────────────── */}
-      <div className={`w-full md:w-[280px] shrink-0 flex flex-col overflow-y-auto border-t md:border-t-0 md:border-l ${dk ? "border-white/8" : "border-gray-100"} ${T.panelBg}`}>
+      {/* ── CENTER: Order Book (desktop only) ────────────────────── */}
+      {(() => {
+        const shorts: { tf: string; pool: number; mult: number }[] = [];
+        const longs:  { tf: string; pool: number; mult: number }[] = [];
+        if (orderBook) {
+          for (const [tf, data] of Object.entries(orderBook.timeframes)) {
+            if (data.short.total > 0) shorts.push({ tf, pool: data.short.total, mult: data.long_multiplier });
+            if (data.long.total  > 0) longs.push({  tf, pool: data.long.total,  mult: data.short_multiplier });
+          }
+        }
+        const allPools = [...shorts, ...longs].map(r => r.pool);
+        const maxPool  = allPools.length > 0 ? Math.max(...allPools) : 1;
 
-        {/* Long / Short */}
-        <div className="px-4 pt-5 pb-4">
-          <div className="flex gap-2.5 mb-3">
-            <motion.button whileTap={{ scale: 0.96 }}
-              onClick={() => setSide(side === "long" ? null : "long")}
-              className={`flex-1 rounded-2xl py-4 text-center transition-all duration-150 ${
-                side === "long" ? "bg-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.35)]" : T.upIdle
-              }`}>
-              <p className={`text-[22px] font-black leading-tight ${side === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
-              <p className={`text-[13px] font-black ${side === "long" ? "text-emerald-100/80" : "text-emerald-400/70"}`}>{longMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
-            </motion.button>
+        const renderRows = (rows: typeof shorts, takerSide: "long" | "short") =>
+          rows.sort((a, b) => b.mult - a.mult).map(r => {
+            const barW  = Math.max(6, (r.pool / maxPool) * 100);
+            const mc    = r.mult >= 5 ? "text-amber-400" : r.mult >= 3 ? "text-emerald-400" : dk ? "text-white/55" : "text-gray-500";
+            const isSelected = side === takerSide && timeframe === r.tf;
+            return (
+              <button
+                key={`${takerSide}-${r.tf}`}
+                onClick={() => { setTradeTab("market"); setSide(takerSide); setTimeframe(r.tf); }}
+                className={`w-full px-3 py-1.5 flex items-center gap-1.5 relative overflow-hidden transition-colors ${
+                  isSelected
+                    ? dk ? "bg-white/[0.07]" : "bg-gray-100"
+                    : dk ? "hover:bg-white/[0.04]" : "hover:bg-gray-50"
+                }`}
+              >
+                <div
+                  className={`absolute left-0 top-0 bottom-0 ${takerSide === "long" ? "bg-emerald-500" : "bg-red-500"} opacity-[0.07]`}
+                  style={{ width: `${barW}%` }}
+                />
+                <span className={`text-[10px] font-black shrink-0 w-7 text-left ${dk ? "text-white/30" : "text-gray-400"}`}>{r.tf}</span>
+                <span className={`text-[10px] font-mono flex-1 text-right tabular-nums ${dk ? "text-white/45" : "text-gray-500"}`}>
+                  ${r.pool >= 1000 ? `${(r.pool / 1000).toFixed(1)}k` : r.pool.toFixed(0)}
+                </span>
+                <span className={`text-[11px] font-black tabular-nums w-12 text-right ${mc}`}>
+                  {r.mult >= 100 ? "100x+" : `${r.mult.toFixed(1)}x`}
+                </span>
+              </button>
+            );
+          });
 
-            <motion.button whileTap={{ scale: 0.96 }}
-              onClick={() => setSide(side === "short" ? null : "short")}
-              className={`flex-1 rounded-2xl py-4 text-center transition-all duration-150 ${
-                side === "short" ? "bg-red-500 shadow-[0_0_24px_rgba(239,68,68,0.35)]" : T.downIdle
-              }`}>
-              <p className={`text-[22px] font-black leading-tight ${side === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
-              <p className={`text-[13px] font-black ${side === "short" ? "text-red-100/80" : "text-red-400/70"}`}>{shortMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
-            </motion.button>
-          </div>
-
-          {/* Pool bar */}
-          {activeMarket && (
-            <>
-              <div className="flex h-1.5 rounded-full overflow-hidden gap-0.5 mb-1.5">
-                <motion.div animate={{ width: `${longPct}%` }}  transition={{ type: "spring", stiffness: 160, damping: 20 }} className="h-full bg-emerald-500 rounded-l-full" />
-                <motion.div animate={{ width: `${shortPct}%` }} transition={{ type: "spring", stiffness: 160, damping: 20 }} className="h-full bg-red-500 rounded-r-full" />
+        return (
+          <div className={`hidden md:flex flex-col w-[170px] shrink-0 border-l overflow-hidden ${dk ? "border-white/8 bg-[#090909]" : "border-gray-100 bg-gray-50/30"}`}>
+            <div className={`px-3 py-2 border-b shrink-0 flex items-center justify-between ${dk ? "border-white/6" : "border-gray-100"}`}>
+              <p className={`text-[9px] font-black uppercase tracking-widest ${T.sectionLbl}`}>Order Book</p>
+              <span className={`text-[9px] ${T.sectionLbl}`}>{shorts.length + longs.length} orders</span>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {/* SHORTS → taker goes LONG */}
+              <div className={`flex items-center justify-between px-3 pt-2 pb-0.5`}>
+                <span className="text-[8px] font-black uppercase tracking-wider text-red-400/50">Shorts</span>
+                <span className={`text-[8px] ${dk ? "text-white/15" : "text-gray-300"}`}>↑ long</span>
               </div>
-              <div className={`flex justify-between text-[10px] font-bold ${T.poolLabel}`}>
-                <span className="text-emerald-400/60">${longPool.toLocaleString()}</span>
-                <span>{markets.filter(m => m.symbol === symbol && m.status === "open").length} open</span>
-                <span className="text-red-400/60">${shortPool.toLocaleString()}</span>
+              {shorts.length === 0
+                ? <p className={`px-3 py-1.5 text-[10px] ${dk ? "text-white/15" : "text-gray-300"}`}>—</p>
+                : renderRows(shorts, "long")
+              }
+
+              <div className={`mx-3 my-1.5 border-t ${dk ? "border-white/6" : "border-gray-100"}`} />
+
+              {/* LONGS → taker goes SHORT */}
+              <div className={`flex items-center justify-between px-3 pt-0.5 pb-0.5`}>
+                <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400/50">Longs</span>
+                <span className={`text-[8px] ${dk ? "text-white/15" : "text-gray-300"}`}>↓ short</span>
               </div>
-            </>
-          )}
-        </div>
+              {longs.length === 0
+                ? <p className={`px-3 py-1.5 text-[10px] ${dk ? "text-white/15" : "text-gray-300"}`}>—</p>
+                : renderRows(longs, "short")
+              }
 
-        {/* Amount */}
-        <div className="px-4 pb-4">
-          <p className={`text-[9px] font-black uppercase tracking-widest mb-2.5 ${T.sectionLbl}`}>Amount</p>
-          <div className="grid grid-cols-4 gap-2 mb-2.5">
-            {presets.map((a) => {
-              const isActive = amount === a && customAmt === String(a);
-              return (
-                <button key={a} onClick={() => { setAmount(a); setCustomAmt(String(a)); }}
-                  className={`py-2.5 rounded-xl text-[13px] font-black transition-all ${
-                    isActive
-                      ? side === "long"  ? "bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.3)]"
-                      : side === "short" ? "bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.3)]"
-                      : dk ? "bg-white text-black" : "bg-gray-900 text-white"
-                      : T.amtIdle
-                  }`}>
-                  ${a}
-                </button>
-              );
-            })}
+              {shorts.length === 0 && longs.length === 0 && (
+                <p className={`px-3 py-3 text-[10px] ${dk ? "text-white/20" : "text-gray-400"}`}>
+                  {orderBook ? "No orders yet." : "Loading…"}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="relative">
-            <span className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] font-bold ${T.textMuted}`}>$</span>
-            <input type="number" placeholder="custom" value={customAmt}
-              onChange={(e) => { setCustomAmt(e.target.value); setAmount(null); }}
-              className={`w-full border text-[13px] font-bold pl-7 pr-3 py-2.5 rounded-xl outline-none transition-all ${T.input}`} />
+        );
+      })()}
+
+      {/* ── RIGHT: Trade Panel ───────────────────────────────────── */}
+      <div className={`w-full md:w-[238px] shrink-0 flex flex-col border-t md:border-t-0 md:border-l overflow-y-auto ${dk ? "border-white/8 bg-[#0e0e0e]" : "border-gray-100 bg-white"}`}>
+
+        {/* Market / Limit tabs */}
+        <div className={`flex shrink-0 border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
+          {(["market", "limit"] as const).map(tab => (
+            <button key={tab} onClick={() => setTradeTab(tab)}
+              className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-wider transition-all relative ${
+                tradeTab === tab
+                  ? dk ? "text-white" : "text-gray-900"
+                  : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"
+              }`}>
+              {tab}
+              {tradeTab === tab && <span className={`absolute bottom-0 left-0 right-0 h-[2px] ${dk ? "bg-white" : "bg-gray-900"}`} />}
+            </button>
+          ))}
+        </div>
+
+        {/* ── MARKET tab ──────────────────────────────────────────── */}
+        {tradeTab === "market" && (
+          <div className="flex flex-col flex-1 px-3 pt-3 gap-3 pb-4">
+
+            {/* Long / Short */}
+            <div className="flex gap-2">
+              <motion.button whileTap={{ scale: 0.96 }} onClick={() => setSide(side === "long" ? null : "long")}
+                className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${side === "long" ? "bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)]" : T.upIdle}`}>
+                <p className={`text-[16px] font-black leading-tight ${side === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
+                <p className={`text-[11px] font-black ${side === "long" ? "text-emerald-100/80" : "text-emerald-400/70"}`}>{longMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.96 }} onClick={() => setSide(side === "short" ? null : "short")}
+                className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${side === "short" ? "bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]" : T.downIdle}`}>
+                <p className={`text-[16px] font-black leading-tight ${side === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
+                <p className={`text-[11px] font-black ${side === "short" ? "text-red-100/80" : "text-red-400/70"}`}>{shortMult.toFixed(2)}x{!activeMarket ? "~" : ""}</p>
+              </motion.button>
+            </div>
+
+            {/* Pool bar */}
+            {activeMarket && (
+              <div>
+                <div className="flex h-1 rounded-full overflow-hidden gap-0.5 mb-1">
+                  <motion.div animate={{ width: `${longPct}%` }}  transition={{ type: "spring", stiffness: 160, damping: 20 }} className="h-full bg-emerald-500 rounded-l-full" />
+                  <motion.div animate={{ width: `${shortPct}%` }} transition={{ type: "spring", stiffness: 160, damping: 20 }} className="h-full bg-red-500 rounded-r-full" />
+                </div>
+                <div className={`flex justify-between text-[9px] font-bold ${T.poolLabel}`}>
+                  <span className="text-emerald-400/60">${longPool.toLocaleString()}</span>
+                  <span>{markets.filter(m => m.symbol === symbol && m.status === "open").length} open</span>
+                  <span className="text-red-400/60">${shortPool.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Duration */}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Duration</p>
+              <div className="flex flex-wrap gap-1">
+                {TIMEFRAMES.map((tf) => (
+                  <button key={tf} onClick={() => setTimeframe(tf)}
+                    className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${timeframe === tf ? T.durActive : T.durIdle}`}>
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Amount */}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Amount</p>
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {presets.map((a) => {
+                  const isActive = amount === a && customAmt === String(a);
+                  return (
+                    <button key={a} onClick={() => { setAmount(a); setCustomAmt(String(a)); }}
+                      className={`py-2 rounded-lg text-[11px] font-black transition-all ${
+                        isActive
+                          ? side === "long"  ? "bg-emerald-500 text-white"
+                          : side === "short" ? "bg-red-500 text-white"
+                          : dk ? "bg-white text-black" : "bg-gray-900 text-white"
+                          : T.amtIdle
+                      }`}>
+                      ${a}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="relative">
+                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${T.textMuted}`}>$</span>
+                <input type="number" placeholder="custom" value={customAmt}
+                  onChange={(e) => { setCustomAmt(e.target.value); setAmount(null); }}
+                  className={`w-full border text-[12px] font-bold pl-6 pr-3 py-2 rounded-lg outline-none transition-all ${T.input}`} />
+              </div>
+            </div>
+
+            {/* Message */}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
+                Message <span className="opacity-40 normal-case font-bold">(optional)</span>
+              </p>
+              <textarea value={tagline} onChange={(e) => setTagline(e.target.value)}
+                maxLength={80} placeholder={`${symbol} to the moon!`} rows={2}
+                className={`w-full border text-[11px] font-bold p-2.5 rounded-lg outline-none resize-none transition-all ${T.input} placeholder:opacity-30`} />
+            </div>
+
+            {/* To win */}
+            <div className="flex items-end justify-between">
+              <p className={`text-[8px] font-black uppercase tracking-widest ${T.sectionLbl}`}>
+                To win{!activeMarket && winAmount ? <span className="ml-1 normal-case opacity-50">(est.)</span> : ""}
+              </p>
+              <div className="text-right">
+                <span className={`text-[26px] font-black leading-none ${winAmount && winAmount !== "0" ? "text-emerald-400" : T.textMuted}`}>
+                  {winAmount && winAmount !== "0" ? `$${winAmount}` : "$0"}
+                </span>
+                {winAmount && finalAmount != null && parseFloat(winAmount) > 0 && (
+                  <p className={`text-[9px] font-bold ${T.textMuted}`}>+${(parseFloat(winAmount) - finalAmount).toFixed(0)} profit</p>
+                )}
+              </div>
+            </div>
+
+            {betError && <p className="text-[10px] font-bold text-red-400">{betError}</p>}
+
+            <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade}
+              disabled={!isReady || betLoading}
+              className={`w-full py-3.5 rounded-xl text-[13px] font-black uppercase tracking-widest transition-all mt-auto ${
+                betLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+                : isReady
+                  ? side === "long"  ? "bg-emerald-500 text-white hover:bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.3)]"
+                  : "bg-red-500 text-white hover:bg-red-400 shadow-[0_0_16px_rgba(239,68,68,0.3)]"
+                  : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}>
+              {betLoading ? "Placing…" : activeMarket ? "Trade" : "Open Market →"}
+            </motion.button>
           </div>
-        </div>
-
-        {/* Message */}
-        <div className="px-4 pb-4">
-          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${T.sectionLbl}`}>Your message <span className="opacity-40 normal-case font-bold">(optional)</span></p>
-          <textarea
-            value={tagline}
-            onChange={(e) => setTagline(e.target.value)}
-            maxLength={80}
-            placeholder={`${symbol} to the moon!`}
-            rows={2}
-            className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${T.input} placeholder:opacity-30`}
-          />
-        </div>
-
-        {/* To win */}
-        <div className="px-4 pb-4">
-          <div className="flex items-end justify-between mb-0.5">
-            <p className={`text-[9px] font-black uppercase tracking-widest ${T.sectionLbl}`}>
-              To win{!activeMarket && winAmount ? <span className="ml-1 normal-case opacity-50">(est.)</span> : ""}
-            </p>
-            <span className={`text-[28px] font-black leading-none ${winAmount && winAmount !== "0" ? "text-emerald-400" : T.textMuted}`}>
-              {winAmount && winAmount !== "0" ? `$${winAmount}` : "$0"}
-            </span>
-          </div>
-          {winAmount && finalAmount != null && parseFloat(winAmount) > 0 && (
-            <p className={`text-[10px] font-bold text-right ${T.textMuted}`}>
-              +${(parseFloat(winAmount) - finalAmount).toFixed(0)} profit · 5% fee
-            </p>
-          )}
-        </div>
-
-        {betError && (
-          <p className="px-4 pb-2 text-[11px] font-bold text-red-400">{betError}</p>
         )}
 
-        {/* Trade / Open Market button */}
-        <div className="px-4 pb-4">
-          <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade}
-            disabled={!isReady || betLoading}
-            className={`w-full py-4 rounded-2xl text-[15px] font-black uppercase tracking-widest transition-all ${
-              betLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
-              : isReady
-                ? side === "long"
-                  ? "bg-emerald-500 text-white hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
-                  : "bg-red-500 text-white hover:bg-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
-                : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
-            }`}>
-            {betLoading ? "Placing…" : activeMarket ? "Trade" : "Open Market →"}
-          </motion.button>
-        </div>
+        {/* ── LIMIT tab ───────────────────────────────────────────── */}
+        {tradeTab === "limit" && (
+          <div className="px-3 pt-3 pb-5 flex flex-col gap-3">
+            {!onPlaceOrder ? (
+              <p className={`text-[12px] ${T.textMuted}`}>Not available.</p>
+            ) : (
+              <>
+                {/* Side */}
+                <div className="flex gap-2">
+                  <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "long" ? null : "long")}
+                    className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "long" ? "bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)]" : T.upIdle}`}>
+                    <p className={`text-[15px] font-black ${makerSide === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
+                    <p className={`text-[9px] font-black ${makerSide === "long" ? "text-emerald-100/80" : "text-emerald-400/60"}`}>maker</p>
+                  </motion.button>
+                  <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "short" ? null : "short")}
+                    className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "short" ? "bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.25)]" : T.downIdle}`}>
+                    <p className={`text-[15px] font-black ${makerSide === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
+                    <p className={`text-[9px] font-black ${makerSide === "short" ? "text-red-100/80" : "text-red-400/60"}`}>maker</p>
+                  </motion.button>
+                </div>
 
-        {/* Duration selector */}
-        <div className="px-4 pb-5">
-          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${T.sectionLbl}`}>Duration</p>
-          <div className="flex flex-wrap gap-1.5">
-            {TIMEFRAMES.map((tf) => (
-              <button key={tf} onClick={() => setTimeframe(tf)}
-                className={`text-[11px] font-black px-3.5 py-1.5 rounded-full border transition-all ${
-                  timeframe === tf ? T.durActive : T.durIdle
-                }`}>
-                {tf}
-              </button>
-            ))}
+                {/* Duration */}
+                <div>
+                  <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Duration</p>
+                  <div className="flex flex-wrap gap-1">
+                    {TIMEFRAMES.map((tf) => (
+                      <button key={tf} onClick={() => setTimeframe(tf)}
+                        className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${timeframe === tf ? T.durActive : T.durIdle}`}>
+                        {tf}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Amount</p>
+                  <div className="relative">
+                    <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${T.textMuted}`}>$</span>
+                    <input type="number" placeholder="min $5" value={makerAmt}
+                      onChange={(e) => { setMakerAmt(e.target.value); setMakerError(""); }}
+                      className={`w-full border text-[12px] font-bold pl-6 pr-3 py-2 rounded-lg outline-none transition-all ${T.input}`} />
+                  </div>
+                </div>
+
+                {/* Auto-reopen */}
+                <button onClick={() => setAutoReopen(v => !v)}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl border transition-all ${
+                    autoReopen
+                      ? dk ? "border-white/20 bg-white/8" : "border-gray-300 bg-gray-100"
+                      : dk ? "border-white/8 bg-transparent" : "border-gray-100 bg-transparent"
+                  }`}>
+                  <span className={`text-[15px] leading-none ${autoReopen ? "" : "opacity-30"}`}>↻</span>
+                  <div className="text-left">
+                    <p className={`text-[10px] font-black ${autoReopen ? T.textPrimary : T.textMuted}`}>Auto-reopen</p>
+                    <p className={`text-[9px] ${T.textMuted}`}>Recreate after resolves</p>
+                  </div>
+                  <div className={`ml-auto w-8 h-4 rounded-full relative transition-colors ${
+                    autoReopen ? makerSide === "short" ? "bg-red-500" : "bg-emerald-500" : dk ? "bg-white/15" : "bg-gray-200"
+                  }`}>
+                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${autoReopen ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </div>
+                </button>
+
+                {makerError && <p className="text-[10px] font-bold text-red-400">{makerError}</p>}
+
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handlePlaceOrder}
+                  disabled={!makerSide || !makerAmt || makerLoading || makerDone}
+                  className={`w-full py-3.5 rounded-xl text-[13px] font-black uppercase tracking-widest transition-all ${
+                    makerDone ? "bg-emerald-500 text-white"
+                    : makerLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+                    : makerSide
+                      ? makerSide === "long"  ? "bg-emerald-500 text-white hover:bg-emerald-400"
+                      : "bg-red-500 text-white hover:bg-red-400"
+                      : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  }`}>
+                  {makerDone ? "Order placed ✓" : makerLoading ? "Placing…" : "Place Order →"}
+                </motion.button>
+
+                <p className={`text-[9px] text-center ${T.textMuted}`}>
+                  Order waits in the book until someone sweeps it.
+                </p>
+              </>
+            )}
           </div>
-        </div>
-
+        )}
       </div>
+
+      </div>{/* end 3-col */}
     </div>
   );
 }

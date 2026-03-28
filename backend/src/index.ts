@@ -6,6 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 
 import { authRoutes }        from "./routes/auth.js";
 import { marketRoutes }      from "./routes/markets.js";
+import { orderRoutes }       from "./routes/orders.js";
 import { portfolioRoutes }   from "./routes/portfolio.js";
 import { priceRoutes }       from "./routes/prices.js";
 import { leaderboardRoutes } from "./routes/leaderboard.js";
@@ -55,6 +56,7 @@ app.decorate("authenticate", async (req: any, reply: any) => {
 // Routes
 await app.register(authRoutes);
 await app.register(marketRoutes);
+await app.register(orderRoutes);
 await app.register(portfolioRoutes);
 await app.register(priceRoutes);
 await app.register(leaderboardRoutes);

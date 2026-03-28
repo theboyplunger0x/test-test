@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { api, Position, ReferralStats } from "../lib/api";
+import { api, Position, ReferralStats, Order as PendingOrder } from "../lib/api";
 
 // ─── local display type ────────────────────────────────────────────────────────
 
@@ -22,6 +22,20 @@ type Order = {
   expiresAt: number;
   isOpener: boolean;
   isPaper: boolean;
+  sweepId: string | null;
+};
+
+// Sweep group — multiple positions from the same sweep_id shown as one row
+type SweepGroup = {
+  sweepId: string;
+  symbol: string;
+  timeframe: string;
+  direction: "long" | "short";
+  totalAmount: number;
+  status: OrderStatus;
+  expiresAt: number;
+  isPaper: boolean;
+  positions: Order[];
 };
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
@@ -53,7 +67,37 @@ function positionToOrder(p: Position): Order {
     expiresAt:  new Date(p.closes_at).getTime(),
     isOpener:   p.opener_id === p.user_id,
     isPaper:    p.is_paper ?? false,
+    sweepId:    p.sweep_id ?? null,
   };
+}
+
+function groupBySweep(orders: Order[]): { sweeps: SweepGroup[]; solo: Order[] } {
+  const sweepMap = new Map<string, Order[]>();
+  const solo: Order[] = [];
+  for (const o of orders) {
+    if (o.sweepId) {
+      const arr = sweepMap.get(o.sweepId) ?? [];
+      arr.push(o);
+      sweepMap.set(o.sweepId, arr);
+    } else {
+      solo.push(o);
+    }
+  }
+  const sweeps: SweepGroup[] = [];
+  for (const [sweepId, positions] of sweepMap) {
+    sweeps.push({
+      sweepId,
+      symbol:      positions[0].symbol,
+      timeframe:   positions[0].timeframe,
+      direction:   positions[0].direction,
+      totalAmount: positions.reduce((s, p) => s + p.amount, 0),
+      status:      positions[0].status,
+      expiresAt:   positions[0].expiresAt,
+      isPaper:     positions[0].isPaper,
+      positions,
+    });
+  }
+  return { sweeps, solo };
 }
 
 function formatCountdown(ms: number): string {
@@ -399,6 +443,10 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
   const [referral, setReferral]       = useState<ReferralStats | null>(null);
   const [claiming, setClaiming]       = useState(false);
   const [claimDone, setClaimDone]     = useState(false);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
+  const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
+  const [orderHistory, setOrderHistory]   = useState<PendingOrder[]>([]);
+  const [showOrderHistory, setShowOrderHistory] = useState(false);
 
   // sync balance prop changes (from parent auth refresh)
   useEffect(() => {
@@ -470,6 +518,42 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
     api.getReferral().then(setReferral).catch(() => {});
   }, []);
 
+  // fetch pending orders from order book
+  const fetchPendingOrders = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+    api.getMyOrders().then(setPendingOrders).catch(() => {});
+  }, []);
+
+  useEffect(() => { fetchPendingOrders(); }, [fetchPendingOrders]);
+
+  // lazy-load order history when section is opened
+  useEffect(() => {
+    if (!showOrderHistory) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+    api.getMyOrders(true).then(setOrderHistory).catch(() => {});
+  }, [showOrderHistory]);
+
+  async function cancelPendingOrder(id: string) {
+    setCancellingOrder(id);
+    try {
+      await api.cancelOrder(id);
+      setPendingOrders(prev => prev.filter(o => o.id !== id));
+    } catch (e: any) {
+      alert(e.message ?? "Cancel failed");
+    } finally {
+      setCancellingOrder(null);
+    }
+  }
+
+  async function toggleAutoReopen(id: string, current: boolean) {
+    try {
+      const { auto_reopen } = await api.setOrderAutoReopen(id, !current);
+      setPendingOrders(prev => prev.map(o => o.id === id ? { ...o, auto_reopen } : o));
+    } catch { /* ignore */ }
+  }
+
   async function handleClaim() {
     if (claiming || claimDone || !referral || Number(referral.claimable_usd) <= 0) return;
     setClaiming(true);
@@ -491,6 +575,8 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
   const active  = realOrders.filter((o) => o.status === "open" || o.status === "live");
   const settled = realOrders.filter((o) => o.status === "won"  || o.status === "lost");
+
+  const { sweeps: activeSweeps, solo: activeSolo } = groupBySweep(active);
   const paperActive  = paperOrders.filter((o) => o.status === "open" || o.status === "live");
   const paperSettled = paperOrders.filter((o) => o.status === "won"  || o.status === "lost");
 
@@ -668,6 +754,107 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           </button>
         )}
 
+        {/* Pending Orders (order book intents) */}
+        {pendingOrders.length > 0 && (
+          <div>
+            <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>
+              Pending Orders · <span className={T.muted}>{pendingOrders.length}</span>
+            </p>
+            <div className="space-y-2">
+              {pendingOrders.map(o => (
+                <div key={o.id} className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${T.cardBase}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-[11px] font-black ${o.side === "short" ? "text-red-400" : "text-emerald-400"}`}>
+                      {o.side.toUpperCase()}
+                    </span>
+                    <span className={`text-[12px] font-bold truncate ${T.strong}`}>{o.symbol}</span>
+                    <span className={`text-[11px] font-mono ${T.muted}`}>{o.timeframe}</span>
+                    {o.status === "partially_filled" && (
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${dk ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
+                        partial
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[12px] font-black ${T.normal}`}>
+                      ${parseFloat(o.remaining_amount).toFixed(0)}
+                    </span>
+                    <button
+                      onClick={() => toggleAutoReopen(o.id, o.auto_reopen)}
+                      title={o.auto_reopen ? "Auto-reopen ON — click to disable" : "Auto-reopen OFF — click to enable"}
+                      className={`text-[13px] px-1.5 py-0.5 rounded-lg transition-colors ${
+                        o.auto_reopen
+                          ? dk ? "text-white/70 bg-white/10 hover:bg-white/5" : "text-gray-700 bg-gray-200 hover:bg-gray-100"
+                          : dk ? "text-white/20 bg-transparent hover:text-white/50" : "text-gray-300 bg-transparent hover:text-gray-500"
+                      }`}
+                    >↻</button>
+                    <button
+                      onClick={() => cancelPendingOrder(o.id)}
+                      disabled={cancellingOrder === o.id}
+                      className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors
+                        ${dk ? "bg-white/6 text-white/40 hover:bg-red-500/15 hover:text-red-400"
+                              : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"}`}
+                    >
+                      {cancellingOrder === o.id ? "…" : "cancel"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Order History (filled / cancelled / expired intents) */}
+        <div>
+          <button
+            onClick={() => setShowOrderHistory(v => !v)}
+            className={`flex items-center gap-2 text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl} hover:opacity-80 transition-opacity`}
+          >
+            <span>Order History</span>
+            <span>{showOrderHistory ? "▲" : "▼"}</span>
+          </button>
+          <AnimatePresence>
+            {showOrderHistory && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                {orderHistory.length === 0 ? (
+                  <p className={`text-[13px] font-bold mb-3 ${T.muted}`}>No order history yet.</p>
+                ) : (
+                  <div className="space-y-2 mb-3">
+                    {orderHistory.map(o => {
+                      const isFilled    = o.status === "filled";
+                      const isCancelled = o.status === "cancelled";
+                      const statusColor = isFilled ? "text-emerald-400" : isCancelled ? T.muted : "text-amber-400";
+                      const statusLabel = isFilled ? "filled" : isCancelled ? "cancelled" : "expired";
+                      return (
+                        <div key={o.id} className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${T.cardBase} opacity-60`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`text-[11px] font-black ${o.side === "short" ? "text-red-400" : "text-emerald-400"}`}>
+                              {o.side.toUpperCase()}
+                            </span>
+                            <span className={`text-[12px] font-bold truncate ${T.strong}`}>{o.symbol}</span>
+                            <span className={`text-[11px] font-mono ${T.muted}`}>{o.timeframe}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-[12px] font-black ${T.normal}`}>
+                              ${parseFloat(o.amount).toFixed(0)}
+                            </span>
+                            <span className={`text-[10px] font-black ${statusColor}`}>{statusLabel}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Open positions */}
         <div>
           <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>
@@ -679,7 +866,10 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
             <p className={`text-[13px] font-bold ${T.muted}`}>No open positions.</p>
           ) : (
             <div className="space-y-2">
-              {active.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
+              {activeSweeps.map(g => (
+                <SweepGroupRow key={g.sweepId} group={g} tick={tick} dk={dk} T={T} />
+              ))}
+              {activeSolo.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
             </div>
           )}
         </div>
@@ -729,6 +919,95 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+// ─── sweep group row ───────────────────────────────────────────────────────────
+
+function SweepGroupRow({ group: g, tick, dk, T }: {
+  group: SweepGroup;
+  tick: number;
+  dk: boolean;
+  T: Record<string, string>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isShort  = g.direction === "short";
+  const timeLeft = g.expiresAt - Date.now();
+  const isSettled = g.status === "won" || g.status === "lost";
+
+  const cardCls =
+    g.status === "won"  ? T.cardWon  :
+    g.status === "lost" ? T.cardLost :
+    T.cardBase;
+
+  return (
+    <div className={`rounded-2xl border overflow-hidden ${cardCls}`}>
+      {/* Summary row */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-[11px] font-black ${isShort ? "text-red-400" : "text-emerald-400"}`}>
+            {isShort ? "▼ SHORT" : "▲ LONG"}
+          </span>
+          <span className={`text-[14px] font-black ${T.strong}`}>${g.symbol}</span>
+          <span className={`text-[10px] font-bold ${T.muted}`}>{g.timeframe}</span>
+          {g.isPaper && (
+            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 uppercase tracking-widest">
+              paper
+            </span>
+          )}
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500"}`}>
+            {g.positions.length} fills
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isSettled ? (
+            <span className={`text-[12px] font-black ${g.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
+              {g.status === "won" ? "WON" : "LOST"}
+            </span>
+          ) : (
+            <span className={`text-[11px] font-black tabular-nums ${timeLeft < 60000 ? "text-red-400" : T.muted}`}>
+              {formatCountdown(timeLeft)}
+            </span>
+          )}
+          <span className={`text-[13px] font-black ${T.strong}`}>${g.totalAmount.toFixed(0)}</span>
+          <span className={`text-[10px] font-bold ${T.muted}`}>{expanded ? "▲" : "▼"}</span>
+        </div>
+      </button>
+
+      {/* Expanded fills */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className={`border-t ${dk ? "border-white/6" : "border-gray-100"} divide-y ${dk ? "divide-white/6" : "divide-gray-100"}`}
+          >
+            {g.positions.map((o, i) => (
+              <div key={o.id} className="px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold ${T.muted}`}>fill {i + 1}</span>
+                  <span className={`text-[11px] font-black ${T.normal}`}>${o.amount.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-mono ${T.muted}`}>
+                    entry ${o.entryPrice.toFixed(6)}
+                  </span>
+                  {isSettled && (
+                    <span className={`text-[11px] font-black ${o.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
+                      {o.status === "won" ? `+$${(calcPayout(o) - o.amount).toFixed(2)}` : `-$${o.amount.toFixed(2)}`}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

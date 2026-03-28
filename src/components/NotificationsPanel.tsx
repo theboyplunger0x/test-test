@@ -66,6 +66,22 @@ function NotifRow({ n, dk, onViewProfile }: { n: AppNotification; dk: boolean; o
         <span className={muted}>· ${payload.amount?.toFixed ? payload.amount.toFixed(0) : payload.amount}</span>
       </span>
     );
+  } else if (n.type === "order_filled") {
+    icon = "⚡";
+    text = (
+      <span>
+        Your{" "}
+        <span className={`font-black ${payload.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
+          {payload.side === "long" ? "LONG" : "SHORT"}
+        </span>{" "}
+        order on <span className={`font-black ${strong}`}>${payload.symbol}</span>{" "}
+        <span className={muted}>{payload.timeframe}</span>{" "}
+        was filled{" "}
+        <span className={`font-black ${strong}`}>
+          ${typeof payload.amount === "number" ? payload.amount.toFixed(0) : payload.amount}
+        </span>
+      </span>
+    );
   } else if (n.type === "followed_big_trade") {
     const won = payload.pnl >= 0;
     icon = won ? "🚀" : "💥";

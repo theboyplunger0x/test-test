@@ -67,6 +67,7 @@ export type Position = {
   short_pool: string;
   opener_id: string;
   message: string | null;
+  sweep_id: string | null;
 };
 
 export type PortfolioResponse = {
@@ -95,7 +96,7 @@ export type FollowStatus = {
 
 export type AppNotification = {
   id: string;
-  type: "market_resolved" | "new_follower" | "followed_big_trade" | "followed_trade";
+  type: "market_resolved" | "new_follower" | "followed_big_trade" | "followed_trade" | "order_filled";
   payload: Record<string, any>;
   read: boolean;
   created_at: string;
@@ -146,6 +147,78 @@ export type Market = {
   opener_username?: string;
   opener_avatar?: string;
   opener_tier?: string;
+};
+
+// ── Order Book types ──────────────────────────────────────────────────────────
+
+export type Order = {
+  id:               string;
+  user_id:          string;
+  symbol:           string;
+  chain:            string;
+  ca:               string | null;
+  timeframe:        string;
+  side:             "long" | "short";
+  amount:           string;
+  remaining_amount: string;
+  reserved_amount:  string;
+  status:           "pending" | "partially_filled" | "filled" | "cancelled" | "expired";
+  is_paper:         boolean;
+  auto_reopen:      boolean;
+  expires_at:       string | null;
+  tagline:          string;
+  created_at:       string;
+};
+
+export type OrderBookSide = {
+  total:  number;
+  orders: {
+    id:               string;
+    username:         string;
+    avatar_url:       string | null;
+    tier:             string;
+    remaining_amount: number;
+    auto_reopen:      boolean;
+    created_at:       string;
+  }[];
+};
+
+export type OrderBookTimeframe = {
+  timeframe:        string;
+  short:            OrderBookSide;
+  long:             OrderBookSide;
+  long_multiplier:  number;   // multiplier if you GO LONG against existing short pool
+  short_multiplier: number;   // multiplier if you GO SHORT against existing long pool
+};
+
+export type OrderBook = {
+  symbol:     string;
+  chain:      string | null;
+  timeframes: Record<string, OrderBookTimeframe>;
+};
+
+export type SweepResult = {
+  sweep_id:          string;
+  market_id:         string;
+  symbol:            string;
+  timeframe:         string;
+  closes_at:         string;
+  requested_amount:  number;
+  filled_amount:     number;
+  unfilled_amount:   number;
+  fills_count:       number;
+  maker_pool:        number;
+  taker_pool:        number;
+  taker_multiplier:  number;
+  maker_multiplier:  number;
+  new_balance:       string;
+  new_paper_balance: string;
+};
+
+export type CreateOrdersResult = {
+  orders:            Order[];
+  new_balance:       string;
+  new_paper_balance: string;
 };
 
 export const api = {
@@ -299,4 +372,42 @@ export const api = {
   markAllRead: () => req<{ ok: boolean }>("/notifications/read-all", { method: "POST", body: "{}" }),
   markNotificationsRead: (ids: string[]) =>
     req<{ ok: boolean }>("/notifications/read", { method: "POST", body: JSON.stringify({ ids }) }),
+
+  // ── Order Book ──────────────────────────────────────────────────────────────
+
+  getOrderBook: (symbol: string, chain?: string) =>
+    req<OrderBook>(`/orders/book?symbol=${encodeURIComponent(symbol)}${chain ? `&chain=${encodeURIComponent(chain)}` : ""}`),
+
+  getMyOrders: (history = false) =>
+    req<Order[]>(`/orders/mine${history ? "?history=1" : ""}`),
+
+  createOrders: (orders: {
+    symbol: string; chain: string; ca?: string; timeframe: string;
+    side: "long" | "short"; amount: number; is_paper?: boolean;
+    auto_reopen?: boolean; expires_at?: string; tagline?: string;
+  }[]) =>
+    req<CreateOrdersResult>("/orders", {
+      method: "POST",
+      body: JSON.stringify(orders.length === 1 ? orders[0] : orders),
+    }),
+
+  cancelOrder: (id: string) =>
+    req<{ ok: boolean; refunded: string; new_balance: string; new_paper_balance: string }>(
+      `/orders/${id}`, { method: "DELETE" }
+    ),
+
+  setOrderAutoReopen: (id: string, auto_reopen: boolean) =>
+    req<{ ok: boolean; auto_reopen: boolean }>(`/orders/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ auto_reopen }),
+    }),
+
+  sweep: (params: {
+    symbol: string; chain: string; timeframe: string;
+    side: "long" | "short"; amount: number; is_paper?: boolean;
+  }) =>
+    req<SweepResult>("/orders/sweep", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
 };

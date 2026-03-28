@@ -533,6 +533,57 @@ export default function FeedPage() {
     return err;
   }
 
+  async function handlePlaceOrder(
+    side: "long" | "short",
+    amount: number,
+    timeframe: string,
+    autoReopen: boolean,
+  ): Promise<string | null> {
+    if (!user) { setAuthOpen(true); return "Please log in first."; }
+    if (!selectedCoin) return "No coin selected.";
+    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    try {
+      const result = await api.createOrders([{
+        symbol: selectedCoin,
+        chain: selectedChain,
+        ca: selectedTokenInfo?.address,
+        timeframe,
+        side,
+        amount,
+        is_paper: paperMode,
+        auto_reopen: autoReopen,
+      }]);
+      setUser(prev => prev ? { ...prev, balance_usd: result.new_balance, paper_balance_usd: result.new_paper_balance } : prev);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Failed to place order";
+    }
+  }
+
+  async function handleSweep(
+    side: "long" | "short",
+    amount: number,
+    timeframe: string,
+  ): Promise<string | null> {
+    if (!user) { setAuthOpen(true); return "Please log in first."; }
+    if (!selectedCoin) return "No coin selected.";
+    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    try {
+      const result = await api.sweep({
+        symbol: selectedCoin,
+        chain: selectedChain,
+        timeframe,
+        side,
+        amount,
+        is_paper: paperMode,
+      });
+      setUser(prev => prev ? { ...prev, balance_usd: result.new_balance, paper_balance_usd: result.new_paper_balance } : prev);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Sweep failed";
+    }
+  }
+
   const MAIN_TABS: { key: MainTab; label: string }[] = [
     { key: "markets",  label: "Markets" },
     { key: "feed",     label: "Trades" },
@@ -739,6 +790,8 @@ export default function FeedPage() {
               markets={markets}
               onBet={handleAdd}
               onAutoTrade={handleAutoTrade}
+              onSweep={handleSweep}
+              onPlaceOrder={handlePlaceOrder}
               onOpenMarket={() => {
                 const coin = liveCoins.find(c => c.symbol === selectedCoin);
                 if (coin) {

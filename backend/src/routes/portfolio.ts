@@ -12,7 +12,7 @@ export async function portfolioRoutes(app: FastifyInstance) {
       db.query(
         `SELECT p.*, p.amount AS amount_usd, m.symbol, m.timeframe, m.status AS market_status,
                 m.winner_side, m.entry_price, m.exit_price, m.closes_at,
-                m.long_pool, m.short_pool, m.opener_id
+                m.long_pool, m.short_pool, m.opener_id, m.sweep_id
          FROM positions p JOIN markets m ON p.market_id = m.id
          WHERE p.user_id = $1
          ORDER BY p.placed_at DESC LIMIT 100`,

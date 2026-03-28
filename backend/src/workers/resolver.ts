@@ -69,6 +69,47 @@ export async function resolveMarket(marketId: string) {
     await client.query("COMMIT");
     console.log(`[resolver] Market ${market.id} (${market.symbol}) resolved → ${winnerSide} wins. Fee: $${fee}`);
 
+    // Fire-and-forget: auto_reopen + notifications
+    (async () => {
+      // Auto-reopen: recreate pending orders for makers who had auto_reopen = true
+      try {
+        const { rows: autoOrders } = await db.query(`
+          SELECT DISTINCT o.*
+          FROM fills f
+          JOIN orders o ON o.id = f.maker_order_id
+          WHERE f.market_id = $1
+            AND o.auto_reopen = true
+            AND o.status = 'filled'
+        `, [market.id]);
+
+        for (const order of autoOrders) {
+          const col = order.is_paper ? "paper_balance_usd" : "balance_usd";
+          const { rows: [u] } = await db.query(
+            `SELECT ${col} FROM users WHERE id = $1`, [order.user_id]
+          );
+          if (!u || parseFloat(u[col]) < parseFloat(order.amount)) continue;
+
+          await db.query(
+            `UPDATE users SET ${col} = ${col} - $1 WHERE id = $2`,
+            [order.amount, order.user_id]
+          );
+          await db.query(`
+            INSERT INTO orders
+              (user_id, symbol, chain, ca, timeframe, side, amount, remaining_amount,
+               reserved_amount, is_paper, auto_reopen, tagline)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7, $8, true, $9)
+          `, [
+            order.user_id, order.symbol, order.chain, order.ca,
+            order.timeframe, order.side, order.amount,
+            order.is_paper, order.tagline,
+          ]);
+          console.log(`[resolver] auto_reopen: new ${order.side} order for ${order.user_id} on ${order.symbol} ${order.timeframe}`);
+        }
+      } catch (err) {
+        console.error("[resolver] auto_reopen error:", err);
+      }
+    })();
+
     // Fire-and-forget: create notifications for all position holders + followers
     (async () => {
       try {
