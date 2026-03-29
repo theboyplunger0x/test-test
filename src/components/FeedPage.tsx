@@ -19,13 +19,14 @@ import ProfilePage from "./ProfilePage";
 import NotificationsPanel from "./NotificationsPanel";
 import TokenProfilePage from "./TokenProfilePage";
 import MarketsView from "./MarketsView";
+import SpotView from "./SpotView";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
 type Filter = "all" | "hot" | "juicy";
 type Theme = "dark" | "light";
-type MainTab = "markets" | "feed" | "trending" | "ranks";
+type MainTab = "markets" | "feed" | "trending" | "ranks" | "trade";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
@@ -585,6 +586,7 @@ export default function FeedPage() {
   }
 
   const MAIN_TABS: { key: MainTab; label: string }[] = [
+    { key: "trade",    label: "Trade" },
     { key: "markets",  label: "Markets" },
     { key: "feed",     label: "Trades" },
     { key: "trending", label: "Trending" },
@@ -826,6 +828,25 @@ export default function FeedPage() {
                   handleCATradeResult(rich ?? { address: coin?.ca ?? selectedCoin ?? "", symbol: selectedCoin ?? "", name: coin?.name ?? selectedCoin ?? "", price: coin?.price ?? 0, change24h: coin?.change24h ?? 0, marketCap: coin?.marketCap ?? 0, volume24h: coin?.volume24h ?? 0, liquidity: coin?.liquidity ?? 0, chainLabel: coin?.chain ?? "SOL", pairAddress: "", chainId: "" });
                 }
               }}
+            />
+          </motion.div>
+        )}
+
+        {/* TRADE TAB */}
+        {!selectedCoin && !tokenProfileToken && mainTab === "trade" && (
+          <motion.div key="trade" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
+            <SpotView
+              dk={dk}
+              liveCoins={liveCoins}
+              markets={markets}
+              onBet={handleAdd}
+              onAutoTrade={handleAutoTrade}
+              onSweep={handleSweep}
+              onPlaceOrder={handlePlaceOrder}
+              onOpenMarket={handleOpenMarket}
+              loggedIn={!!user}
+              onAuthRequired={() => setAuthOpen(true)}
+              presets={tradePresets}
             />
           </motion.div>
         )}
