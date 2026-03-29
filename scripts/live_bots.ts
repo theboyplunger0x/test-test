@@ -4,6 +4,7 @@
  * Usage: BASE_URL=https://fud-markets-backend-production.up.railway.app npx tsx scripts/live_bots.ts
  */
 
+export {};
 const BASE = process.env.BASE_URL ?? "http://localhost:3001";
 const DURATION_MS = 12 * 60 * 60 * 1000;
 

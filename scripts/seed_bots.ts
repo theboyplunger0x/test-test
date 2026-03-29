@@ -4,6 +4,7 @@
  * Usage: BASE_URL=https://your-backend.railway.app npx tsx scripts/seed_bots.ts
  */
 
+export {};
 const BASE = process.env.BASE_URL ?? "http://localhost:3001";
 
 const BOTS = [
