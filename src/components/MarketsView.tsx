@@ -9,6 +9,7 @@ interface Props {
   dk:             boolean;
   liveMarkets:    Market[];
   paperMode?:     boolean;
+  presets?:       number[];
   onSelectToken?: (symbol: string, chain: string) => void;
   onViewProfile?: (username: string) => void;
   shakingIds?:    Set<string>;
@@ -21,7 +22,7 @@ function fmtPool(n: number): string {
 }
 function fmtMult(m: number): string {
   if (!m || m <= 0) return "—";
-  if (m >= 100) return "100x+";
+  if (m >= 10) return `${Math.round(m)}x`;
   return `${m.toFixed(2)}x`;
 }
 function multColor(m: number): string {
@@ -248,7 +249,7 @@ function RightPanel({ dk, paperMode, onSelectToken }: { dk: boolean; paperMode: 
 }
 
 // ── Quick Trade Modal ─────────────────────────────────────────────────────────
-function QuickTradeModal({ market, dk, onClose, paperMode }: { market: Market; dk: boolean; onClose: () => void; paperMode: boolean }) {
+function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: Market; dk: boolean; onClose: () => void; paperMode: boolean; presets: number[] }) {
   const longPool  = parseFloat(market.long_pool);
   const shortPool = parseFloat(market.short_pool);
   const [side, setSide]     = useState<"long"|"short"|null>(null);
@@ -333,7 +334,7 @@ function QuickTradeModal({ market, dk, onClose, paperMode }: { market: Market; d
                 )}
               </div>
               <div className="flex gap-1.5 mt-2">
-                {[10, 25, 50, 100].map(q => (
+                {presets.map(q => (
                   <button key={q} onClick={() => setAmount(String(q))}
                     className={`flex-1 py-1.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/6 text-white/40 hover:bg-white/12 hover:text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`}>
                     ${q}
@@ -792,7 +793,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile }: { dk: boolean; onSele
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, onSelectToken, onViewProfile, shakingIds }: Props) {
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, shakingIds }: Props) {
   const [selectedTf, setSelectedTf]       = useState<string>("all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 
@@ -878,7 +879,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, o
 
     <AnimatePresence>
       {tradeMarket && (
-        <QuickTradeModal market={tradeMarket} dk={dk} paperMode={paperMode} onClose={() => setTradeMarket(null)} />
+        <QuickTradeModal market={tradeMarket} dk={dk} paperMode={paperMode} presets={presets} onClose={() => setTradeMarket(null)} />
       )}
     </AnimatePresence>
     </>

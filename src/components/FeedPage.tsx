@@ -842,6 +842,7 @@ export default function FeedPage() {
                 .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
               }
               paperMode={paperMode}
+              presets={tradePresets}
               onSelectToken={(symbol, chain) => {
                 setMainTab("chart");
                 handleCoinClick(symbol);
