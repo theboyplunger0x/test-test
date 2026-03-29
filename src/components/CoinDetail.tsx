@@ -222,6 +222,7 @@ export default function CoinDetail({
   const [makerError, setMakerError]     = useState("");
   const [makerLoading, setMakerLoading] = useState(false);
   const [makerDone, setMakerDone]       = useState(false);
+  const [makerTfs, setMakerTfs]         = useState<Set<string>>(() => new Set([initialTf]));
 
   async function handlePlaceOrder() {
     if (!makerSide) return;
@@ -691,7 +692,6 @@ export default function CoinDetail({
 
         {/* ── LIMIT tab ───────────────────────────────────────────── */}
         {tradeTab === "limit" && (() => {
-          const [makerTfs, setMakerTfs] = useState<Set<string>>(new Set([timeframe]));
           const toggleTf = (tf: string) => setMakerTfs(prev => {
             const next = new Set(prev);
             next.has(tf) ? next.delete(tf) : next.add(tf);

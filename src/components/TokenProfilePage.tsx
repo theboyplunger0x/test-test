@@ -170,13 +170,15 @@ export default function TokenProfilePage({
     getOHLCV(addr, token.chainLabel ?? "solana", resolution, limit).then(c => setCandles(c)).catch(() => {});
   }, [token.pairAddress, token.address, chartTf]);
 
-  const totalLong  = positions.filter(p => p.side === "long").reduce((s, p) => s + parseFloat(p.amount), 0);
-  const totalShort = positions.filter(p => p.side === "short").reduce((s, p) => s + parseFloat(p.amount), 0);
+  const modeMarketIds = new Set(markets.filter(m => !!m.is_paper === paperMode).map(m => m.id));
+  const modePositions = positions.filter(p => modeMarketIds.has(p.market_id ?? ""));
+  const totalLong  = modePositions.filter(p => p.side === "long").reduce((s, p) => s + parseFloat(p.amount), 0);
+  const totalShort = modePositions.filter(p => p.side === "short").reduce((s, p) => s + parseFloat(p.amount), 0);
   const totalVol   = totalLong + totalShort;
   const longPct    = totalVol > 0 ? (totalLong / totalVol) * 100 : 50;
 
   // Positions: opener first (if has message), then sorted by amount
-  const sortedPositions = [...positions].sort((a, b) => {
+  const sortedPositions = [...modePositions].sort((a, b) => {
     if (a.is_opener && !b.is_opener) return -1;
     if (!a.is_opener && b.is_opener) return 1;
     return parseFloat(b.amount) - parseFloat(a.amount);
@@ -274,7 +276,7 @@ export default function TokenProfilePage({
         <div className={`px-5 py-3 border-b ${border}`}>
           <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${muted}`}>Open markets</p>
           <div className="flex flex-wrap gap-2">
-            {markets.filter(m => m.status === "open").map(m => (
+            {markets.filter(m => m.status === "open" && !!m.is_paper === paperMode).map(m => (
               <button key={m.id}
                 onClick={() => { setBetMarket(m); setBetSide(null); setBetAmt(null); setBetCustom(""); setBetMsg(""); setBetDone(false); setBetError(null); }}
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition-all ${
@@ -282,7 +284,7 @@ export default function TokenProfilePage({
                     ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
                     : dk ? "bg-white/5 text-white/60 border-white/10 hover:bg-white/10" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
                 }`}>
-                {m.timeframe} {m.is_paper ? "· paper" : ""}
+                {m.timeframe}
               </button>
             ))}
             <button onClick={onOpenMarket}
