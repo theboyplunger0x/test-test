@@ -22,7 +22,8 @@ function fmtPool(n: number): string {
 }
 function fmtMult(m: number): string {
   if (!m || m <= 0) return "—";
-  if (m >= 10) return `${Math.round(m)}x`;
+  if (m >= 100) return "100x+";
+  if (m >= 10)  return `${Math.floor(m / 10) * 10}x`;
   return `${m.toFixed(2)}x`;
 }
 function multColor(m: number): string {
