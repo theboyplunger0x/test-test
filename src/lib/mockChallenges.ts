@@ -5,6 +5,8 @@ export type Challenge = {
   chain: "SOL" | "ETH" | "BASE";
   timeframe: string;
   expiresIn: string;
+  closesAt?: number;   // unix ms — for live countdown
+  lastBetAt?: number;  // unix ms — for activity sort
   openedAt: number; // seconds ago
   entryPrice: number;
   shortPool: number;

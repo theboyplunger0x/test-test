@@ -84,6 +84,7 @@ interface Props {
   onAuthRequired: () => void;
   tokenInfo?: TokenInfo;    // pre-fetched (from CA search); skips symbol lookup
   presets?: number[];
+  paperMode?: boolean;
 }
 
 export default function CoinDetail({
@@ -91,6 +92,7 @@ export default function CoinDetail({
   markets, onBet, onAutoTrade, onSweep, onPlaceOrder, onOpenMarket, onViewToken, loggedIn, onAuthRequired,
   tokenInfo: tokenInfoProp,
   presets = DEFAULT_AMOUNTS,
+  paperMode = false,
 }: Props) {
   const dk = theme === "dark";
   const [timeframe, setTimeframe] = useState(initialTf);
@@ -194,14 +196,14 @@ export default function CoinDetail({
     let cancelled = false;
     const fetch = async () => {
       try {
-        const ob = await api.getOrderBook(symbol, chain.toLowerCase());
+        const ob = await api.getOrderBook(symbol, chain.toLowerCase(), paperMode);
         if (!cancelled) setOrderBook(ob);
       } catch { /* ignore */ }
     };
     fetch();
     obTimerRef.current = setInterval(fetch, 5_000);
     return () => { cancelled = true; if (obTimerRef.current) clearInterval(obTimerRef.current); };
-  }, [symbol, chain]);
+  }, [symbol, chain, paperMode]);
 
   const [side, setSide]         = useState<"long" | "short" | null>(null);
   const [amount, setAmount]     = useState<number | null>(null);
@@ -498,7 +500,50 @@ export default function CoinDetail({
         </div>
 
         {/* ── MARKET tab ──────────────────────────────────────────── */}
-        {tradeTab === "market" && (
+        {tradeTab === "market" && (() => {
+          // ── Sweep simulation ────────────────────────────────────
+          const tfData = orderBook?.timeframes[timeframe];
+          const opposingSide = side === "long" ? "short" : "long";
+          const opposingOrders = (tfData?.[opposingSide as "long" | "short"]?.orders ?? []) as { username: string; remaining_amount: number }[];
+          const sortedOrders = [...opposingOrders].sort((a, b) => b.remaining_amount - a.remaining_amount);
+          let remaining = finalAmount ?? 0;
+          const fills: { username: string; amount: number }[] = [];
+          for (const order of sortedOrders) {
+            if (remaining <= 0) break;
+            const filled = Math.min(remaining, order.remaining_amount);
+            fills.push({ username: order.username, amount: filled });
+            remaining -= filled;
+          }
+          const filledTotal  = (finalAmount ?? 0) - remaining;
+          const unfilledTotal = remaining;
+          const hasSweep     = fills.length > 0 && filledTotal > 0;
+          const sweepMult    = side === "long"
+            ? (tfData?.long_multiplier  ?? longMult)
+            : (tfData?.short_multiplier ?? shortMult);
+          const effectiveMult = hasSweep ? sweepMult : activeMult;
+          const effectiveWin  = finalAmount != null && finalAmount > 0 && side
+            ? (finalAmount * effectiveMult).toFixed(0)
+            : null;
+
+          async function handleExecute() {
+            if (!isReady) return;
+            if (!loggedIn) { onAuthRequired(); return; }
+            setBetLoading(true); setBetError("");
+            let err: string | null;
+            if (hasSweep && onSweep) {
+              err = await onSweep(side!, finalAmount!, timeframe);
+            } else if (!activeMarket) {
+              err = onAutoTrade ? await onAutoTrade(side!, finalAmount!, timeframe, tagline.trim() || undefined) : null;
+              if (!err && !onAutoTrade) { onOpenMarket(); setBetLoading(false); return; }
+            } else {
+              err = await onBet(activeMarket.id, side!, finalAmount!, tagline.trim() || undefined);
+            }
+            setBetLoading(false);
+            if (err) setBetError(err);
+            else { setSide(null); setAmount(null); setCustomAmt(""); setTagline(""); }
+          }
+
+          return (
           <div className="flex flex-col flex-1 px-3 pt-3 gap-3 pb-4">
 
             {/* Long / Short */}
@@ -571,34 +616,62 @@ export default function CoinDetail({
               </div>
             </div>
 
+            {/* Sweep preview — shows when amount entered + there are matching orders */}
+            {isReady && hasSweep && (
+              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                className={`rounded-xl border p-3 space-y-1.5 ${dk ? "border-amber-500/20 bg-amber-500/5" : "border-amber-200 bg-amber-50"}`}>
+                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${dk ? "text-amber-400/60" : "text-amber-600"}`}>
+                  ⚡ Sweep Preview
+                </p>
+                {fills.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className={`text-[10px] font-bold ${dk ? "text-white/50" : "text-gray-600"}`}>{f.username}</span>
+                    <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/70" : "text-gray-800"}`}>${f.amount.toFixed(0)}</span>
+                  </div>
+                ))}
+                {unfilledTotal > 0.01 && (
+                  <div className={`flex items-center justify-between pt-1 border-t ${dk ? "border-white/8" : "border-amber-200"}`}>
+                    <span className={`text-[10px] ${dk ? "text-white/30" : "text-gray-400"}`}>Unfilled → limit order</span>
+                    <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/40" : "text-gray-500"}`}>${unfilledTotal.toFixed(0)}</span>
+                  </div>
+                )}
+                <div className={`flex items-center justify-between pt-1 border-t ${dk ? "border-white/8" : "border-amber-200"}`}>
+                  <span className={`text-[10px] font-black ${dk ? "text-amber-400/80" : "text-amber-700"}`}>Effective mult</span>
+                  <span className={`text-[13px] font-black tabular-nums ${dk ? "text-amber-400" : "text-amber-600"}`}>{effectiveMult.toFixed(2)}x</span>
+                </div>
+              </motion.div>
+            )}
+
             {/* Message */}
-            <div>
-              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
-                Message <span className="opacity-40 normal-case font-bold">(optional)</span>
-              </p>
-              <textarea value={tagline} onChange={(e) => setTagline(e.target.value)}
-                maxLength={80} placeholder={`${symbol} to the moon!`} rows={2}
-                className={`w-full border text-[11px] font-bold p-2.5 rounded-lg outline-none resize-none transition-all ${T.input} placeholder:opacity-30`} />
-            </div>
+            {!hasSweep && (
+              <div>
+                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
+                  Message <span className="opacity-40 normal-case font-bold">(optional)</span>
+                </p>
+                <textarea value={tagline} onChange={(e) => setTagline(e.target.value)}
+                  maxLength={80} placeholder={`${symbol} to the moon!`} rows={2}
+                  className={`w-full border text-[11px] font-bold p-2.5 rounded-lg outline-none resize-none transition-all ${T.input} placeholder:opacity-30`} />
+              </div>
+            )}
 
             {/* To win */}
             <div className="flex items-end justify-between">
               <p className={`text-[8px] font-black uppercase tracking-widest ${T.sectionLbl}`}>
-                To win{!activeMarket && winAmount ? <span className="ml-1 normal-case opacity-50">(est.)</span> : ""}
+                To win{!activeMarket && !hasSweep && effectiveWin ? <span className="ml-1 normal-case opacity-50">(est.)</span> : ""}
               </p>
               <div className="text-right">
-                <span className={`text-[26px] font-black leading-none ${winAmount && winAmount !== "0" ? "text-emerald-400" : T.textMuted}`}>
-                  {winAmount && winAmount !== "0" ? `$${winAmount}` : "$0"}
+                <span className={`text-[26px] font-black leading-none ${effectiveWin && effectiveWin !== "0" ? "text-emerald-400" : T.textMuted}`}>
+                  {effectiveWin && effectiveWin !== "0" ? `$${effectiveWin}` : "$0"}
                 </span>
-                {winAmount && finalAmount != null && parseFloat(winAmount) > 0 && (
-                  <p className={`text-[9px] font-bold ${T.textMuted}`}>+${(parseFloat(winAmount) - finalAmount).toFixed(0)} profit</p>
+                {effectiveWin && finalAmount != null && parseFloat(effectiveWin) > 0 && (
+                  <p className={`text-[9px] font-bold ${T.textMuted}`}>+${(parseFloat(effectiveWin) - finalAmount).toFixed(0)} profit</p>
                 )}
               </div>
             </div>
 
             {betError && <p className="text-[10px] font-bold text-red-400">{betError}</p>}
 
-            <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade}
+            <motion.button whileTap={{ scale: 0.97 }} onClick={handleExecute}
               disabled={!isReady || betLoading}
               className={`w-full py-3.5 rounded-xl text-[13px] font-black uppercase tracking-widest transition-all mt-auto ${
                 betLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
@@ -607,97 +680,169 @@ export default function CoinDetail({
                   : "bg-red-500 text-white hover:bg-red-400 shadow-[0_0_16px_rgba(239,68,68,0.3)]"
                   : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}>
-              {betLoading ? "Placing…" : activeMarket ? "Trade" : "Open Market →"}
+              {betLoading ? "Placing…"
+                : hasSweep ? `⚡ Sweep $${filledTotal.toFixed(0)}`
+                : activeMarket ? "Trade"
+                : "Open Market →"}
             </motion.button>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── LIMIT tab ───────────────────────────────────────────── */}
-        {tradeTab === "limit" && (
+        {tradeTab === "limit" && (() => {
+          const [makerTfs, setMakerTfs] = useState<Set<string>>(new Set([timeframe]));
+          const toggleTf = (tf: string) => setMakerTfs(prev => {
+            const next = new Set(prev);
+            next.has(tf) ? next.delete(tf) : next.add(tf);
+            return next;
+          });
+          const makerAmtNum  = parseFloat(makerAmt) || 0;
+          const totalAmt     = makerAmtNum * makerTfs.size;
+          const canSubmit    = !!makerSide && makerAmtNum >= 5 && makerTfs.size > 0;
+
+          async function handleMultiOrder() {
+            if (!canSubmit) return;
+            if (!loggedIn) { onAuthRequired(); return; }
+            setMakerLoading(true); setMakerError("");
+            try {
+              await api.createOrders(
+                [...makerTfs].map(tf => ({
+                  symbol, chain, timeframe: tf,
+                  side: makerSide!, amount: makerAmtNum,
+                  is_paper: paperMode, auto_reopen: autoReopen,
+                }))
+              );
+              setMakerDone(true); setMakerAmt(""); setMakerSide(null); setMakerTfs(new Set());
+              setTimeout(() => setMakerDone(false), 2500);
+            } catch (e: any) {
+              setMakerError(e.message ?? "Failed");
+            } finally {
+              setMakerLoading(false);
+            }
+          }
+
+          return (
           <div className="px-3 pt-3 pb-5 flex flex-col gap-3">
-            {!onPlaceOrder ? (
-              <p className={`text-[12px] ${T.textMuted}`}>Not available.</p>
-            ) : (
-              <>
-                {/* Side */}
-                <div className="flex gap-2">
-                  <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "long" ? null : "long")}
-                    className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "long" ? "bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)]" : T.upIdle}`}>
-                    <p className={`text-[15px] font-black ${makerSide === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
-                    <p className={`text-[9px] font-black ${makerSide === "long" ? "text-emerald-100/80" : "text-emerald-400/60"}`}>maker</p>
-                  </motion.button>
-                  <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "short" ? null : "short")}
-                    className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "short" ? "bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.25)]" : T.downIdle}`}>
-                    <p className={`text-[15px] font-black ${makerSide === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
-                    <p className={`text-[9px] font-black ${makerSide === "short" ? "text-red-100/80" : "text-red-400/60"}`}>maker</p>
-                  </motion.button>
-                </div>
+            {/* Side */}
+            <div className="flex gap-2">
+              <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "long" ? null : "long")}
+                className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "long" ? "bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)]" : T.upIdle}`}>
+                <p className={`text-[15px] font-black ${makerSide === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
+                <p className={`text-[9px] font-black ${makerSide === "long" ? "text-emerald-100/80" : "text-emerald-400/60"}`}>maker</p>
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "short" ? null : "short")}
+                className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "short" ? "bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.25)]" : T.downIdle}`}>
+                <p className={`text-[15px] font-black ${makerSide === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
+                <p className={`text-[9px] font-black ${makerSide === "short" ? "text-red-100/80" : "text-red-400/60"}`}>maker</p>
+              </motion.button>
+            </div>
 
-                {/* Duration */}
+            {/* Multi-timeframe selector */}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
+                Timeframes <span className="normal-case font-bold opacity-50">(select multiple)</span>
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {TIMEFRAMES.map((tf) => {
+                  const active = makerTfs.has(tf);
+                  return (
+                    <button key={tf} onClick={() => toggleTf(tf)}
+                      className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
+                        active
+                          ? makerSide === "short"
+                            ? "bg-red-500 border-red-500 text-white"
+                            : "bg-emerald-500 border-emerald-500 text-white"
+                          : T.durIdle
+                      }`}>
+                      {tf}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Amount per timeframe */}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
+                Amount per timeframe
+              </p>
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {[5, 25, 50, 100].map(a => (
+                  <button key={a} onClick={() => { setMakerAmt(String(a)); setMakerError(""); }}
+                    className={`py-2 rounded-lg text-[11px] font-black transition-all ${
+                      makerAmt === String(a) ? T.amtIdle.replace("hover:", "") : T.amtIdle
+                    }`}>
+                    ${a}
+                  </button>
+                ))}
+              </div>
+              <div className="relative">
+                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${T.textMuted}`}>$</span>
+                <input type="number" placeholder="min $5" value={makerAmt}
+                  onChange={(e) => { setMakerAmt(e.target.value); setMakerError(""); }}
+                  className={`w-full border text-[12px] font-bold pl-6 pr-3 py-2 rounded-lg outline-none transition-all ${T.input}`} />
+              </div>
+            </div>
+
+            {/* Total preview */}
+            {canSubmit && (
+              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                className={`rounded-xl border px-3 py-2.5 flex items-center justify-between ${dk ? "border-white/8 bg-white/4" : "border-gray-200 bg-gray-50"}`}>
                 <div>
-                  <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Duration</p>
-                  <div className="flex flex-wrap gap-1">
-                    {TIMEFRAMES.map((tf) => (
-                      <button key={tf} onClick={() => setTimeframe(tf)}
-                        className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${timeframe === tf ? T.durActive : T.durIdle}`}>
-                        {tf}
-                      </button>
-                    ))}
-                  </div>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${T.sectionLbl}`}>Total reserved</p>
+                  <p className={`text-[18px] font-black ${T.textPrimary}`}>${totalAmt.toFixed(0)}</p>
                 </div>
-
-                {/* Amount */}
-                <div>
-                  <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Amount</p>
-                  <div className="relative">
-                    <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${T.textMuted}`}>$</span>
-                    <input type="number" placeholder="min $5" value={makerAmt}
-                      onChange={(e) => { setMakerAmt(e.target.value); setMakerError(""); }}
-                      className={`w-full border text-[12px] font-bold pl-6 pr-3 py-2 rounded-lg outline-none transition-all ${T.input}`} />
-                  </div>
+                <div className="text-right">
+                  <p className={`text-[9px] ${T.textMuted}`}>{makerTfs.size} order{makerTfs.size > 1 ? "s" : ""}</p>
+                  <p className={`text-[9px] ${T.textMuted}`}>${makerAmtNum} each</p>
                 </div>
-
-                {/* Auto-reopen */}
-                <button onClick={() => setAutoReopen(v => !v)}
-                  className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl border transition-all ${
-                    autoReopen
-                      ? dk ? "border-white/20 bg-white/8" : "border-gray-300 bg-gray-100"
-                      : dk ? "border-white/8 bg-transparent" : "border-gray-100 bg-transparent"
-                  }`}>
-                  <span className={`text-[15px] leading-none ${autoReopen ? "" : "opacity-30"}`}>↻</span>
-                  <div className="text-left">
-                    <p className={`text-[10px] font-black ${autoReopen ? T.textPrimary : T.textMuted}`}>Auto-reopen</p>
-                    <p className={`text-[9px] ${T.textMuted}`}>Recreate after resolves</p>
-                  </div>
-                  <div className={`ml-auto w-8 h-4 rounded-full relative transition-colors ${
-                    autoReopen ? makerSide === "short" ? "bg-red-500" : "bg-emerald-500" : dk ? "bg-white/15" : "bg-gray-200"
-                  }`}>
-                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${autoReopen ? "translate-x-4" : "translate-x-0.5"}`} />
-                  </div>
-                </button>
-
-                {makerError && <p className="text-[10px] font-bold text-red-400">{makerError}</p>}
-
-                <motion.button whileTap={{ scale: 0.97 }} onClick={handlePlaceOrder}
-                  disabled={!makerSide || !makerAmt || makerLoading || makerDone}
-                  className={`w-full py-3.5 rounded-xl text-[13px] font-black uppercase tracking-widest transition-all ${
-                    makerDone ? "bg-emerald-500 text-white"
-                    : makerLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
-                    : makerSide
-                      ? makerSide === "long"  ? "bg-emerald-500 text-white hover:bg-emerald-400"
-                      : "bg-red-500 text-white hover:bg-red-400"
-                      : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  }`}>
-                  {makerDone ? "Order placed ✓" : makerLoading ? "Placing…" : "Place Order →"}
-                </motion.button>
-
-                <p className={`text-[9px] text-center ${T.textMuted}`}>
-                  Order waits in the book until someone sweeps it.
-                </p>
-              </>
+              </motion.div>
             )}
+
+            {/* Auto-reopen */}
+            <button onClick={() => setAutoReopen(v => !v)}
+              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl border transition-all ${
+                autoReopen
+                  ? dk ? "border-white/20 bg-white/8" : "border-gray-300 bg-gray-100"
+                  : dk ? "border-white/8 bg-transparent" : "border-gray-100 bg-transparent"
+              }`}>
+              <span className={`text-[15px] leading-none ${autoReopen ? "" : "opacity-30"}`}>↻</span>
+              <div className="text-left">
+                <p className={`text-[10px] font-black ${autoReopen ? T.textPrimary : T.textMuted}`}>Auto-reopen</p>
+                <p className={`text-[9px] ${T.textMuted}`}>Recreate after each resolves</p>
+              </div>
+              <div className={`ml-auto w-8 h-4 rounded-full relative transition-colors ${
+                autoReopen ? makerSide === "short" ? "bg-red-500" : "bg-emerald-500" : dk ? "bg-white/15" : "bg-gray-200"
+              }`}>
+                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${autoReopen ? "translate-x-4" : "translate-x-0.5"}`} />
+              </div>
+            </button>
+
+            {makerError && <p className="text-[10px] font-bold text-red-400">{makerError}</p>}
+
+            <motion.button whileTap={{ scale: 0.97 }} onClick={handleMultiOrder}
+              disabled={!canSubmit || makerLoading || makerDone}
+              className={`w-full py-3.5 rounded-xl text-[13px] font-black uppercase tracking-widest transition-all ${
+                makerDone ? "bg-emerald-500 text-white"
+                : makerLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+                : canSubmit
+                  ? makerSide === "long"  ? "bg-emerald-500 text-white hover:bg-emerald-400"
+                  : "bg-red-500 text-white hover:bg-red-400"
+                  : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}>
+              {makerDone ? `${makerTfs.size > 1 ? "Orders" : "Order"} placed ✓`
+                : makerLoading ? "Placing…"
+                : canSubmit ? `Place ${makerTfs.size} Order${makerTfs.size > 1 ? "s" : ""} · $${totalAmt.toFixed(0)}`
+                : "Select side + timeframe"}
+            </motion.button>
+
+            <p className={`text-[9px] text-center ${T.textMuted}`}>
+              Orders wait in the book until someone sweeps them.
+            </p>
           </div>
-        )}
+          );
+        })()}
       </div>
 
       </div>{/* end 3-col */}

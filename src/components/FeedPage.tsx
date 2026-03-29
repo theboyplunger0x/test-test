@@ -26,7 +26,7 @@ import { fetchTrending } from "@/lib/chartData";
 
 type Filter = "all" | "hot" | "juicy";
 type Theme = "dark" | "light";
-type MainTab = "markets" | "feed" | "trending" | "ranks" | "trade";
+type MainTab = "markets" | "feed" | "trending" | "ranks" | "chart";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
@@ -51,17 +51,20 @@ function formatMsLeft(ms: number): string {
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
   const d = Math.floor(h / 24);
-  if (d > 0) return `${d}d ${h % 24}h`;
-  if (h > 0) return `${h}h ${m % 60}m`;
-  if (m > 0) return `${m}m ${s % 60}s`;
-  return `${s}s`;
+  if (ms < 60_000)          return `${s}s`;
+  if (ms < 60 * 60_000)     return `${m}m`;
+  if (d > 0)                return `${d}d`;
+  return `${h}h`;
 }
 
 function marketToChallenge(m: Market): Challenge {
-  const msLeft = Math.max(0, new Date(m.closes_at).getTime() - Date.now());
+  const closesAtMs = new Date(m.closes_at).getTime();
+  const msLeft = Math.max(0, closesAtMs - Date.now());
   const openedSecsAgo = Math.floor((Date.now() - new Date(m.created_at).getTime()) / 1000);
   return {
     id: m.id,
+    closesAt:  closesAtMs,
+    lastBetAt: m.last_bet_at ? new Date(m.last_bet_at).getTime() : undefined,
     user: m.opener_username ?? m.opener_id.slice(0, 8) + "…",
     openerUsername: m.opener_username,
     openerAvatar: m.opener_avatar,
@@ -118,11 +121,14 @@ function tierBadge(tier?: string, telegramUsername?: string) {
 
 export default function FeedPage() {
   const [markets, setMarkets]           = useState<Market[]>([]);
+  const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
+  const prevLastBetAt                   = useRef<Record<string, number>>({});
   const [filter, setFilter]             = useState<Filter>("all");
   const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
   const [mainTab, setMainTab]           = useState<MainTab>("markets");
   const [ordersOpen, setOrdersOpen]     = useState(false);
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
+  const [chartSymbol, setChartSymbol]   = useState<string | null>(null);
   const [selectedTf, setSelectedTf]     = useState<string>("1h");
   const [theme, setTheme]               = useState<Theme>("dark");
   const [tapeOpen, setTapeOpen]         = useState(true);
@@ -238,7 +244,24 @@ export default function FeedPage() {
   // Fetch markets + poll every 30s; also refresh user balance to capture payouts
   useEffect(() => {
     async function fetchMarketsAndBalance() {
-      try { setMarkets(await api.getMarkets()); } catch {}
+      try {
+        const fresh = await api.getMarkets();
+        // Detect which markets got a new bet since last fetch
+        const newShaking = new Set<string>();
+        for (const m of fresh) {
+          if (!m.last_bet_at) continue;
+          const ts = new Date(m.last_bet_at).getTime();
+          if (prevLastBetAt.current[m.id] && ts > prevLastBetAt.current[m.id]) {
+            newShaking.add(m.id);
+          }
+          prevLastBetAt.current[m.id] = ts;
+        }
+        if (newShaking.size > 0) {
+          setShakingIds(newShaking);
+          setTimeout(() => setShakingIds(new Set()), 700);
+        }
+        setMarkets(fresh);
+      } catch {}
       // Refresh balance so settled-market payouts show up immediately
       if (typeof window !== "undefined" && localStorage.getItem("token")) {
         try { const fresh = await api.me(); setUser(fresh); } catch {}
@@ -379,7 +402,9 @@ export default function FeedPage() {
 
   // Filter markets by mode: paper markets for Paper tab, real markets for Real tab
   const modeMarkets   = markets.filter(m => !!m.is_paper === paperMode);
-  const allChallenges = modeMarkets.map(marketToChallenge);
+  const allChallenges = modeMarkets
+    .map(marketToChallenge)
+    .sort((a, b) => (b.lastBetAt ?? 0) - (a.lastBetAt ?? 0));
   const tfFiltered    = allChallenges
     .filter(c => c.timeframe === selectedTf)
     .filter(c => statusFilter === "open" ? c.status === "open" : c.status !== "open");
@@ -400,8 +425,10 @@ export default function FeedPage() {
   const trending = [...allChallenges].sort((a, b) => (b.longPool + b.shortPool) - (a.longPool + a.shortPool));
 
   const handleCoinClick = (symbol: string) => {
-    setSelectedTokenInfo(null); // clear any CA-search token info
-    setSelectedCoin(symbol);
+    setSelectedTokenInfo(null);
+    setSelectedCoin(null);
+    setChartSymbol(symbol);
+    setMainTab("chart");
   };
 
   function handleCATradeResult(token: TokenInfo) {
@@ -586,9 +613,9 @@ export default function FeedPage() {
   }
 
   const MAIN_TABS: { key: MainTab; label: string }[] = [
-    { key: "trade",    label: "Trade" },
     { key: "markets",  label: "Markets" },
-    { key: "feed",     label: "Trades" },
+    { key: "chart",    label: "Chart" },
+    { key: "feed",     label: "P2P" },
     { key: "trending", label: "Trending" },
     { key: "ranks",    label: "Leaderboard" },
   ];
@@ -717,7 +744,7 @@ export default function FeedPage() {
       {/* Nav bar */}
       <div className={`flex items-center justify-between px-6 py-2.5 border-b ${T.navBorder} shrink-0`}>
         <AnimatePresence mode="wait">
-          {!selectedCoin && !tokenProfileToken ? (
+          {!tokenProfileToken ? (
             <motion.div key="tabs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1">
               {/* Main tabs */}
               {MAIN_TABS.map(t => (
@@ -729,7 +756,7 @@ export default function FeedPage() {
             </motion.div>
           ) : (
             <motion.button key="back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => { setSelectedCoin(null); setTokenProfileToken(null); }}
+              onClick={() => setTokenProfileToken(null)}
               className={`text-[12px] font-bold transition-colors ${T.backBtn}`}>
               ← Back
             </motion.button>
@@ -741,14 +768,15 @@ export default function FeedPage() {
       <AnimatePresence mode="wait">
 
         {/* TOKEN PROFILE PAGE */}
-        {tokenProfileToken && !selectedCoin && (
+        {tokenProfileToken && (
           <motion.div key={`token-profile-${tokenProfileToken.symbol}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex-1 overflow-hidden flex">
             <TokenProfilePage
               token={tokenProfileToken}
               dk={dk}
               onClose={() => setTokenProfileToken(null)}
               onViewChart={() => {
-                setSelectedCoin(tokenProfileToken.symbol);
+                setChartSymbol(tokenProfileToken.symbol);
+                setMainTab("chart");
                 setTokenProfileToken(null);
               }}
               onBet={handleAdd}
@@ -781,60 +809,10 @@ export default function FeedPage() {
           </motion.div>
         )}
 
-        {/* COIN DETAIL */}
-        {selectedCoin && (
-          <motion.div key={`coin-${selectedCoin}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex-1 overflow-hidden flex">
-            <CoinDetail
-              symbol={selectedCoin}
-              chain={selectedChain}
-              timeframe={selectedTf}
-              theme={theme}
-              markets={markets}
-              onBet={handleAdd}
-              onAutoTrade={handleAutoTrade}
-              onSweep={handleSweep}
-              onPlaceOrder={handlePlaceOrder}
-              onOpenMarket={() => {
-                const coin = liveCoins.find(c => c.symbol === selectedCoin);
-                if (coin) {
-                  handleOpenMarket(coin);
-                } else if (selectedTokenInfo) {
-                  handleOpenMarket({
-                    id:        selectedTokenInfo.address,
-                    symbol:    selectedTokenInfo.symbol,
-                    name:      selectedTokenInfo.name,
-                    price:     selectedTokenInfo.price,
-                    change24h: selectedTokenInfo.change24h,
-                    marketCap: selectedTokenInfo.marketCap,
-                    volume24h: selectedTokenInfo.volume24h,
-                    liquidity: selectedTokenInfo.liquidity,
-                    age:       "—",
-                    migrated:  true,
-                    chain:     selectedTokenInfo.chainLabel as Coin["chain"],
-                    ca:        selectedTokenInfo.address,
-                  });
-                }
-              }}
-              loggedIn={!!user}
-              onAuthRequired={() => setAuthOpen(true)}
-              tokenInfo={selectedTokenInfo ?? undefined}
-              presets={tradePresets}
-              onViewToken={() => {
-                if (selectedTokenInfo) { setSelectedCoin(null); handleCATradeResult(selectedTokenInfo); }
-                else {
-                  const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === selectedCoin?.toUpperCase());
-                  const coin = liveCoins.find(c => c.symbol.toUpperCase() === selectedCoin?.toUpperCase());
-                  setSelectedCoin(null);
-                  handleCATradeResult(rich ?? { address: coin?.ca ?? selectedCoin ?? "", symbol: selectedCoin ?? "", name: coin?.name ?? selectedCoin ?? "", price: coin?.price ?? 0, change24h: coin?.change24h ?? 0, marketCap: coin?.marketCap ?? 0, volume24h: coin?.volume24h ?? 0, liquidity: coin?.liquidity ?? 0, chainLabel: coin?.chain ?? "SOL", pairAddress: "", chainId: "" });
-                }
-              }}
-            />
-          </motion.div>
-        )}
 
-        {/* TRADE TAB */}
-        {!selectedCoin && !tokenProfileToken && mainTab === "trade" && (
-          <motion.div key="trade" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
+        {/* CHART TAB */}
+        {!tokenProfileToken && mainTab === "chart" && (
+          <motion.div key="chart" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
             <SpotView
               dk={dk}
               liveCoins={liveCoins}
@@ -847,19 +825,35 @@ export default function FeedPage() {
               loggedIn={!!user}
               onAuthRequired={() => setAuthOpen(true)}
               presets={tradePresets}
+              paperMode={paperMode}
+              externalSymbol={chartSymbol ?? undefined}
+              externalTokenInfo={selectedTokenInfo ?? undefined}
             />
           </motion.div>
         )}
 
         {/* MARKETS TAB */}
-        {!selectedCoin && !tokenProfileToken && mainTab === "markets" && (
+        {!tokenProfileToken && mainTab === "markets" && (
           <motion.div key="markets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
-            <MarketsView dk={dk} liveMarkets={markets.filter(m => m.status === "open")} />
+            <MarketsView
+              dk={dk}
+              liveMarkets={markets
+                .filter(m => m.status === "open" && !!m.is_paper === paperMode)
+                .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
+              }
+              paperMode={paperMode}
+              onSelectToken={(symbol, chain) => {
+                setMainTab("chart");
+                handleCoinClick(symbol);
+              }}
+              onViewProfile={(u) => setProfileUser(u)}
+              shakingIds={shakingIds}
+            />
           </motion.div>
         )}
 
         {/* FEED TAB */}
-        {!selectedCoin && !tokenProfileToken && mainTab === "feed" && (
+        {!tokenProfileToken && mainTab === "feed" && (
           <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex overflow-hidden">
             {/* Timeframe sidebar — desktop only */}
             <div style={{ width: "220px", minWidth: "220px" }} className={`hidden md:flex border-r ${T.sidebarBorder} flex-col py-4 px-3 shrink-0 overflow-y-auto`}>
@@ -910,38 +904,20 @@ export default function FeedPage() {
                 {filtered.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {filtered.map((c, i) => (
-                      <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} onViewCoin={() => {
-                          const t: TokenInfo = {
-                            symbol:    c.symbol,
-                            name:      c.symbol,
-                            address:   "",
-                            chainId:   c.chain.toLowerCase(),
-                            chainLabel: c.chain,
-                            price:     c.entryPrice,
-                            change24h: 0,
-                            liquidity: 0,
-                            volume24h: 0,
-                            marketCap: 0,
-                            pairAddress: "",
-                          };
-                          // Use selectedTokenInfo if we already have richer data
+                      <ChallengeCard key={c.id} challenge={c} index={i} onAdd={handleAdd} shaking={shakingIds.has(c.id)} onViewCoin={() => {
                           const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === c.symbol.toUpperCase());
-                          handleCATradeResult(rich ?? t);
+                          handleCATradeResult(rich ?? {
+                            symbol: c.symbol, name: c.symbol, address: "",
+                            chainId: c.chain.toLowerCase(), chainLabel: c.chain,
+                            price: c.entryPrice, change24h: 0, liquidity: 0,
+                            volume24h: 0, marketCap: 0, pairAddress: "",
+                          });
                         }} onViewProfile={setProfileUser} dk={dk} livePrice={livePrices[`${c.symbol}_${c.chain}`]} paperMode={paperMode} />
                     ))}
                   </div>
                 ) : (
                   <div className={`flex flex-col items-center justify-center h-full gap-4 px-6 ${T.emptyIcon}`}>
-                    {statusFilter === "closed" ? (
-                      <>
-                        <span className="text-[32px]">✓</span>
-                        <p className="text-[13px] font-bold">No closed markets yet</p>
-                        <p className={`text-[11px] font-bold text-center max-w-[220px] ${dk ? "text-white/30" : "text-gray-400"}`}>
-                          Settled markets appear here and clear after 24h.
-                        </p>
-                      </>
-                    ) : modeMarkets.length === 0 ? (
-                      // Completely empty — first market CTA
+                    {modeMarkets.length === 0 ? (
                       <>
                         <span className="text-[40px]">{paperMode ? "🧪" : "🏁"}</span>
                         <div className="text-center">
@@ -949,32 +925,18 @@ export default function FeedPage() {
                             {paperMode ? "No paper markets yet" : "No markets yet"}
                           </p>
                           <p className={`text-[12px] font-bold mt-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                            {paperMode
-                              ? "Practice with simulated money. Open a paper market and test your strategy."
-                              : "Be the first. Open a market and set the tone."}
+                            {paperMode ? "Practice with simulated money. Open a paper market and test your strategy." : "Be the first. Open a market and set the tone."}
                           </p>
                         </div>
-                        <button
-                          onClick={() => setMainTab("trending")}
-                          className={`px-5 py-2.5 rounded-xl text-[12px] font-black tracking-wide transition-all ${
-                            paperMode
-                              ? "bg-yellow-400 text-black hover:bg-yellow-300"
-                              : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700"
-                          }`}
-                        >
+                        <button onClick={() => setMainTab("trending")}
+                          className={`px-5 py-2.5 rounded-xl text-[12px] font-black tracking-wide transition-all ${paperMode ? "bg-yellow-400 text-black hover:bg-yellow-300" : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700"}`}>
                           {paperMode ? "Open paper market →" : "Open first market →"}
                         </button>
                       </>
                     ) : (
-                      // Markets exist but none match timeframe / filters
                       <>
                         <span className="text-[32px]">—</span>
                         <p className="text-[13px] font-bold">No open {selectedTf} {paperMode ? "paper " : ""}markets</p>
-                        <p className={`text-[11px] font-bold text-center max-w-[220px] ${dk ? "text-white/30" : "text-gray-400"}`}>
-                          {paperMode
-                            ? "Switch timeframe or open a paper market yourself."
-                            : "Switch timeframe or open one yourself."}
-                        </p>
                         <button onClick={() => setMainTab("trending")}
                           className={`text-[12px] font-black px-4 py-2 rounded-xl transition-all ${dk ? "bg-white/8 hover:bg-white/15 text-white/50 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-900"}`}>
                           Trending →
@@ -1002,7 +964,7 @@ export default function FeedPage() {
         )}
 
         {/* TRENDING TAB */}
-        {!selectedCoin && !tokenProfileToken && mainTab === "trending" && (() => {
+        {!tokenProfileToken && mainTab === "trending" && (() => {
           let displayed = trendingTokens;
           if (trendingChain) displayed = displayed.filter(t => t.chainLabel === trendingChain);
           if (trendingSort === "mcap-desc") displayed = [...displayed].sort((a, b) => b.marketCap - a.marketCap);
@@ -1055,9 +1017,9 @@ export default function FeedPage() {
         })()}
 
         {/* RANKS TAB */}
-        {!selectedCoin && !tokenProfileToken && mainTab === "ranks" && (
+        {!tokenProfileToken && mainTab === "ranks" && (
           <motion.div key="ranks" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
-            <LeaderboardView dk={dk} onViewProfile={(u) => setProfilePageUser(u)} />
+            <LeaderboardView dk={dk} onViewProfile={(u) => setProfilePageUser(u)} paperMode={paperMode} />
           </motion.div>
         )}
 
@@ -1395,7 +1357,7 @@ export default function FeedPage() {
 
 // ─── ChallengeCard ────────────────────────────────────────────────────────────
 
-function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, onViewProfile, dk, livePrice, paperMode }: {
+function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, onViewProfile, dk, livePrice, paperMode, shaking }: {
   challenge: Challenge;
   index: number;
   onAdd: (id: string, side: "short" | "long", amount: number) => Promise<string | null>;
@@ -1404,11 +1366,63 @@ function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, onViewProfile, 
   dk: boolean;
   livePrice?: number;
   paperMode?: boolean;
+  shaking?: boolean;
 }) {
   const [activeSide, setActiveSide] = useState<"short" | "long" | null>(null);
   const [customAmt, setCustomAmt]   = useState("");
   const [betLoading, setBetLoading] = useState(false);
   const [betError, setBetError]     = useState("");
+
+  // Rotating messages
+  type CardMsg = { text: string; user: string; avatar?: string; isOpener: boolean };
+  const [msgs, setMsgs]     = useState<CardMsg[]>(() =>
+    c.tagline ? [{ text: c.tagline, user: c.openerUsername ?? c.user, avatar: c.openerAvatar, isOpener: true }] : []
+  );
+  const [msgIdx, setMsgIdx] = useState(0);
+
+  useEffect(() => {
+    function load() {
+      api.getMarketPositions(c.id).then((positions: any[]) => {
+        const betMsgs: CardMsg[] = positions
+          .filter(p => p.message)
+          .map(p => ({ text: p.message, user: p.username ?? "", avatar: p.avatar_url ?? undefined, isOpener: p.is_opener ?? false }));
+        const openerMsg: CardMsg[] = c.tagline
+          ? [{ text: c.tagline, user: c.openerUsername ?? c.user, avatar: c.openerAvatar, isOpener: true }]
+          : [];
+        const seen = new Set<string>();
+        const all = [...openerMsg, ...betMsgs].filter(m => { if (seen.has(m.text)) return false; seen.add(m.text); return true; });
+        setMsgs(all);
+      }).catch(() => {});
+    }
+    load();
+    const iv = setInterval(load, 30_000);
+    return () => clearInterval(iv);
+  }, [c.id]);
+
+  useEffect(() => {
+    if (msgs.length <= 1) return;
+    const iv = setInterval(() => setMsgIdx(i => (i + 1) % msgs.length), 3000);
+    return () => clearInterval(iv);
+  }, [msgs.length]);
+
+  const currentMsg = msgs[msgIdx] ?? null;
+  const [timeLeft, setTimeLeft]     = useState(() =>
+    c.closesAt ? formatMsLeft(Math.max(0, c.closesAt - Date.now())) : c.expiresIn
+  );
+
+  useEffect(() => {
+    if (!c.closesAt) return;
+    let iv: ReturnType<typeof setInterval>;
+    function tick() {
+      const ms = Math.max(0, c.closesAt! - Date.now());
+      setTimeLeft(formatMsLeft(ms));
+      clearInterval(iv);
+      const next = ms < 60_000 ? 1_000 : 60_000;
+      iv = setInterval(tick, next);
+    }
+    tick();
+    return () => clearInterval(iv);
+  }, [c.closesAt]);
 
   const total      = c.shortPool + c.longPool;
   const shortPct   = total > 0 ? (c.shortPool / total) * 100 : 50;
@@ -1481,7 +1495,11 @@ function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, onViewProfile, 
     : dk ? "border-red-500/30 bg-red-500/5" : "border-red-300 bg-red-50";
 
   return (
-    <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={shaking ? { x: [0, -6, 6, -4, 4, -2, 2, 0], opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
+      transition={shaking ? { duration: 0.5, ease: "easeOut" } : { delay: index * 0.03 }}
       className={`flex flex-col gap-3 rounded-2xl border-2 transition-all p-4 ${isDone ? resolvedCard : card}`}>
 
       <div className="flex items-start justify-between">
@@ -1534,22 +1552,44 @@ function ChallengeCard({ challenge: c, index, onAdd, onViewCoin, onViewProfile, 
         </div>
         <div className="text-right">
           <span className={`text-[12px] font-bold ${tfTxt}`}>{c.timeframe}</span>
-          <p className={`text-[10px] mt-0.5 ${expTxt}`}>
-            {isDone ? "closed" : `${c.expiresIn} left`}
+          <p className={`text-[10px] mt-0.5 tabular-nums ${expTxt}`}>
+            {isDone ? "closed" : `${timeLeft} left`}
           </p>
         </div>
       </div>
 
-      {c.tagline && (
-        <div className="flex items-start gap-2">
-          {c.openerAvatar ? (
-            <img src={c.openerAvatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0 mt-0.5" />
+      {currentMsg && (
+        <div className="flex items-start gap-2 min-h-[22px]">
+          {currentMsg.avatar ? (
+            <img src={currentMsg.avatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0 mt-0.5" />
           ) : (
-            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 mt-0.5 ${dk ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"}`}>
-              {(c.openerUsername ?? c.user).charAt(0).toUpperCase()}
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 mt-0.5 ${
+              currentMsg.isOpener
+                ? dk ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"
+                : dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500"
+            }`}>
+              {currentMsg.user.charAt(0).toUpperCase()}
             </span>
           )}
-          <p className={`text-[12px] leading-snug font-bold ${dk ? "text-yellow-400/80" : "text-yellow-600"}`}>"{c.tagline}"</p>
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={msgIdx}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.3 }}
+              className={`text-[12px] leading-snug font-bold ${
+                currentMsg.isOpener
+                  ? dk ? "text-yellow-400/80" : "text-yellow-600"
+                  : dk ? "text-white/60" : "text-gray-700"
+              }`}
+            >
+              "{currentMsg.text}"
+              {!currentMsg.isOpener && (
+                <span className={`not-italic font-normal ml-1.5 text-[10px] ${dk ? "text-white/25" : "text-gray-400"}`}>— {currentMsg.user}</span>
+              )}
+            </motion.p>
+          </AnimatePresence>
         </div>
       )}
 

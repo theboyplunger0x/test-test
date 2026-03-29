@@ -19,6 +19,9 @@ interface Props {
   loggedIn: boolean;
   onAuthRequired: () => void;
   presets?: number[];
+  paperMode?: boolean;
+  externalSymbol?: string;          // controlled from outside (e.g. clicking a ticker)
+  externalTokenInfo?: TokenInfo;    // pre-fetched token info from CA search
 }
 
 const CHAIN_COLORS: Record<string, string> = {
@@ -29,12 +32,21 @@ const CHAIN_COLORS: Record<string, string> = {
 
 export default function SpotView({
   dk, liveCoins, markets, onBet, onAutoTrade, onSweep, onPlaceOrder, onOpenMarket,
-  loggedIn, onAuthRequired, presets,
+  loggedIn, onAuthRequired, presets, paperMode, externalSymbol, externalTokenInfo,
 }: Props) {
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(liveCoins[0]?.symbol ?? "SOL");
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(
+    externalSymbol ?? liveCoins[0]?.symbol ?? "SOL"
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const selectedCoin = liveCoins.find(c => c.symbol === selectedSymbol) ?? liveCoins[0];
+  // Sync when parent sets a new symbol (e.g. clicking a ticker)
+  useEffect(() => {
+    if (externalSymbol && externalSymbol !== selectedSymbol) {
+      setSelectedSymbol(externalSymbol);
+    }
+  }, [externalSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedCoin = liveCoins.find(c => c.symbol.toUpperCase() === selectedSymbol.toUpperCase()) ?? liveCoins[0];
   const selectedChain = selectedCoin?.chain ?? "SOL";
 
   // scroll selected pill into view
@@ -108,6 +120,8 @@ export default function SpotView({
             loggedIn={loggedIn}
             onAuthRequired={onAuthRequired}
             presets={presets}
+            paperMode={paperMode}
+            tokenInfo={externalTokenInfo}
           />
         </motion.div>
       )}

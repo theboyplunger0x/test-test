@@ -125,6 +125,7 @@ export type UserProfile = {
     status: string;
     winner_side: "long" | "short" | null;
     chain: string;
+    is_paper: boolean;
   }[];
 };
 
@@ -147,6 +148,7 @@ export type Market = {
   opener_username?: string;
   opener_avatar?: string;
   opener_tier?: string;
+  last_bet_at?: string;
 };
 
 // ── Order Book types ──────────────────────────────────────────────────────────
@@ -325,8 +327,8 @@ export const api = {
       body: JSON.stringify({ token, password }),
     }),
 
-  leaderboard: (period: "week" | "month" | "all" = "week") =>
-    req<LeaderboardEntry[]>(`/leaderboard?period=${period}`),
+  leaderboard: (period: "week" | "month" | "all" = "week", paper = false) =>
+    req<LeaderboardEntry[]>(`/leaderboard?period=${period}&paper=${paper}`),
 
   linkTelegram: (token: string) =>
     req<{ ok: true }>("/auth/link-telegram", {
@@ -375,8 +377,8 @@ export const api = {
 
   // ── Order Book ──────────────────────────────────────────────────────────────
 
-  getOrderBook: (symbol: string, chain?: string) =>
-    req<OrderBook>(`/orders/book?symbol=${encodeURIComponent(symbol)}${chain ? `&chain=${encodeURIComponent(chain)}` : ""}`),
+  getOrderBook: (symbol: string, chain?: string, paper = false) =>
+    req<OrderBook>(`/orders/book?symbol=${encodeURIComponent(symbol)}${chain ? `&chain=${encodeURIComponent(chain)}` : ""}&paper=${paper}`),
 
   getMyOrders: (history = false) =>
     req<Order[]>(`/orders/mine${history ? "?history=1" : ""}`),

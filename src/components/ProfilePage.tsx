@@ -492,7 +492,9 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                             {t.side === "long" ? "▲" : "▼"}
                           </span>
                           <div>
-                            <p className={`text-[12px] font-black ${strong}`}>${t.symbol} {t.side.toUpperCase()} {t.timeframe}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className={`text-[12px] font-black ${strong}`}>${t.symbol} {t.side.toUpperCase()} {t.timeframe}</p>
+                            </div>
                             <p className={`text-[10px] ${muted}`}>{date}</p>
                           </div>
                         </div>

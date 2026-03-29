@@ -962,7 +962,7 @@ function SweepGroupRow({ group: g, tick, dk, T }: {
             {g.positions.length} fills
           </span>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           {isSettled ? (
             <span className={`text-[12px] font-black ${g.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
               {g.status === "won" ? "WON" : "LOST"}
@@ -972,7 +972,10 @@ function SweepGroupRow({ group: g, tick, dk, T }: {
               {formatCountdown(timeLeft)}
             </span>
           )}
-          <span className={`text-[13px] font-black ${T.strong}`}>${g.totalAmount.toFixed(0)}</span>
+          <div className="text-right">
+            <p className={`text-[13px] font-black ${T.strong}`}>${g.totalAmount.toFixed(0)}</p>
+            <p className={`text-[9px] font-bold ${T.muted}`}>{g.positions.length} fills</p>
+          </div>
           <span className={`text-[10px] font-bold ${T.muted}`}>{expanded ? "▲" : "▼"}</span>
         </div>
       </button>
@@ -1083,13 +1086,22 @@ function PositionRow({ order: o, tick, dk, T, onViewToken }: {
           <p className={`text-[10px] font-bold mb-0.5 ${T.muted}`}>Stake</p>
           <p className={`text-[14px] font-black ${T.strong}`}>${o.amount}</p>
         </div>
+        {!isSettled && mult && (
+          <div className="text-center">
+            <p className={`text-[10px] font-bold mb-0.5 ${T.muted}`}>Mult</p>
+            <p className={`text-[14px] font-black text-amber-400`}>{mult}x</p>
+          </div>
+        )}
         <div className="text-right">
-          <p className={`text-[10px] font-bold mb-0.5 ${T.muted}`}>{isSettled ? "Payout" : "If right"}</p>
-          <p className={`text-[14px] font-black ${isSettled ? (o.status === "won" ? "text-emerald-400" : T.muted) : T.normal}`}>
+          <p className={`text-[10px] font-bold mb-0.5 ${T.muted}`}>{isSettled ? "Payout" : "To win"}</p>
+          <p className={`text-[14px] font-black ${isSettled ? (o.status === "won" ? "text-emerald-400" : T.muted) : "text-emerald-400"}`}>
             {isSettled
               ? o.status === "won" ? `$${payout.toFixed(2)}` : "—"
-              : mult ? `${mult}x · $${payout.toFixed(2)}` : "no pool yet"}
+              : mult ? `$${payout.toFixed(2)}` : "no pool yet"}
           </p>
+          {!isSettled && mult && profit > 0 && (
+            <p className={`text-[9px] font-bold ${T.muted}`}>+${profit.toFixed(2)} profit</p>
+          )}
         </div>
       </div>
 

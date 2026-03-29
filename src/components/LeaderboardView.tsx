@@ -14,7 +14,7 @@ const PERIOD_LABELS: Record<Period, string> = {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-export default function LeaderboardView({ dk, onViewProfile }: { dk: boolean; onViewProfile?: (username: string) => void }) {
+export default function LeaderboardView({ dk, onViewProfile, paperMode = false }: { dk: boolean; onViewProfile?: (username: string) => void; paperMode?: boolean }) {
   const [period, setPeriod]   = useState<Period>("week");
   const [rows, setRows]       = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,11 +23,11 @@ export default function LeaderboardView({ dk, onViewProfile }: { dk: boolean; on
   useEffect(() => {
     setLoading(true);
     setError(null);
-    api.leaderboard(period)
+    api.leaderboard(period, paperMode)
       .then(setRows)
       .catch((e) => setError(e.message ?? "Failed to load"))
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [period, paperMode]);
 
   // ── theme tokens ────────────────────────────────────────────────────────────
   const T = {
@@ -50,18 +50,20 @@ export default function LeaderboardView({ dk, onViewProfile }: { dk: boolean; on
   return (
     <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
       {/* Period picker */}
-      <div className={`flex rounded-2xl p-1 gap-1 ${T.pillGroup}`}>
-        {(["week", "month", "all"] as Period[]).map((p) => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            className={`flex-1 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-              period === p ? T.pillActive : T.pillInact
-            }`}
-          >
-            {p === "week" ? "Week" : p === "month" ? "Month" : "All Time"}
-          </button>
-        ))}
+      <div className="flex gap-2">
+        <div className={`flex flex-1 rounded-2xl p-1 gap-1 ${T.pillGroup}`}>
+          {(["week", "month", "all"] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`flex-1 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                period === p ? T.pillActive : T.pillInact
+              }`}
+            >
+              {p === "week" ? "Week" : p === "month" ? "Month" : "All"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Header */}
