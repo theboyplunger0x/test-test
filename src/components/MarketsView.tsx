@@ -70,8 +70,8 @@ function HeroCard({ market, dk, onTrade }: { market: Market; dk: boolean; onTrad
   const total     = longPool + shortPool;
   const longPct   = total > 0 ? Math.round((longPool  / total) * 100) : 50;
   const shortPct  = 100 - longPct;
-  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool, 1) : 1.95;
-  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool, 1) : 1.95;
+  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool, 5) : 1.95;
+  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool, 5) : 1.95;
   const bias      = longPct >= 60 ? "SHORT" : shortPct >= 60 ? "LONG" : null;
 
   const border = dk ? "border-white/8"  : "border-gray-200";
@@ -196,8 +196,8 @@ function RightPanel({ dk, paperMode, onSelectToken }: { dk: boolean; paperMode: 
             const lp = parseFloat(m.long_pool);
             const sp = parseFloat(m.short_pool);
             const bestMult = Math.max(
-              sp > 0 ? 1 + (sp * 0.95) / Math.max(lp, 1) : 0,
-              lp > 0 ? 1 + (lp * 0.95) / Math.max(sp, 1) : 0,
+              sp > 0 ? 1 + (sp * 0.95) / Math.max(lp, 5) : 0,
+              lp > 0 ? 1 + (lp * 0.95) / Math.max(sp, 5) : 0,
             );
             const bestSide = (sp > lp) ? "LONG" : "SHORT";
             return (
@@ -258,8 +258,8 @@ function QuickTradeModal({ market, dk, onClose, paperMode }: { market: Market; d
   const [err, setErr]       = useState<string | null>(null);
 
   const amt = parseFloat(amount) || 0;
-  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool + (side === "long" ? amt : 0), 1) : 1.95;
-  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool + (side === "short" ? amt : 0), 1) : 1.95;
+  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool + (side === "long" ? amt : 0), 5) : 1.95;
+  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool + (side === "short" ? amt : 0), 5) : 1.95;
   const currentMult = side === "long" ? longMult : side === "short" ? shortMult : null;
 
   async function execute() {
@@ -402,17 +402,26 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
 
   const currentMsg = msgs[msgIdx] ?? null;
 
-  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool, 1) : 1.95;
-  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool, 1) : 1.95;
+  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool, 5) : 1.95;
+  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool, 5) : 1.95;
   const bestMult  = Math.max(longMult, shortMult);
   const bestSide  = longMult >= shortMult ? "LONG" : "SHORT";
 
-  const border   = dk ? "border-white/6"  : "border-gray-200";
-  const bg       = dk ? "bg-[#111]"       : "bg-white";
+  const isHot = bestMult >= 15;
+  // For hot cards: the majority side is the one with LOWER mult (more money there)
+  const majoritySide  = bestSide === "LONG" ? "SHORT" : "LONG";
+  const majorityPct   = bestSide === "LONG" ? shortPct : longPct;
+  const contrarian    = bestSide; // the side with the HIGH multiplier = fade opportunity
+
+  const border   = isHot
+    ? "border-amber-400/60 shadow-[0_0_16px_rgba(251,191,36,0.18)]"
+    : dk ? "border-white/6" : "border-gray-200";
+  const bg       = isHot
+    ? dk ? "bg-[#111]" : "bg-amber-50/40"
+    : dk ? "bg-[#111]" : "bg-white";
   const strong   = dk ? "text-white"      : "text-gray-900";
   const muted    = dk ? "text-white/35"   : "text-gray-400";
-  const divCls   = dk ? "border-white/5"  : "border-gray-100";
-  const barBg    = dk ? "bg-white/6"      : "bg-gray-100";
+  const divCls   = isHot ? "border-amber-400/20" : dk ? "border-white/5" : "border-gray-100";
   const chainCls = {
     sol:  dk ? "bg-purple-500/15 text-purple-300" : "bg-purple-100 text-purple-700",
     eth:  dk ? "bg-blue-500/15 text-blue-300"     : "bg-blue-100 text-blue-700",
@@ -425,57 +434,118 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
       animate={shaking ? { x: [0, -6, 6, -4, 4, -2, 2, 0] } : {}}
       transition={shaking ? { duration: 0.5, ease: "easeOut" } : {}}
     >
-    <button onClick={onClick} className={`w-full text-left rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-3 hover:border-white/20 transition-colors`}>
+    <button onClick={onClick} className={`w-full text-left rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-3 transition-all ${isHot ? "" : "hover:border-white/20"}`}>
 
-      {/* Header: symbol + chain + timeframe | multiplier */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className={`text-[16px] font-black ${strong}`}>${market.symbol}</span>
+      {isHot ? (
+        /* ── HOT CARD: contrarian opportunity hero layout ── */
+        <>
+          {/* Top row: symbol + chain + tf */}
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[15px] font-black ${strong}`}>${market.symbol}</span>
             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${chainCls}`}>{market.chain?.toUpperCase()}</span>
             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-white/6 text-white/30" : "bg-gray-100 text-gray-400"}`}>{market.timeframe}</span>
+            <span className="ml-auto text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-400 tracking-wide">🔥 HOT</span>
           </div>
-          {/* Rotating message + user inline */}
-          <div className="min-h-[28px]">
+
+          {/* Hero: big multiplier + fade label */}
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <p className="text-[38px] font-black tabular-nums leading-none text-amber-400">{fmtMult(bestMult)}</p>
+              <p className={`text-[11px] font-black mt-1 ${contrarian === "LONG" ? "text-emerald-400" : "text-red-400"}`}>
+                {contrarian === "LONG" ? "▲ LONG" : "▼ SHORT"} — fade the crowd
+              </p>
+            </div>
+            <div className="text-right">
+              <p className={`text-[22px] font-black tabular-nums leading-none ${majorityPct >= 80 ? "text-red-400" : "text-white/50"}`}>{majorityPct}%</p>
+              <p className={`text-[9px] font-bold mt-0.5 ${muted}`}>betting {majoritySide}</p>
+            </div>
+          </div>
+
+          {/* Message */}
+          <div className="min-h-[20px]">
             <AnimatePresence mode="wait">
               {currentMsg && (
                 <motion.div key={msgIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.3 }}>
                   <p className={`text-[10px] italic line-clamp-2 leading-[14px] ${currentMsg.isOpener ? (dk ? "text-yellow-400/80" : "text-yellow-600") : muted}`}>
                     "{currentMsg.text}"
-                    {currentMsg.user && (
-                      <span className={`not-italic ml-1 ${dk ? "text-white/20" : "text-gray-400"}`}>— {currentMsg.user}</span>
-                    )}
+                    {currentMsg.user && <span className={`not-italic ml-1 ${dk ? "text-white/20" : "text-gray-400"}`}>— {currentMsg.user}</span>}
                   </p>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        </div>
-        {/* Multiplier */}
-        <div className="text-right shrink-0">
-          <p className={`text-[18px] font-black tabular-nums leading-none ${multColor(bestMult)}`}>{fmtMult(bestMult)}</p>
-          <p className={`text-[9px] font-black mt-0.5 ${bestSide === "LONG" ? "text-emerald-400/60" : "text-red-400/60"}`}>{bestSide}</p>
-        </div>
-      </div>
 
-      {/* Pool bar */}
-      <div className={`pt-2 border-t ${divCls} flex items-center gap-2`}>
-        <span className="text-[9px] font-black text-emerald-400 shrink-0">▲ {fmtPool(longPool)}</span>
-        <div className="flex-1 h-2 rounded-full overflow-hidden flex">
-          <motion.div initial={{ width: 0 }} animate={{ width: `${longPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
-            className="h-full bg-emerald-500" />
-          <motion.div initial={{ width: 0 }} animate={{ width: `${shortPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
-            className="h-full bg-red-500" />
-        </div>
-        <span className="text-[9px] font-black text-red-400 shrink-0">{fmtPool(shortPool)} ▼</span>
-      </div>
+          {/* Pool bar */}
+          <div className={`pt-2 border-t ${divCls} flex items-center gap-2`}>
+            <span className="text-[9px] font-black text-emerald-400 shrink-0">▲ {fmtPool(longPool)}</span>
+            <div className="flex-1 h-2 rounded-full overflow-hidden flex">
+              <motion.div initial={{ width: 0 }} animate={{ width: `${longPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }} className="h-full bg-emerald-500" />
+              <motion.div initial={{ width: 0 }} animate={{ width: `${shortPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }} className="h-full bg-red-500" />
+            </div>
+            <span className="text-[9px] font-black text-red-400 shrink-0">{fmtPool(shortPool)} ▼</span>
+          </div>
 
-      {/* Trade CTA */}
-      <button
-        onClick={e => { e.stopPropagation(); onTrade(); }}
-        className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-white text-black hover:bg-white/90 active:scale-95 transition-all">
-        Trade
-      </button>
+          {/* Trade CTA — amber for hot */}
+          <button
+            onClick={e => { e.stopPropagation(); onTrade(); }}
+            className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-amber-400 text-black hover:bg-amber-300 active:scale-95 transition-all">
+            Trade {fmtMult(bestMult)} · {contrarian}
+          </button>
+        </>
+      ) : (
+        /* ── NORMAL CARD ── */
+        <>
+          {/* Header: symbol + chain + timeframe | multiplier */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className={`text-[16px] font-black ${strong}`}>${market.symbol}</span>
+                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${chainCls}`}>{market.chain?.toUpperCase()}</span>
+                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-white/6 text-white/30" : "bg-gray-100 text-gray-400"}`}>{market.timeframe}</span>
+              </div>
+              {/* Rotating message + user inline */}
+              <div className="min-h-[28px]">
+                <AnimatePresence mode="wait">
+                  {currentMsg && (
+                    <motion.div key={msgIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.3 }}>
+                      <p className={`text-[10px] italic line-clamp-2 leading-[14px] ${currentMsg.isOpener ? (dk ? "text-yellow-400/80" : "text-yellow-600") : muted}`}>
+                        "{currentMsg.text}"
+                        {currentMsg.user && (
+                          <span className={`not-italic ml-1 ${dk ? "text-white/20" : "text-gray-400"}`}>— {currentMsg.user}</span>
+                        )}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+            {/* Multiplier */}
+            <div className="text-right shrink-0">
+              <p className={`text-[18px] font-black tabular-nums leading-none ${multColor(bestMult)}`}>{fmtMult(bestMult)}</p>
+              <p className={`text-[9px] font-black mt-0.5 ${bestSide === "LONG" ? "text-emerald-400/60" : "text-red-400/60"}`}>{bestSide}</p>
+            </div>
+          </div>
+
+          {/* Pool bar */}
+          <div className={`pt-2 border-t ${divCls} flex items-center gap-2`}>
+            <span className="text-[9px] font-black text-emerald-400 shrink-0">▲ {fmtPool(longPool)}</span>
+            <div className="flex-1 h-2 rounded-full overflow-hidden flex">
+              <motion.div initial={{ width: 0 }} animate={{ width: `${longPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
+                className="h-full bg-emerald-500" />
+              <motion.div initial={{ width: 0 }} animate={{ width: `${shortPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
+                className="h-full bg-red-500" />
+            </div>
+            <span className="text-[9px] font-black text-red-400 shrink-0">{fmtPool(shortPool)} ▼</span>
+          </div>
+
+          {/* Trade CTA */}
+          <button
+            onClick={e => { e.stopPropagation(); onTrade(); }}
+            className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-white text-black hover:bg-white/90 active:scale-95 transition-all">
+            Trade
+          </button>
+        </>
+      )}
 
     </button>
     </motion.div>
@@ -521,8 +591,8 @@ function useOBEntries(paperMode: boolean) {
           const st = tfData.short.total ?? 0;
           if (lt + st === 0) continue;
           const bestMult = Math.max(
-            st > 0 ? 1 + (st * 0.95) / Math.max(lt, 1) : 0,
-            lt > 0 ? 1 + (lt * 0.95) / Math.max(st, 1) : 0,
+            st > 0 ? 1 + (st * 0.95) / Math.max(lt, 5) : 0,
+            lt > 0 ? 1 + (lt * 0.95) / Math.max(st, 5) : 0,
           );
           out.push({
             key:       `${t.symbol}-${t.chain}-${tf}`,

@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { api, LeaderboardEntry } from "../lib/api";
 
-type Period = "week" | "month" | "all";
+type Period  = "week" | "month" | "all";
+type SortKey = "pnl" | "volume" | "winrate";
+type SortDir = "desc" | "asc";
 
 const PERIOD_LABELS: Record<Period, string> = {
   week:  "This Week",
@@ -16,6 +18,8 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 
 export default function LeaderboardView({ dk, onViewProfile, paperMode = false }: { dk: boolean; onViewProfile?: (username: string) => void; paperMode?: boolean }) {
   const [period, setPeriod]   = useState<Period>("week");
+  const [sortKey, setSortKey] = useState<SortKey>("pnl");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [rows, setRows]       = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -45,24 +49,46 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
     barFillNeg: dk ? "bg-red-400"     : "bg-red-500",
   };
 
+  const sortedRows = [...rows].sort((a, b) => {
+    let av = 0, bv = 0;
+    if (sortKey === "pnl")     { av = parseFloat(a.pnl);    bv = parseFloat(b.pnl); }
+    if (sortKey === "volume")  { av = parseFloat(a.volume); bv = parseFloat(b.volume); }
+    if (sortKey === "winrate") {
+      av = a.total_bets > 0 ? a.wins / a.total_bets : 0;
+      bv = b.total_bets > 0 ? b.wins / b.total_bets : 0;
+    }
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
+
   const maxPnl = rows.length > 0 ? Math.max(...rows.map((r) => Math.abs(parseFloat(r.pnl)))) : 1;
 
   return (
     <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
       {/* Period picker */}
-      <div className="flex gap-2">
-        <div className={`flex flex-1 rounded-2xl p-1 gap-1 ${T.pillGroup}`}>
+      <div className="space-y-2">
+        <div className={`flex rounded-2xl p-1 gap-1 ${T.pillGroup}`}>
           {(["week", "month", "all"] as Period[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`flex-1 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-                period === p ? T.pillActive : T.pillInact
-              }`}
-            >
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`flex-1 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${period === p ? T.pillActive : T.pillInact}`}>
               {p === "week" ? "Week" : p === "month" ? "Month" : "All"}
             </button>
           ))}
+        </div>
+
+        {/* Sort controls */}
+        <div className="flex items-center gap-2">
+          <div className={`flex flex-1 rounded-xl p-0.5 gap-0.5 ${T.pillGroup}`}>
+            {([["pnl", "P&L"], ["volume", "Volume"], ["winrate", "Win Rate"]] as [SortKey, string][]).map(([key, label]) => (
+              <button key={key} onClick={() => setSortKey(key)}
+                className={`flex-1 py-1.5 rounded-[10px] text-[10px] font-black transition-all ${sortKey === key ? T.pillActive : T.pillInact}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${T.pillGroup} ${T.pillInact}`}>
+            {sortDir === "desc" ? "↓" : "↑"}
+          </button>
         </div>
       </div>
 
@@ -90,7 +116,7 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
         </div>
       ) : (
         <div className="space-y-2">
-          {rows.map((row, i) => {
+          {sortedRows.map((row, i) => {
             const pnl      = parseFloat(row.pnl);
             const winRate  = row.total_bets > 0 ? Math.round((row.wins / row.total_bets) * 100) : 0;
             const barWidth = maxPnl > 0 ? Math.abs(pnl) / maxPnl : 0;
@@ -125,7 +151,7 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
 
                   <div className="text-right">
                     <p className={`text-[16px] font-black tabular-nums ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                      {pnl >= 0 ? "+" : ""}${Math.abs(pnl).toFixed(2)}
+                      {pnl >= 0 ? "+" : "-"}${Math.abs(pnl).toFixed(2)}
                     </p>
                     <p className={`text-[10px] font-bold ${T.muted}`}>
                       ${parseFloat(row.volume).toFixed(0)} vol
