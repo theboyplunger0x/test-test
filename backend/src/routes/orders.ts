@@ -15,8 +15,10 @@ export async function orderRoutes(app: FastifyInstance) {
     const { symbol, chain } = req.query as any;
     if (!symbol) return reply.status(400).send({ error: "symbol required" });
 
-    const params: any[] = [symbol.toUpperCase()];
-    const chainClause = chain ? `AND UPPER(o.chain) = UPPER($2)` : "";
+    const isPaper = (req.query as any).paper === "true";
+    const params: any[] = [symbol.toUpperCase(), isPaper];
+    let paramIdx = 3;
+    const chainClause = chain ? `AND UPPER(o.chain) = UPPER($${paramIdx++})` : "";
     if (chain) params.push(chain);
 
     const { rows } = await db.query(`
@@ -26,6 +28,7 @@ export async function orderRoutes(app: FastifyInstance) {
       FROM orders o
       JOIN users u ON u.id = o.user_id
       WHERE UPPER(o.symbol) = $1
+        AND o.is_paper = $2
         ${chainClause}
         AND o.status IN ('pending', 'partially_filled')
         AND (o.expires_at IS NULL OR o.expires_at > NOW())
@@ -279,6 +282,7 @@ export async function orderRoutes(app: FastifyInstance) {
       side: takerSide,
       amount: rawAmount,
       is_paper = false,
+      message: takerMessage,
     } = req.body as any;
 
     if (!symbol || !chain || !timeframe || !takerSide || !rawAmount) {
@@ -382,9 +386,9 @@ export async function orderRoutes(app: FastifyInstance) {
         [fillAmount, taker.userId]
       );
       await client.query(`
-        INSERT INTO positions (user_id, market_id, side, amount, is_paper)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [taker.userId, market.id, takerSide, fillAmount, is_paper]);
+        INSERT INTO positions (user_id, market_id, side, amount, is_paper, message)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [taker.userId, market.id, takerSide, fillAmount, is_paper, takerMessage?.trim() || null]);
 
       // Process maker orders — ALL go into the market (mark filled, create positions + fills)
       let remaining = fillAmount;
@@ -398,11 +402,11 @@ export async function orderRoutes(app: FastifyInstance) {
         const consumed  = remaining > 0 ? Math.min(orderAmt, remaining) : 0;
         remaining      -= consumed;
 
-        // Insert maker position for their full remaining amount
+        // Insert maker position for their full remaining amount (use order tagline as message)
         await client.query(`
-          INSERT INTO positions (user_id, market_id, side, amount, is_paper)
-          VALUES ($1, $2, $3, $4, $5)
-        `, [order.user_id, market.id, makerSide, orderAmt, is_paper]);
+          INSERT INTO positions (user_id, market_id, side, amount, is_paper, message)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [order.user_id, market.id, makerSide, orderAmt, is_paper, order.tagline?.trim() || null]);
 
         // Record the fill (tracks which makers are in this sweep)
         await client.query(`

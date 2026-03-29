@@ -59,10 +59,10 @@ export async function userRoutes(app: FastifyInstance) {
 
     // Recent 8 non-paper trades
     const { rows: recentTrades } = await db.query(
-      `SELECT p.side, p.amount, p.placed_at, m.symbol, m.timeframe, m.status, m.winner_side, m.chain
+      `SELECT p.side, p.amount, p.placed_at, p.is_paper, m.symbol, m.timeframe, m.status, m.winner_side, m.chain
        FROM positions p
        JOIN markets m ON m.id = p.market_id
-       WHERE p.user_id = $1 AND p.is_paper = false
+       WHERE p.user_id = $1
        ORDER BY p.placed_at DESC
        LIMIT 50`,
       [user.id]

@@ -4,7 +4,8 @@ import { db } from "../db/client.js";
 export async function leaderboardRoutes(app: FastifyInstance) {
   // GET /leaderboard?period=week|month|all
   app.get("/leaderboard", async (req, reply) => {
-    const { period = "week" } = req.query as { period?: string };
+    const { period = "week", paper = "false" } = req.query as { period?: string; paper?: string };
+    const isPaper = paper === "true";
 
     let dateFilter = "";
     if (period === "week") {
@@ -38,12 +39,12 @@ export async function leaderboardRoutes(app: FastifyInstance) {
        JOIN markets  m ON p.market_id = m.id
        JOIN users    u ON p.user_id   = u.id
        WHERE m.status = 'resolved'
-         AND p.is_paper = false
+         AND p.is_paper = $1
          ${dateFilter}
        GROUP BY u.id, u.username
        HAVING COUNT(p.id) >= 1
        ORDER BY pnl DESC
-       LIMIT 50`,
+       LIMIT 50`, [isPaper]
     );
 
     return rows;

@@ -170,7 +170,7 @@ export default function TokenProfilePage({
     getOHLCV(addr, token.chainLabel ?? "solana", resolution, limit).then(c => setCandles(c)).catch(() => {});
   }, [token.pairAddress, token.address, chartTf]);
 
-  const modeMarketIds = new Set(markets.filter(m => !!m.is_paper === paperMode).map(m => m.id));
+  const modeMarketIds = new Set(markets.filter(m => m.status === "open" && !!m.is_paper === paperMode).map(m => m.id));
   const modePositions = positions.filter(p => modeMarketIds.has(p.market_id ?? ""));
   const totalLong  = modePositions.filter(p => p.side === "long").reduce((s, p) => s + parseFloat(p.amount), 0);
   const totalShort = modePositions.filter(p => p.side === "short").reduce((s, p) => s + parseFloat(p.amount), 0);

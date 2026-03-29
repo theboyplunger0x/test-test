@@ -215,7 +215,7 @@ export default function CoinDetail({
   const [sweepLoading, setSweepLoading] = useState(false);
 
   // ── Trade panel tab ─────────────────────────────────────────────────────────
-  const [tradeTab, setTradeTab]         = useState<"market" | "limit">("market");
+  const [tradeTab, setTradeTab]         = useState<"market" | "sweep" | "limit">("market");
   const [makerSide, setMakerSide]       = useState<"long" | "short" | null>(null);
   const [makerAmt, setMakerAmt]         = useState("");
   const [autoReopen, setAutoReopen]     = useState(false);
@@ -485,16 +485,16 @@ export default function CoinDetail({
       {/* ── RIGHT: Trade Panel ───────────────────────────────────── */}
       <div className={`w-full md:w-[238px] shrink-0 flex flex-col border-t md:border-t-0 md:border-l overflow-y-auto ${dk ? "border-white/8 bg-[#0e0e0e]" : "border-gray-100 bg-white"}`}>
 
-        {/* Market / Limit tabs */}
+        {/* Trade / Challenge tabs */}
         <div className={`flex shrink-0 border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
-          {(["market", "limit"] as const).map(tab => (
+          {(["market", "sweep", "limit"] as const).map(tab => (
             <button key={tab} onClick={() => setTradeTab(tab)}
-              className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-wider transition-all relative ${
+              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider transition-all relative ${
                 tradeTab === tab
                   ? dk ? "text-white" : "text-gray-900"
                   : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"
               }`}>
-              {tab}
+              {tab === "market" ? "Open Market" : tab === "sweep" ? "Sweep" : "Challenge"}
               {tradeTab === tab && <span className={`absolute bottom-0 left-0 right-0 h-[2px] ${dk ? "bg-white" : "bg-gray-900"}`} />}
             </button>
           ))}
@@ -502,38 +502,12 @@ export default function CoinDetail({
 
         {/* ── MARKET tab ──────────────────────────────────────────── */}
         {tradeTab === "market" && (() => {
-          // ── Sweep simulation ────────────────────────────────────
-          const tfData = orderBook?.timeframes[timeframe];
-          const opposingSide = side === "long" ? "short" : "long";
-          const opposingOrders = (tfData?.[opposingSide as "long" | "short"]?.orders ?? []) as { username: string; remaining_amount: number }[];
-          const sortedOrders = [...opposingOrders].sort((a, b) => b.remaining_amount - a.remaining_amount);
-          let remaining = finalAmount ?? 0;
-          const fills: { username: string; amount: number }[] = [];
-          for (const order of sortedOrders) {
-            if (remaining <= 0) break;
-            const filled = Math.min(remaining, order.remaining_amount);
-            fills.push({ username: order.username, amount: filled });
-            remaining -= filled;
-          }
-          const filledTotal  = (finalAmount ?? 0) - remaining;
-          const unfilledTotal = remaining;
-          const hasSweep     = fills.length > 0 && filledTotal > 0;
-          const sweepMult    = side === "long"
-            ? (tfData?.long_multiplier  ?? longMult)
-            : (tfData?.short_multiplier ?? shortMult);
-          const effectiveMult = hasSweep ? sweepMult : activeMult;
-          const effectiveWin  = finalAmount != null && finalAmount > 0 && side
-            ? (finalAmount * effectiveMult).toFixed(0)
-            : null;
-
           async function handleExecute() {
             if (!isReady) return;
             if (!loggedIn) { onAuthRequired(); return; }
             setBetLoading(true); setBetError("");
             let err: string | null;
-            if (hasSweep && onSweep) {
-              err = await onSweep(side!, finalAmount!, timeframe);
-            } else if (!activeMarket) {
+            if (!activeMarket) {
               err = onAutoTrade ? await onAutoTrade(side!, finalAmount!, timeframe, tagline.trim() || undefined) : null;
               if (!err && !onAutoTrade) { onOpenMarket(); setBetLoading(false); return; }
             } else {
@@ -617,55 +591,27 @@ export default function CoinDetail({
               </div>
             </div>
 
-            {/* Sweep preview — shows when amount entered + there are matching orders */}
-            {isReady && hasSweep && (
-              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                className={`rounded-xl border p-3 space-y-1.5 ${dk ? "border-amber-500/20 bg-amber-500/5" : "border-amber-200 bg-amber-50"}`}>
-                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${dk ? "text-amber-400/60" : "text-amber-600"}`}>
-                  ⚡ Sweep Preview
-                </p>
-                {fills.map((f, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className={`text-[10px] font-bold ${dk ? "text-white/50" : "text-gray-600"}`}>{f.username}</span>
-                    <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/70" : "text-gray-800"}`}>${f.amount.toFixed(0)}</span>
-                  </div>
-                ))}
-                {unfilledTotal > 0.01 && (
-                  <div className={`flex items-center justify-between pt-1 border-t ${dk ? "border-white/8" : "border-amber-200"}`}>
-                    <span className={`text-[10px] ${dk ? "text-white/30" : "text-gray-400"}`}>Unfilled → limit order</span>
-                    <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/40" : "text-gray-500"}`}>${unfilledTotal.toFixed(0)}</span>
-                  </div>
-                )}
-                <div className={`flex items-center justify-between pt-1 border-t ${dk ? "border-white/8" : "border-amber-200"}`}>
-                  <span className={`text-[10px] font-black ${dk ? "text-amber-400/80" : "text-amber-700"}`}>Effective mult</span>
-                  <span className={`text-[13px] font-black tabular-nums ${dk ? "text-amber-400" : "text-amber-600"}`}>{effectiveMult.toFixed(2)}x</span>
-                </div>
-              </motion.div>
-            )}
-
             {/* Message */}
-            {!hasSweep && (
-              <div>
-                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
-                  Message <span className="opacity-40 normal-case font-bold">(optional)</span>
-                </p>
-                <textarea value={tagline} onChange={(e) => setTagline(e.target.value)}
-                  maxLength={80} placeholder={`${symbol} to the moon!`} rows={2}
-                  className={`w-full border text-[11px] font-bold p-2.5 rounded-lg outline-none resize-none transition-all ${T.input} placeholder:opacity-30`} />
-              </div>
-            )}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
+                Message <span className="opacity-40 normal-case font-bold">(optional)</span>
+              </p>
+              <textarea value={tagline} onChange={(e) => setTagline(e.target.value)}
+                maxLength={80} placeholder={`${symbol} to the moon!`} rows={2}
+                className={`w-full border text-[11px] font-bold p-2.5 rounded-lg outline-none resize-none transition-all ${T.input} placeholder:opacity-30`} />
+            </div>
 
             {/* To win */}
             <div className="flex items-end justify-between">
               <p className={`text-[8px] font-black uppercase tracking-widest ${T.sectionLbl}`}>
-                To win{!activeMarket && !hasSweep && effectiveWin ? <span className="ml-1 normal-case opacity-50">(est.)</span> : ""}
+                To win{!activeMarket && winAmount ? <span className="ml-1 normal-case opacity-50">(est.)</span> : ""}
               </p>
               <div className="text-right">
-                <span className={`text-[26px] font-black leading-none ${effectiveWin && effectiveWin !== "0" ? "text-emerald-400" : T.textMuted}`}>
-                  {effectiveWin && effectiveWin !== "0" ? `$${effectiveWin}` : "$0"}
+                <span className={`text-[26px] font-black leading-none ${winAmount && winAmount !== "0" ? "text-emerald-400" : T.textMuted}`}>
+                  {winAmount && winAmount !== "0" ? `$${winAmount}` : "$0"}
                 </span>
-                {effectiveWin && finalAmount != null && parseFloat(effectiveWin) > 0 && (
-                  <p className={`text-[9px] font-bold ${T.textMuted}`}>+${(parseFloat(effectiveWin) - finalAmount).toFixed(0)} profit</p>
+                {winAmount && finalAmount != null && parseFloat(winAmount) > 0 && (
+                  <p className={`text-[9px] font-bold ${T.textMuted}`}>+${(parseFloat(winAmount) - finalAmount).toFixed(0)} profit</p>
                 )}
               </div>
             </div>
@@ -681,10 +627,144 @@ export default function CoinDetail({
                   : "bg-red-500 text-white hover:bg-red-400 shadow-[0_0_16px_rgba(239,68,68,0.3)]"
                   : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}>
-              {betLoading ? "Placing…"
-                : hasSweep ? `⚡ Sweep $${filledTotal.toFixed(0)}`
-                : activeMarket ? "Trade"
-                : "Open Market →"}
+              {betLoading ? "Placing…" : activeMarket ? "Trade" : "Open Market →"}
+            </motion.button>
+          </div>
+          );
+        })()}
+
+        {/* ── SWEEP tab ───────────────────────────────────────────── */}
+        {tradeTab === "sweep" && (() => {
+          const tfData = orderBook?.timeframes[timeframe];
+          const opposingSide = side === "long" ? "short" : "long";
+          const opposingOrders = (tfData?.[opposingSide as "long" | "short"]?.orders ?? []) as { username: string; remaining_amount: number }[];
+          const sortedOrders = [...opposingOrders].sort((a, b) => b.remaining_amount - a.remaining_amount);
+          let remaining = finalAmount ?? 0;
+          const fills: { username: string; amount: number }[] = [];
+          for (const order of sortedOrders) {
+            if (remaining <= 0) break;
+            const filled = Math.min(remaining, order.remaining_amount);
+            fills.push({ username: order.username, amount: filled });
+            remaining -= filled;
+          }
+          const filledTotal   = (finalAmount ?? 0) - remaining;
+          const unfilledTotal = remaining;
+          const hasFills      = fills.length > 0 && filledTotal > 0;
+          const sweepMult     = side === "long"
+            ? (tfData?.long_multiplier  ?? longMult)
+            : (tfData?.short_multiplier ?? shortMult);
+          const sweepWin = finalAmount != null && finalAmount > 0 && side
+            ? (finalAmount * sweepMult).toFixed(0) : null;
+
+          async function handleSweep() {
+            if (!isReady || !onSweep) return;
+            if (!loggedIn) { onAuthRequired(); return; }
+            setSweepLoading(true); setSweepError("");
+            const err = await onSweep(side!, finalAmount!, timeframe);
+            setSweepLoading(false);
+            if (err) setSweepError(err);
+            else { setSide(null); setAmount(null); setCustomAmt(""); }
+          }
+
+          return (
+          <div className="flex flex-col flex-1 px-3 pt-3 gap-3 pb-4">
+            {/* Long / Short */}
+            <div className="flex gap-2">
+              <motion.button whileTap={{ scale: 0.96 }} onClick={() => setSide(side === "long" ? null : "long")}
+                className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${side === "long" ? "bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)]" : T.upIdle}`}>
+                <p className={`text-[16px] font-black leading-tight ${side === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
+                <p className={`text-[11px] font-black ${side === "long" ? "text-emerald-100/80" : "text-emerald-400/70"}`}>{longMult.toFixed(2)}x</p>
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.96 }} onClick={() => setSide(side === "short" ? null : "short")}
+                className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${side === "short" ? "bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]" : T.downIdle}`}>
+                <p className={`text-[16px] font-black leading-tight ${side === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
+                <p className={`text-[11px] font-black ${side === "short" ? "text-red-100/80" : "text-red-400/70"}`}>{shortMult.toFixed(2)}x</p>
+              </motion.button>
+            </div>
+
+            {/* Duration */}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Duration</p>
+              <div className="flex flex-wrap gap-1">
+                {TIMEFRAMES.map((tf) => (
+                  <button key={tf} onClick={() => setTimeframe(tf)}
+                    className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${timeframe === tf ? T.durActive : T.durIdle}`}>
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Amount */}
+            <div>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Amount</p>
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {presets.map((a) => {
+                  const isActive = amount === a && customAmt === String(a);
+                  return (
+                    <button key={a} onClick={() => { setAmount(a); setCustomAmt(String(a)); }}
+                      className={`py-2 rounded-lg text-[11px] font-black transition-all ${
+                        isActive
+                          ? side === "long"  ? "bg-emerald-500 text-white"
+                          : side === "short" ? "bg-red-500 text-white"
+                          : dk ? "bg-white text-black" : "bg-gray-900 text-white"
+                          : T.amtIdle
+                      }`}>
+                      ${a}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="relative">
+                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${T.textMuted}`}>$</span>
+                <input type="number" placeholder="custom" value={customAmt}
+                  onChange={(e) => { setCustomAmt(e.target.value); setAmount(null); }}
+                  className={`w-full border text-[12px] font-bold pl-6 pr-3 py-2 rounded-lg outline-none transition-all ${T.input}`} />
+              </div>
+            </div>
+
+            {/* Fills preview */}
+            {isReady && (
+              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                className={`rounded-xl border p-3 space-y-1.5 ${hasFills ? dk ? "border-amber-500/20 bg-amber-500/5" : "border-amber-200 bg-amber-50" : dk ? "border-white/8 bg-white/3" : "border-gray-200 bg-gray-50"}`}>
+                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${hasFills ? dk ? "text-amber-400/60" : "text-amber-600" : T.sectionLbl}`}>
+                  {hasFills ? "⚡ Fills" : "Order Book"}
+                </p>
+                {hasFills ? fills.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className={`text-[10px] font-bold ${dk ? "text-white/50" : "text-gray-600"}`}>{f.username}</span>
+                    <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/70" : "text-gray-800"}`}>${f.amount.toFixed(0)}</span>
+                  </div>
+                )) : (
+                  <p className={`text-[10px] ${T.textMuted}`}>No open orders on this side yet</p>
+                )}
+                {unfilledTotal > 0.01 && (
+                  <div className={`flex items-center justify-between pt-1 border-t ${dk ? "border-white/8" : "border-amber-200"}`}>
+                    <span className={`text-[10px] ${dk ? "text-white/30" : "text-gray-400"}`}>Unfilled → challenge</span>
+                    <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/40" : "text-gray-500"}`}>${unfilledTotal.toFixed(0)}</span>
+                  </div>
+                )}
+                {hasFills && (
+                  <div className={`flex items-center justify-between pt-1 border-t ${dk ? "border-white/8" : "border-amber-200"}`}>
+                    <span className={`text-[10px] font-black ${dk ? "text-amber-400/80" : "text-amber-700"}`}>Mult</span>
+                    <span className={`text-[13px] font-black tabular-nums ${dk ? "text-amber-400" : "text-amber-600"}`}>{sweepMult.toFixed(2)}x</span>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {sweepError && <p className="text-[10px] font-bold text-red-400">{sweepError}</p>}
+
+            <motion.button whileTap={{ scale: 0.97 }} onClick={handleSweep}
+              disabled={!isReady || !hasFills || sweepLoading}
+              className={`w-full py-3.5 rounded-xl text-[13px] font-black uppercase tracking-widest transition-all mt-auto ${
+                sweepLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+                : isReady && hasFills
+                  ? side === "long"  ? "bg-amber-500 text-white hover:bg-amber-400 shadow-[0_0_16px_rgba(245,158,11,0.3)]"
+                  : "bg-amber-500 text-white hover:bg-amber-400 shadow-[0_0_16px_rgba(245,158,11,0.3)]"
+                  : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}>
+              {sweepLoading ? "Sweeping…" : hasFills ? `⚡ Sweep $${filledTotal.toFixed(0)}` : "No liquidity"}
             </motion.button>
           </div>
           );
@@ -729,12 +809,12 @@ export default function CoinDetail({
               <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "long" ? null : "long")}
                 className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "long" ? "bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)]" : T.upIdle}`}>
                 <p className={`text-[15px] font-black ${makerSide === "long" ? "text-white" : "text-emerald-300"}`}>▲ Long</p>
-                <p className={`text-[9px] font-black ${makerSide === "long" ? "text-emerald-100/80" : "text-emerald-400/60"}`}>maker</p>
+                <p className={`text-[9px] font-black ${makerSide === "long" ? "text-emerald-100/80" : "text-emerald-400/60"}`}>open challenge</p>
               </motion.button>
               <motion.button whileTap={{ scale: 0.96 }} onClick={() => setMakerSide(makerSide === "short" ? null : "short")}
                 className={`flex-1 rounded-xl py-3 text-center transition-all duration-150 ${makerSide === "short" ? "bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.25)]" : T.downIdle}`}>
                 <p className={`text-[15px] font-black ${makerSide === "short" ? "text-white" : "text-red-300"}`}>▼ Short</p>
-                <p className={`text-[9px] font-black ${makerSide === "short" ? "text-red-100/80" : "text-red-400/60"}`}>maker</p>
+                <p className={`text-[9px] font-black ${makerSide === "short" ? "text-red-100/80" : "text-red-400/60"}`}>open challenge</p>
               </motion.button>
             </div>
 

@@ -6,7 +6,7 @@
 
 export {};
 const BASE = process.env.BASE_URL ?? "http://localhost:3001";
-const DURATION_MS = 12 * 60 * 60 * 1000;
+const DURATION_MS = 24 * 60 * 60 * 1000;
 
 const BOTS = [
   { username: "degen_alpha",    password: "botpass123" },
