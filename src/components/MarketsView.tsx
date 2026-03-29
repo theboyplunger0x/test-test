@@ -24,6 +24,7 @@ function fmtMult(m: number): string {
   if (!m || m <= 0) return "—";
   if (m >= 100) return "100x+";
   if (m >= 10)  return `${Math.floor(m / 10) * 10}x`;
+  if (m >= 5)   return `${Math.floor(m)}x`;
   return `${m.toFixed(1)}x`;
 }
 function multColor(m: number): string {
