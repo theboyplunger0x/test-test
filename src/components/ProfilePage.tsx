@@ -73,13 +73,14 @@ function PnlChart({ trades, period, dk }: {
   );
 }
 
-export default function ProfilePage({ username, dk, onClose, currentUser, currentUserObj, onUserUpdate }: {
+export default function ProfilePage({ username, dk, onClose, currentUser, currentUserObj, onUserUpdate, paperMode = false }: {
   username: string;
   dk: boolean;
   onClose: () => void;
   currentUser?: string;
   currentUserObj?: User;
   onUserUpdate?: (u: User) => void;
+  paperMode?: boolean;
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -174,12 +175,13 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
   const strong  = dk ? "text-white" : "text-gray-900";
   const sub     = dk ? "text-white/60" : "text-gray-600";
 
-  const filteredTrades = profile?.recent_trades.filter(t => {
+  const modeTrades = profile?.recent_trades.filter(t => !!t.is_paper === paperMode) ?? [];
+  const filteredTrades = modeTrades.filter(t => {
     if (posFilter === "open") return t.status === "open";
     if (posFilter === "won") return t.status === "resolved" && t.winner_side === t.side;
     if (posFilter === "lost") return t.status === "resolved" && t.winner_side !== t.side;
     return true;
-  }) ?? [];
+  });
 
   return (
     <motion.div
@@ -389,7 +391,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                   {pnl >= 0 ? "+" : "-"}${Math.abs(pnl).toFixed(2)}
                 </p>
                 <div className="flex-1 min-h-[60px]">
-                  <PnlChart trades={profile.recent_trades} period={period} dk={dk} />
+                  <PnlChart trades={modeTrades} period={period} dk={dk} />
                 </div>
                 <div className="flex justify-between mt-2">
                   <div>
@@ -478,15 +480,15 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
             {/* Activity tab */}
             {tab === "activity" && (
               <div className={`rounded-2xl border overflow-hidden ${border}`}>
-                {profile.recent_trades.length === 0 ? (
+                {modeTrades.length === 0 ? (
                   <p className={`text-[13px] ${muted} text-center py-8`}>No activity yet.</p>
                 ) : (
-                  profile.recent_trades.map((t, i) => {
+                  modeTrades.map((t, i) => {
                     const won = t.status === "resolved" && t.winner_side === t.side;
                     const lost = t.status === "resolved" && t.winner_side !== t.side;
                     const date = new Date(t.placed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
                     return (
-                      <div key={i} className={`flex items-center justify-between px-4 py-3 ${i < profile.recent_trades.length - 1 ? `border-b ${border}` : ""}`}>
+                      <div key={i} className={`flex items-center justify-between px-4 py-3 ${i < modeTrades.length - 1 ? `border-b ${border}` : ""}`}>
                         <div className="flex items-center gap-3">
                           <span className={`text-[16px] ${t.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
                             {t.side === "long" ? "▲" : "▼"}

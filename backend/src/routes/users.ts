@@ -8,7 +8,7 @@ export async function userRoutes(app: FastifyInstance) {
     if (!q || q.length < 2) return [];
     const { rows } = await db.query(
       `SELECT username, avatar_url, tier FROM users WHERE username ILIKE $1 ORDER BY username LIMIT 8`,
-      [`${q}%`]
+      [`%${q}%`]
     );
     return rows;
   });

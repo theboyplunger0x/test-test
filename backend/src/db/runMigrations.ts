@@ -226,6 +226,11 @@ CREATE INDEX IF NOT EXISTS idx_fills_order  ON fills(maker_order_id);
 
 ALTER TABLE markets ADD COLUMN IF NOT EXISTS sweep_id UUID;
 CREATE INDEX IF NOT EXISTS idx_markets_sweep ON markets(sweep_id) WHERE sweep_id IS NOT NULL;
+
+-- v3: performance
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_users_username_trgm  ON users USING gin(username gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_positions_user_paper ON positions(user_id, is_paper);
 `;
 
 export async function runMigrations() {

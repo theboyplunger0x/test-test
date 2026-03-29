@@ -20,6 +20,7 @@ interface Props {
   onAuthRequired: () => void;
   presets?: number[];
   paperMode?: boolean;
+  onViewProfile?: (username: string) => void;
   externalSymbol?: string;          // controlled from outside (e.g. clicking a ticker)
   externalTokenInfo?: TokenInfo;    // pre-fetched token info from CA search
 }
@@ -32,7 +33,7 @@ const CHAIN_COLORS: Record<string, string> = {
 
 export default function SpotView({
   dk, liveCoins, markets, onBet, onAutoTrade, onSweep, onPlaceOrder, onOpenMarket,
-  loggedIn, onAuthRequired, presets, paperMode, externalSymbol, externalTokenInfo,
+  loggedIn, onAuthRequired, presets, paperMode, onViewProfile, externalSymbol, externalTokenInfo,
 }: Props) {
   const [selectedSymbol, setSelectedSymbol] = useState<string>(
     externalSymbol ?? liveCoins[0]?.symbol ?? "SOL"
@@ -117,6 +118,7 @@ export default function SpotView({
             onSweep={onSweep}
             onPlaceOrder={onPlaceOrder}
             onOpenMarket={() => onOpenMarket(selectedCoin)}
+            onViewProfile={onViewProfile}
             loggedIn={loggedIn}
             onAuthRequired={onAuthRequired}
             presets={presets}

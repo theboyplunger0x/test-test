@@ -162,7 +162,7 @@ function HeroCard({ market, dk, onTrade }: { market: Market; dk: boolean; onTrad
 }
 
 // ── Right panel (Best Odds + Top Traders) ────────────────────────────────────
-function RightPanel({ dk, paperMode, onSelectToken }: { dk: boolean; paperMode: boolean; onSelectToken?: (s: string, c: string) => void }) {
+function RightPanel({ dk, paperMode, onSelectToken, onViewProfile }: { dk: boolean; paperMode: boolean; onSelectToken?: (s: string, c: string) => void; onViewProfile?: (u: string) => void }) {
   const [topMarkets, setTopMarkets] = useState<Market[]>([]);
   const [leaders, setLeaders]       = useState<LeaderboardEntry[]>([]);
 
@@ -236,10 +236,10 @@ function RightPanel({ dk, paperMode, onSelectToken }: { dk: boolean; paperMode: 
               <div key={l.username} className={`flex items-center justify-between px-2 py-2 rounded-xl ${rowHov}`}>
                 <div className="flex items-center gap-2">
                   <span className="text-[13px]">{medals[i]}</span>
-                  <p className={`text-[13px] font-black ${strong}`}>{l.username}</p>
+                  <button onClick={() => onViewProfile?.(l.username)} className={`text-[13px] font-black ${strong} hover:opacity-70 transition-opacity`}>{l.username}</button>
                 </div>
                 <span className={`text-[13px] font-black tabular-nums ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {pnl >= 0 ? "+" : ""}${Math.abs(pnl).toFixed(0)}
+                  {pnl >= 0 ? "+" : "-"}${Math.abs(pnl).toFixed(0)}
                 </span>
               </div>
             );
@@ -828,7 +828,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
           <div className="flex gap-4 items-start">
             <HeroCard market={hero} dk={dk} onTrade={() => onSelectToken?.(hero.symbol, hero.chain)} />
             <div className="hidden lg:block">
-              <RightPanel dk={dk} paperMode={paperMode} onSelectToken={onSelectToken} />
+              <RightPanel dk={dk} paperMode={paperMode} onSelectToken={onSelectToken} onViewProfile={onViewProfile} />
             </div>
           </div>
         ) : (

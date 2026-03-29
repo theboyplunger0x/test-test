@@ -9,3 +9,8 @@ CREATE TABLE IF NOT EXISTS tg_link_tokens (
   tg_id      BIGINT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL
 );
+
+-- v3: performance indexes
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_users_username_trgm ON users USING gin(username gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_positions_user_paper ON positions(user_id, is_paper);

@@ -80,6 +80,7 @@ interface Props {
   onPlaceOrder?: (side: "long" | "short", amount: number, timeframe: string, autoReopen: boolean) => Promise<string | null>;
   onOpenMarket: () => void;
   onViewToken?: () => void;
+  onViewProfile?: (username: string) => void;
   loggedIn: boolean;
   onAuthRequired: () => void;
   tokenInfo?: TokenInfo;    // pre-fetched (from CA search); skips symbol lookup
@@ -89,7 +90,7 @@ interface Props {
 
 export default function CoinDetail({
   symbol, chain, timeframe: initialTf, theme,
-  markets, onBet, onAutoTrade, onSweep, onPlaceOrder, onOpenMarket, onViewToken, loggedIn, onAuthRequired,
+  markets, onBet, onAutoTrade, onSweep, onPlaceOrder, onOpenMarket, onViewToken, onViewProfile, loggedIn, onAuthRequired,
   tokenInfo: tokenInfoProp,
   presets = DEFAULT_AMOUNTS,
   paperMode = false,
@@ -732,7 +733,7 @@ export default function CoinDetail({
                 </p>
                 {hasFills ? fills.map((f, i) => (
                   <div key={i} className="flex items-center justify-between">
-                    <span className={`text-[10px] font-bold ${dk ? "text-white/50" : "text-gray-600"}`}>{f.username}</span>
+                    <button onClick={() => onViewProfile?.(f.username)} className={`text-[10px] font-bold ${dk ? "text-white/50 hover:text-white/80" : "text-gray-600 hover:text-gray-900"} transition-opacity`}>{f.username}</button>
                     <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/70" : "text-gray-800"}`}>${f.amount.toFixed(0)}</span>
                   </div>
                 )) : (

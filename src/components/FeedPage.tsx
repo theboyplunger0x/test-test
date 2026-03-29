@@ -822,6 +822,7 @@ export default function FeedPage() {
               onSweep={handleSweep}
               onPlaceOrder={handlePlaceOrder}
               onOpenMarket={handleOpenMarket}
+              onViewProfile={(u) => setProfileUser(u)}
               loggedIn={!!user}
               onAuthRequired={() => setAuthOpen(true)}
               presets={tradePresets}
@@ -1341,7 +1342,7 @@ export default function FeedPage() {
         {profilePageUser && (
           <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)}
             currentUser={user?.username} currentUserObj={user ?? undefined}
-            onUserUpdate={(u) => setUser(u)} />
+            onUserUpdate={(u) => setUser(u)} paperMode={paperMode} />
         )}
       </AnimatePresence>
 
