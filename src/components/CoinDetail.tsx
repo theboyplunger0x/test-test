@@ -429,27 +429,42 @@ export default function CoinDetail({
             const total   = longP + shortP;
             const longPct = total > 0 ? Math.round((longP / total) * 100) : 50;
             const msLeft  = Math.max(0, new Date(m.closes_at).getTime() - Date.now());
-            const isResolved   = m.status === "resolved";
-            const isMultiTf    = (openerCounts[m.opener_id] ?? 0) > 1;
-            const dominantSide = longPct >= 50 ? "long" : "short";
-            const sideColor    = dominantSide === "long" ? "text-emerald-400" : "text-red-400";
-            const sideBorder   = dominantSide === "long"
-              ? dk ? "border-emerald-500/30" : "border-emerald-300"
-              : dk ? "border-red-500/30"     : "border-red-300";
+            const isResolved = m.status === "resolved";
+            const isMultiTf  = (openerCounts[m.opener_id] ?? 0) > 1;
+            const side       = longPct >= 50 ? "long" : "short";
+            const sideColor  = side === "long" ? "text-emerald-400" : "text-red-400";
+            const sideLabel  = side === "long" ? "▲ LONG" : "▼ SHORT";
 
             return (
-              <div key={m.id} className={`shrink-0 w-[180px] flex flex-col gap-2 p-3 rounded-xl border ${dk ? `bg-white/[0.03] ${sideBorder}` : `bg-white ${sideBorder}`}`}>
-                {/* top row: timeframe + multi-tf badge */}
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${dk ? "bg-white/10 text-white/50" : "bg-gray-100 text-gray-500"}`}>
-                    {m.timeframe}
-                  </span>
-                  {isMultiTf && (
-                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${dk ? "bg-white/6 text-white/35" : "bg-gray-100 text-gray-400"}`}>
-                      multi-tf
-                    </span>
+              <div key={m.id} className={`flex items-start gap-3 px-4 py-3 border-b ${dk ? "border-white/4 hover:bg-white/[0.015]" : "border-gray-50 hover:bg-gray-50"} transition-colors`}>
+                {/* left: side indicator */}
+                <span className={`text-[10px] font-black shrink-0 mt-0.5 ${sideColor}`}>{sideLabel}</span>
+
+                {/* center: message (social-first) + meta */}
+                <div className="flex-1 min-w-0">
+                  {m.tagline ? (
+                    <p className={`text-[12px] font-bold leading-snug ${dk ? "text-white/85" : "text-gray-800"}`}>
+                      "{m.tagline}"
+                    </p>
+                  ) : (
+                    <p className={`text-[12px] italic ${dk ? "text-white/20" : "text-gray-300"}`}>no message</p>
                   )}
-                  <span className="flex-1" />
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <button onClick={() => onViewProfile?.(m.opener_username ?? "")}
+                      className={`text-[10px] font-bold ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-700"} transition-colors`}>
+                      {m.opener_username ?? "—"}
+                    </button>
+                    <span className={`text-[9px] ${dk ? "text-white/20" : "text-gray-300"}`}>·</span>
+                    <span className={`text-[9px] font-black px-1 py-0.5 rounded ${dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500"}`}>{m.timeframe}</span>
+                    {isMultiTf && (
+                      <span className={`text-[9px] font-black px-1 py-0.5 rounded ${dk ? "bg-white/5 text-white/25" : "bg-gray-100 text-gray-400"}`}>multi-tf</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* right: amount + status */}
+                <div className="shrink-0 text-right">
+                  <p className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${total > 0 ? total.toFixed(0) : "0"}</p>
                   {isResolved && m.winner_side ? (
                     <span className={`text-[9px] font-black ${m.winner_side === "long" ? "text-emerald-400" : "text-red-400"}`}>
                       {m.winner_side === "long" ? "▲" : "▼"} won
@@ -458,36 +473,6 @@ export default function CoinDetail({
                     <span className={`text-[9px] tabular-nums ${dk ? "text-white/25" : "text-gray-400"}`}>{formatCountdown(msLeft)}</span>
                   )}
                 </div>
-
-                {/* tagline */}
-                {m.tagline ? (
-                  <p className={`text-[11px] font-bold leading-tight line-clamp-2 ${dk ? "text-white/80" : "text-gray-800"}`}>
-                    "{m.tagline}"
-                  </p>
-                ) : (
-                  <p className={`text-[11px] font-bold ${dk ? "text-white/20" : "text-gray-300"}`}>—</p>
-                )}
-
-                {/* amount + side */}
-                <div className="flex items-end justify-between mt-auto">
-                  <span className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
-                    ${total > 0 ? total.toFixed(0) : "0"}
-                  </span>
-                  <span className={`text-[11px] font-black ${sideColor}`}>
-                    {longPct}% L
-                  </span>
-                </div>
-
-                {/* pool bar */}
-                <div className={`h-1 rounded-full overflow-hidden ${dk ? "bg-white/8" : "bg-gray-100"}`}>
-                  <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${longPct}%` }} />
-                </div>
-
-                {/* opener */}
-                <button onClick={() => onViewProfile?.(m.opener_username ?? "")}
-                  className={`text-[9px] font-bold text-left truncate ${dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"} transition-colors`}>
-                  {m.opener_username ?? "—"}
-                </button>
               </div>
             );
           };
@@ -508,9 +493,7 @@ export default function CoinDetail({
               {visible.length === 0 ? (
                 <p className={`px-4 py-4 text-[11px] ${dk ? "text-white/20" : "text-gray-300"}`}>No {bidTab} orders.</p>
               ) : (
-                <div className="flex gap-2.5 px-4 py-3 overflow-x-auto">
-                  {visible.map(renderCard)}
-                </div>
+                <div>{visible.map(renderCard)}</div>
               )}
             </div>
           );
