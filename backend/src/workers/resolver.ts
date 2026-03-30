@@ -189,14 +189,34 @@ export function scheduleResolution(marketId: string, closesAt: Date) {
 /** On startup: load all open markets and reschedule their resolution. */
 export async function scheduleAllPendingMarkets() {
   const { rows } = await db.query(`SELECT id, closes_at FROM markets WHERE status = 'open'`);
-  for (const market of rows) {
+
+  const future  = rows.filter(m => new Date(m.closes_at).getTime() > Date.now());
+  const expired = rows.filter(m => new Date(m.closes_at).getTime() <= Date.now());
+
+  // Schedule future markets normally
+  for (const market of future) {
     scheduleResolution(market.id, new Date(market.closes_at));
   }
-  console.log(`[resolver] Rescheduled ${rows.length} pending market(s)`);
+
+  // Resolve already-expired markets in batches of 5 to avoid DB exhaustion
+  const BATCH = 5;
+  for (let i = 0; i < expired.length; i += BATCH) {
+    const batch = expired.slice(i, i + BATCH);
+    await Promise.allSettled(batch.map(m => resolveMarket(m.id)));
+    if (i + BATCH < expired.length) {
+      await new Promise(r => setTimeout(r, 200)); // brief pause between batches
+    }
+  }
+
+  console.log(`[resolver] Rescheduled ${future.length} future market(s), resolved ${expired.length} expired market(s)`);
 }
 
-// Keep the old export name for backwards compat (used nowhere now but safe to keep)
+// Safety-net: resolve any markets that were missed (runs every 60s)
 export async function resolveExpiredMarkets() {
-  const { rows } = await db.query(`SELECT id, closes_at FROM markets WHERE status = 'open' AND closes_at <= NOW()`);
-  for (const market of rows) resolveMarket(market.id);
+  const { rows } = await db.query(`SELECT id FROM markets WHERE status = 'open' AND closes_at <= NOW() LIMIT 20`);
+  const BATCH = 5;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    await Promise.allSettled(rows.slice(i, i + BATCH).map(m => resolveMarket(m.id)));
+    if (i + BATCH < rows.length) await new Promise(r => setTimeout(r, 200));
+  }
 }
