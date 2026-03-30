@@ -8,6 +8,7 @@ type Period = "week" | "month" | "all";
 
 export default function LeaderboardView({ dk, onViewProfile, paperMode = false }: { dk: boolean; onViewProfile?: (username: string) => void; paperMode?: boolean }) {
   const [period, setPeriod]   = useState<Period>("week");
+  const [dir, setDir]         = useState<"desc" | "asc">("desc");
   const [rows, setRows]       = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -42,8 +43,7 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
         : parseFloat(a.pnl) - parseFloat(b.pnl)
     ).slice(0, 5);
 
-  const gainers = sorted("desc");
-  const losers  = sorted("asc");
+  const displayed = sorted(dir);
   const maxPnl  = rows.length > 0 ? Math.max(...rows.map(r => Math.abs(parseFloat(r.pnl)))) : 1;
 
   const renderRow = (row: LeaderboardEntry, i: number, isGainers: boolean) => {
@@ -87,12 +87,18 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
   return (
     <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className={`text-[11px] font-black uppercase tracking-widest ${T.label}`}>Leaderboard</p>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className={`text-[11px] font-black uppercase tracking-widest ${T.label}`}>Leaderboard</p>
+          <button onClick={() => setDir(d => d === "desc" ? "asc" : "desc")}
+            className={`text-[13px] font-black transition-opacity hover:opacity-70 ${dir === "desc" ? "text-emerald-400" : "text-red-400"}`}>
+            {dir === "desc" ? "▲ Top Winners" : "▼ Top Losers"}
+          </button>
+        </div>
         <div className={`flex rounded-xl p-0.5 gap-0.5 ${T.pillGroup}`}>
           {(["week", "month", "all"] as Period[]).map((p) => (
             <button key={p} onClick={() => setPeriod(p)}
-              className={`px-2.5 py-1 rounded-[9px] text-[10px] font-black transition-all ${period === p ? T.pillActive : T.pillInact}`}>
+              className={`flex-1 py-1.5 rounded-[9px] text-[10px] font-black transition-all ${period === p ? T.pillActive : T.pillInact}`}>
               {p === "week" ? "Week" : p === "month" ? "Month" : "All"}
             </button>
           ))}
@@ -110,16 +116,9 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
           <p className={`text-[12px] font-bold ${T.muted}`}>Make some calls and get on the board.</p>
         </div>
       ) : (
-        <>
-          <div className="space-y-2">
-            <p className={`text-[10px] font-black uppercase tracking-widest ${T.label}`}>🔥 Top Gainers</p>
-            {gainers.map((row, i) => renderRow(row, i, true))}
-          </div>
-          <div className="space-y-2">
-            <p className={`text-[10px] font-black uppercase tracking-widest ${T.label}`}>📉 Top Losers</p>
-            {losers.map((row, i) => renderRow(row, i, false))}
-          </div>
-        </>
+        <div className="space-y-2">
+          {displayed.map((row, i) => renderRow(row, i, dir === "desc"))}
+        </div>
       )}
     </div>
   );
