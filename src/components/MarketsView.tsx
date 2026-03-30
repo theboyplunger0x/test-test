@@ -776,7 +776,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile }: { dk: boolean; onSele
                 </div>
                 {/* Row 2: message + username */}
                 <div className="flex items-center gap-2">
-                  <p className={`text-[11px] italic truncate leading-snug flex-1 ${e.isOpener ? (dk ? "text-yellow-400/70" : "text-yellow-600") : msgTxt}`}>
+                  <p className={`text-[11px] italic line-clamp-2 leading-snug flex-1 ${e.isOpener ? (dk ? "text-yellow-400/70" : "text-yellow-600") : msgTxt}`}>
                     {e.message ? `"${e.message}"` : ""}
                   </p>
                   <span

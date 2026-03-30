@@ -594,11 +594,12 @@ export default function CoinDetail({
 
             {/* Message */}
             <div>
-              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>
-                Message <span className="opacity-40 normal-case font-bold">(optional)</span>
-              </p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className={`text-[8px] font-black uppercase tracking-widest ${T.sectionLbl}`}>Message <span className="opacity-40 normal-case font-bold">(optional)</span></p>
+                <span className={`text-[9px] font-bold tabular-nums ${tagline.length > 50 ? "text-amber-400" : T.sectionLbl}`}>{tagline.length}/60</span>
+              </div>
               <textarea value={tagline} onChange={(e) => setTagline(e.target.value)}
-                maxLength={80} placeholder={`${symbol} to the moon!`} rows={2}
+                maxLength={60} placeholder={`${symbol} to the moon!`} rows={2}
                 className={`w-full border text-[11px] font-bold p-2.5 rounded-lg outline-none resize-none transition-all ${T.input} placeholder:opacity-30`} />
             </div>
 

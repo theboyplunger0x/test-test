@@ -107,11 +107,14 @@ export default function OpenMarketModal({
 
         {/* Tagline */}
         <div>
-          <p className={`text-[10px] font-black uppercase tracking-widest mb-1.5 ${labelCls}`}>Your call <span className={labelCls}>(optional)</span></p>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className={`text-[10px] font-black uppercase tracking-widest ${labelCls}`}>Your call <span className={labelCls}>(optional)</span></p>
+            <span className={`text-[9px] font-bold tabular-nums ${tagline.length > 50 ? "text-amber-400" : labelCls}`}>{tagline.length}/60</span>
+          </div>
           <input
             type="text"
             placeholder='"this thing is cooked"'
-            maxLength={80}
+            maxLength={60}
             value={tagline}
             onChange={(e) => setTagline(e.target.value)}
             className={`w-full px-3 py-2.5 rounded-xl text-[13px] outline-none transition-all italic ${inputCls}`}

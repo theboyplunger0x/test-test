@@ -2111,7 +2111,7 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
                 </div>
                 {e.message && (
                   <div className="flex items-center gap-2">
-                    <p className={`text-[11px] italic truncate leading-snug flex-1 ${e.isOpener ? (dk ? "text-yellow-400/70" : "text-yellow-600") : msgTxt}`}>"{e.message}"</p>
+                    <p className={`text-[11px] italic line-clamp-2 leading-snug flex-1 ${e.isOpener ? (dk ? "text-yellow-400/70" : "text-yellow-600") : msgTxt}`}>"{e.message}"</p>
                     <span
                       className={`text-[10px] font-bold shrink-0 ${userTxt} ${onViewProfile ? "cursor-pointer hover:opacity-60 transition-opacity" : ""}`}
                       onClick={(ev) => { ev.stopPropagation(); if (onViewProfile && e.user) onViewProfile(e.user); }}

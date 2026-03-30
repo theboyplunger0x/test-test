@@ -330,9 +330,12 @@ export default function TokenProfilePage({
                   onChange={e => { setBetCustom(e.target.value); setBetAmt(null); }}
                   className={`w-full pl-6 pr-3 py-2 rounded-xl text-[12px] font-bold border outline-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
               </div>
-              <textarea value={betMsg} onChange={e => setBetMsg(e.target.value)} maxLength={80} rows={2}
-                placeholder="Your take (optional)"
-                className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+              <div className="relative">
+                <textarea value={betMsg} onChange={e => setBetMsg(e.target.value)} maxLength={60} rows={2}
+                  placeholder="Your take (optional)"
+                  className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+                <span className={`absolute bottom-2 right-3 text-[9px] font-bold tabular-nums pointer-events-none ${betMsg.length > 50 ? "text-amber-400" : dk ? "text-white/20" : "text-gray-300"}`}>{betMsg.length}/60</span>
+              </div>
               {betError && <p className="text-[11px] text-red-400">{betError}</p>}
               <button onClick={handleBet} disabled={!betSide || !finalBetAmt || betLoading}
                 className={`w-full py-3 rounded-xl text-[13px] font-black transition-all disabled:opacity-40 ${dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white"}`}>
