@@ -315,6 +315,11 @@ export const api = {
   getRecentPositions: () =>
     req<{ id: string; side: "long" | "short"; amount: string; message: string | null; placed_at: string; is_paper: boolean; username: string; avatar_url: string | null; tier: string; symbol: string; chain: string; timeframe: string; status: string; is_opener: boolean }[]>("/positions/recent"),
 
+  getSymbolPositions: (symbol: string, paper = false) =>
+    req<{ id: string; side: "long" | "short"; amount: string; message: string | null; placed_at: string; is_paper: boolean; username: string; avatar_url: string | null; tier: string; market_id: string; timeframe: string; status: string; winner_side: "long" | "short" | null; closes_at: string; is_opener: boolean }[]>(
+      `/positions/symbol/${encodeURIComponent(symbol)}?paper=${paper}`
+    ),
+
   forgotPassword: (email?: string, username?: string) =>
     req<{ ok: true }>("/auth/forgot-password", {
       method: "POST",

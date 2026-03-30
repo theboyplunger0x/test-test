@@ -299,7 +299,7 @@ export default function FeedPage() {
 
   // Live price SSE stream — connects to backend /prices/live, updates every ~1.5s
   useEffect(() => {
-    const openMarkets = markets.filter(m => m.status === "open");
+    const openMarkets = markets.filter(m => m.status === "open" && new Date(m.closes_at).getTime() > Date.now());
     if (openMarkets.length === 0) return;
 
     // Deduplicate by symbol:chain
@@ -446,7 +446,8 @@ export default function FeedPage() {
     let market = markets.find(m =>
       m.symbol.toUpperCase() === token.symbol.toUpperCase() &&
       m.timeframe === timeframe && m.status === "open" &&
-      (m.is_paper === true) === paperMode
+      (m.is_paper === true) === paperMode &&
+      new Date(m.closes_at).getTime() > Date.now()
     );
     if (!market) {
       try {
@@ -536,7 +537,8 @@ export default function FeedPage() {
       m.symbol.toUpperCase() === selectedCoin.toUpperCase() &&
       m.timeframe === timeframe &&
       m.status === "open" &&
-      (m.is_paper === true) === paperMode
+      (m.is_paper === true) === paperMode &&
+      new Date(m.closes_at).getTime() > Date.now()
     );
 
     if (!market) {
@@ -839,7 +841,7 @@ export default function FeedPage() {
             <MarketsView
               dk={dk}
               liveMarkets={markets
-                .filter(m => m.status === "open" && !!m.is_paper === paperMode)
+                .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
                 .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
               }
               paperMode={paperMode}

@@ -281,6 +281,27 @@ export async function marketRoutes(app: FastifyInstance) {
     return { markets, positions };
   });
 
+  // GET /positions/symbol/:symbol — bid history for a token (open + recent closed)
+  app.get("/positions/symbol/:symbol", async (req, reply) => {
+    const { symbol } = req.params as any;
+    const { paper } = req.query as any;
+    const isPaper = paper === "true";
+    const { rows } = await db.query(
+      `SELECT p.id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
+              u.username, u.avatar_url, u.tier,
+              m.id AS market_id, m.timeframe, m.status, m.winner_side, m.closes_at,
+              (m.opener_id = p.user_id) AS is_opener
+       FROM positions p
+       JOIN users u ON p.user_id = u.id
+       JOIN markets m ON p.market_id = m.id
+       WHERE m.symbol ILIKE $1 AND p.is_paper = $2
+       ORDER BY p.placed_at DESC
+       LIMIT 80`,
+      [symbol, isPaper]
+    );
+    return rows;
+  });
+
   // GET /positions/recent — latest positions with messages for the tape
   app.get("/positions/recent", async (req, reply) => {
     const { rows } = await db.query(

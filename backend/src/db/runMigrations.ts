@@ -235,7 +235,15 @@ CREATE INDEX IF NOT EXISTS idx_positions_user_paper ON positions(user_id, is_pap
 
 export async function runMigrations() {
   console.log("Running database migrations...");
-  await db.query(schema);
-  await db.query(alterations);
+  const client = await db.connect();
+  try {
+    // Advisory lock so concurrent restarts don't deadlock on DDL
+    await client.query("SELECT pg_advisory_lock(7777777)");
+    await client.query(schema);
+    await client.query(alterations);
+    await client.query("SELECT pg_advisory_unlock(7777777)");
+  } finally {
+    client.release();
+  }
   console.log("Migrations complete.");
 }

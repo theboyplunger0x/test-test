@@ -189,6 +189,17 @@ export default function CoinDetail({
   const longMult  = total > 0 ? mult(longPool,  shortPool) : DEFAULT_MULT;
   const shortMult = total > 0 ? mult(shortPool, longPool)  : DEFAULT_MULT;
 
+  // ── Markets feed (for history section) ──────────────────────────────────────
+  const [feedMarkets, setFeedMarkets] = useState<Market[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getTokenFeed(symbol).then(({ markets: ms }) => {
+      if (!cancelled) setFeedMarkets(ms.filter((m: Market) => !!m.is_paper === paperMode));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [symbol, paperMode]);
+
   // ── Order book ──────────────────────────────────────────────────────────────
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
   const obTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -217,6 +228,7 @@ export default function CoinDetail({
 
   // ── Trade panel tab ─────────────────────────────────────────────────────────
   const [tradeTab, setTradeTab]         = useState<"market" | "sweep" | "limit">("market");
+  const [bidTab, setBidTab]             = useState<"open" | "closed">("open");
   const [makerSide, setMakerSide]       = useState<"long" | "short" | null>(null);
   const [makerAmt, setMakerAmt]         = useState("");
   const [autoReopen, setAutoReopen]     = useState(false);
@@ -345,7 +357,7 @@ export default function CoinDetail({
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
 
       {/* ── LEFT: Chart ──────────────────────────────────────────── */}
-      <div className={`flex-1 flex flex-col overflow-hidden min-h-0 ${T.chartBg}`} style={{ minHeight: 0 }}>
+      <div className={`flex-1 flex flex-col overflow-y-auto min-h-0 ${T.chartBg}`} style={{ minHeight: 0 }}>
 
         {/* Chart toolbar: TF selector + countdown */}
         <div className={`flex items-center gap-2 px-3 py-2 border-b shrink-0 ${dk ? "border-white/6" : "border-gray-100"}`}>
@@ -399,6 +411,76 @@ export default function CoinDetail({
             <div className={`absolute inset-0 flex items-center justify-center ${T.textMuted} text-[12px] font-bold`}>No chart data</div>
           )}
         </div>
+
+        {/* ── Markets History ─────────────────────────────────────── */}
+        {(() => {
+          const openMarkets    = feedMarkets.filter(m => m.status === "open" && new Date(m.closes_at).getTime() > Date.now());
+          const closedMarkets  = feedMarkets.filter(m => m.status !== "open" || new Date(m.closes_at).getTime() <= Date.now());
+          const visibleMarkets = bidTab === "open" ? openMarkets : closedMarkets;
+
+          const renderMarket = (m: Market) => {
+            const longP  = parseFloat(m.long_pool);
+            const shortP = parseFloat(m.short_pool);
+            const total  = longP + shortP;
+            const longPct = total > 0 ? Math.round((longP / total) * 100) : 50;
+            const msLeft  = Math.max(0, new Date(m.closes_at).getTime() - Date.now());
+            const isResolved = m.status === "resolved";
+            const winnerColor = m.winner_side === "long"
+              ? dk ? "text-emerald-400" : "text-emerald-600"
+              : dk ? "text-red-400" : "text-red-500";
+
+            return (
+              <div key={m.id} className={`flex items-center gap-3 px-4 py-2.5 border-b ${dk ? "border-white/4 hover:bg-white/2" : "border-gray-50 hover:bg-gray-50"} transition-colors`}>
+                <span className={`text-[10px] font-black shrink-0 px-1.5 py-0.5 rounded ${dk ? "bg-white/8 text-white/50" : "bg-gray-100 text-gray-500"}`}>{m.timeframe}</span>
+                <button onClick={() => onViewProfile?.(m.opener_username ?? "")}
+                  className={`text-[11px] font-bold shrink-0 ${dk ? "text-white/55 hover:text-white" : "text-gray-500 hover:text-gray-900"} transition-colors`}>
+                  {m.opener_username ?? "—"}
+                </button>
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <div className={`w-full h-1.5 rounded-full overflow-hidden ${dk ? "bg-white/8" : "bg-gray-100"}`}>
+                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${longPct}%` }} />
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[9px] text-emerald-400">{longPct}% L</span>
+                    <span className="text-[9px] text-red-400">{100 - longPct}% S</span>
+                  </div>
+                </div>
+                <span className={`text-[11px] font-bold shrink-0 ${dk ? "text-white/70" : "text-gray-700"}`}>${total.toFixed(0)}</span>
+                <div className="shrink-0 text-right">
+                  {isResolved && m.winner_side ? (
+                    <span className={`text-[10px] font-black ${winnerColor}`}>{m.winner_side.toUpperCase()} won</span>
+                  ) : (
+                    <span className={`text-[9px] tabular-nums ${dk ? "text-white/30" : "text-gray-400"}`}>{formatCountdown(msLeft)}</span>
+                  )}
+                </div>
+              </div>
+            );
+          };
+
+          return (
+            <div className={`shrink-0 border-t ${dk ? "border-white/8" : "border-gray-100"}`}>
+              <div className={`flex items-center gap-3 px-4 py-2 border-b ${dk ? "border-white/6 bg-[#0a0a0a]" : "border-gray-100 bg-gray-50"}`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${dk ? "text-white/40" : "text-gray-400"}`}>Markets</span>
+                <div className={`flex rounded-lg overflow-hidden text-[10px] font-black ${dk ? "bg-white/5" : "bg-gray-100"}`}>
+                  {(["open", "closed"] as const).map(tab => (
+                    <button key={tab} onClick={() => setBidTab(tab)}
+                      className={`px-3 py-1 capitalize transition-all ${bidTab === tab ? dk ? "bg-white text-black" : "bg-gray-900 text-white" : dk ? "text-white/50 hover:text-white/80" : "text-gray-400 hover:text-gray-700"}`}>
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                {visibleMarkets.length === 0 ? (
+                  <p className={`px-4 py-4 text-[11px] ${dk ? "text-white/20" : "text-gray-300"}`}>No {bidTab} markets.</p>
+                ) : (
+                  visibleMarkets.map(renderMarket)
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
 
       {/* ── CENTER: Order Book (desktop only) ────────────────────── */}
@@ -928,6 +1010,8 @@ export default function CoinDetail({
       </div>
 
       </div>{/* end 3-col */}
+
     </div>
   );
 }
+
