@@ -412,47 +412,82 @@ export default function CoinDetail({
           )}
         </div>
 
-        {/* ── Markets History ─────────────────────────────────────── */}
+        {/* ── Open Orders ─────────────────────────────────────────── */}
         {(() => {
-          const openMarkets    = feedMarkets.filter(m => m.status === "open" && new Date(m.closes_at).getTime() > Date.now());
-          const closedMarkets  = feedMarkets.filter(m => m.status !== "open" || new Date(m.closes_at).getTime() <= Date.now());
-          const visibleMarkets = bidTab === "open" ? openMarkets : closedMarkets;
+          const openMarkets   = feedMarkets.filter(m => m.status === "open" && new Date(m.closes_at).getTime() > Date.now());
+          const closedMarkets = feedMarkets.filter(m => m.status !== "open" || new Date(m.closes_at).getTime() <= Date.now());
+          const visible       = bidTab === "open" ? openMarkets : closedMarkets;
 
-          const renderMarket = (m: Market) => {
-            const longP  = parseFloat(m.long_pool);
-            const shortP = parseFloat(m.short_pool);
-            const total  = longP + shortP;
+          // detect multi-tf: opener has >1 market in the visible list
+          const openerCounts  = visible.reduce<Record<string, number>>((acc, m) => {
+            const k = m.opener_id; acc[k] = (acc[k] ?? 0) + 1; return acc;
+          }, {});
+
+          const renderCard = (m: Market) => {
+            const longP   = parseFloat(m.long_pool);
+            const shortP  = parseFloat(m.short_pool);
+            const total   = longP + shortP;
             const longPct = total > 0 ? Math.round((longP / total) * 100) : 50;
             const msLeft  = Math.max(0, new Date(m.closes_at).getTime() - Date.now());
-            const isResolved = m.status === "resolved";
-            const winnerColor = m.winner_side === "long"
-              ? dk ? "text-emerald-400" : "text-emerald-600"
-              : dk ? "text-red-400" : "text-red-500";
+            const isResolved   = m.status === "resolved";
+            const isMultiTf    = (openerCounts[m.opener_id] ?? 0) > 1;
+            const dominantSide = longPct >= 50 ? "long" : "short";
+            const sideColor    = dominantSide === "long" ? "text-emerald-400" : "text-red-400";
+            const sideBorder   = dominantSide === "long"
+              ? dk ? "border-emerald-500/30" : "border-emerald-300"
+              : dk ? "border-red-500/30"     : "border-red-300";
 
             return (
-              <div key={m.id} className={`flex items-center gap-3 px-4 py-2.5 border-b ${dk ? "border-white/4 hover:bg-white/2" : "border-gray-50 hover:bg-gray-50"} transition-colors`}>
-                <span className={`text-[10px] font-black shrink-0 px-1.5 py-0.5 rounded ${dk ? "bg-white/8 text-white/50" : "bg-gray-100 text-gray-500"}`}>{m.timeframe}</span>
-                <button onClick={() => onViewProfile?.(m.opener_username ?? "")}
-                  className={`text-[11px] font-bold shrink-0 ${dk ? "text-white/55 hover:text-white" : "text-gray-500 hover:text-gray-900"} transition-colors`}>
-                  {m.opener_username ?? "—"}
-                </button>
-                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                  <div className={`w-full h-1.5 rounded-full overflow-hidden ${dk ? "bg-white/8" : "bg-gray-100"}`}>
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${longPct}%` }} />
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[9px] text-emerald-400">{longPct}% L</span>
-                    <span className="text-[9px] text-red-400">{100 - longPct}% S</span>
-                  </div>
-                </div>
-                <span className={`text-[11px] font-bold shrink-0 ${dk ? "text-white/70" : "text-gray-700"}`}>${total.toFixed(0)}</span>
-                <div className="shrink-0 text-right">
+              <div key={m.id} className={`shrink-0 w-[180px] flex flex-col gap-2 p-3 rounded-xl border ${dk ? `bg-white/[0.03] ${sideBorder}` : `bg-white ${sideBorder}`}`}>
+                {/* top row: timeframe + multi-tf badge */}
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${dk ? "bg-white/10 text-white/50" : "bg-gray-100 text-gray-500"}`}>
+                    {m.timeframe}
+                  </span>
+                  {isMultiTf && (
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${dk ? "bg-white/6 text-white/35" : "bg-gray-100 text-gray-400"}`}>
+                      multi-tf
+                    </span>
+                  )}
+                  <span className="flex-1" />
                   {isResolved && m.winner_side ? (
-                    <span className={`text-[10px] font-black ${winnerColor}`}>{m.winner_side.toUpperCase()} won</span>
+                    <span className={`text-[9px] font-black ${m.winner_side === "long" ? "text-emerald-400" : "text-red-400"}`}>
+                      {m.winner_side === "long" ? "▲" : "▼"} won
+                    </span>
                   ) : (
-                    <span className={`text-[9px] tabular-nums ${dk ? "text-white/30" : "text-gray-400"}`}>{formatCountdown(msLeft)}</span>
+                    <span className={`text-[9px] tabular-nums ${dk ? "text-white/25" : "text-gray-400"}`}>{formatCountdown(msLeft)}</span>
                   )}
                 </div>
+
+                {/* tagline */}
+                {m.tagline ? (
+                  <p className={`text-[11px] font-bold leading-tight line-clamp-2 ${dk ? "text-white/80" : "text-gray-800"}`}>
+                    "{m.tagline}"
+                  </p>
+                ) : (
+                  <p className={`text-[11px] font-bold ${dk ? "text-white/20" : "text-gray-300"}`}>—</p>
+                )}
+
+                {/* amount + side */}
+                <div className="flex items-end justify-between mt-auto">
+                  <span className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
+                    ${total > 0 ? total.toFixed(0) : "0"}
+                  </span>
+                  <span className={`text-[11px] font-black ${sideColor}`}>
+                    {longPct}% L
+                  </span>
+                </div>
+
+                {/* pool bar */}
+                <div className={`h-1 rounded-full overflow-hidden ${dk ? "bg-white/8" : "bg-gray-100"}`}>
+                  <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${longPct}%` }} />
+                </div>
+
+                {/* opener */}
+                <button onClick={() => onViewProfile?.(m.opener_username ?? "")}
+                  className={`text-[9px] font-bold text-left truncate ${dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"} transition-colors`}>
+                  {m.opener_username ?? "—"}
+                </button>
               </div>
             );
           };
@@ -460,7 +495,7 @@ export default function CoinDetail({
           return (
             <div className={`shrink-0 border-t ${dk ? "border-white/8" : "border-gray-100"}`}>
               <div className={`flex items-center gap-3 px-4 py-2 border-b ${dk ? "border-white/6 bg-[#0a0a0a]" : "border-gray-100 bg-gray-50"}`}>
-                <span className={`text-[10px] font-black uppercase tracking-widest ${dk ? "text-white/40" : "text-gray-400"}`}>Markets</span>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${dk ? "text-white/40" : "text-gray-400"}`}>Orders</span>
                 <div className={`flex rounded-lg overflow-hidden text-[10px] font-black ${dk ? "bg-white/5" : "bg-gray-100"}`}>
                   {(["open", "closed"] as const).map(tab => (
                     <button key={tab} onClick={() => setBidTab(tab)}
@@ -470,13 +505,13 @@ export default function CoinDetail({
                   ))}
                 </div>
               </div>
-              <div>
-                {visibleMarkets.length === 0 ? (
-                  <p className={`px-4 py-4 text-[11px] ${dk ? "text-white/20" : "text-gray-300"}`}>No {bidTab} markets.</p>
-                ) : (
-                  visibleMarkets.map(renderMarket)
-                )}
-              </div>
+              {visible.length === 0 ? (
+                <p className={`px-4 py-4 text-[11px] ${dk ? "text-white/20" : "text-gray-300"}`}>No {bidTab} orders.</p>
+              ) : (
+                <div className="flex gap-2.5 px-4 py-3 overflow-x-auto">
+                  {visible.map(renderCard)}
+                </div>
+              )}
             </div>
           );
         })()}
