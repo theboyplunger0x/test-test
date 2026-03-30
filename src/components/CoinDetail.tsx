@@ -386,7 +386,7 @@ export default function CoinDetail({
         </div>
 
         {/* Chart */}
-        <div className="flex-1 min-h-0 h-[240px] md:h-auto relative">
+        <div className="shrink-0 h-[240px] md:h-[320px] relative">
           {loading && candles.length === 0 && (
             <div className={`absolute inset-0 flex items-center justify-center ${T.textMuted} text-[12px] font-bold`}>
               Loading chart…
