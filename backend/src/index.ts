@@ -16,7 +16,7 @@ import { activityRoutes }    from "./routes/activity.js";
 import { userRoutes }           from "./routes/users.js";
 import { followRoutes }         from "./routes/follows.js";
 import { notificationRoutes }   from "./routes/notifications.js";
-import { scheduleAllPendingMarkets, resolveExpiredMarkets } from "./workers/resolver.js";
+import { scheduleAllPendingMarkets, resolveExpiredMarkets, expireUnfilledOrders } from "./workers/resolver.js";
 import { pollDeposits }              from "./workers/depositPoller.js";
 import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
 import { runMigrations }             from "./db/runMigrations.js";
@@ -78,6 +78,9 @@ await scheduleAllPendingMarkets();
 
 // Safety-net: sweep any markets whose closes_at has passed but weren't resolved (e.g. missed setTimeout after restart)
 setInterval(resolveExpiredMarkets, 60_000);
+
+// Expire unfilled orders, refund balance, and notify users
+setInterval(expireUnfilledOrders, 60_000);
 
 // Poll for incoming deposits every 30s
 setInterval(pollDeposits, 30_000);

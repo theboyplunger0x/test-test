@@ -20,13 +20,15 @@ import NotificationsPanel from "./NotificationsPanel";
 import TokenProfilePage from "./TokenProfilePage";
 import MarketsView from "./MarketsView";
 import SpotView from "./SpotView";
+import CallCard, { type Call } from "./CallCard";
+import DebateCard, { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
 type Filter = "all" | "hot" | "juicy";
 type Theme = "dark" | "light";
-type MainTab = "markets" | "feed" | "trending" | "ranks" | "chart";
+type MainTab = "calls" | "markets" | "feed" | "trending" | "ranks" | "chart";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
@@ -125,7 +127,11 @@ export default function FeedPage() {
   const prevLastBetAt                   = useRef<Record<string, number>>({});
   const [filter, setFilter]             = useState<Filter>("all");
   const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
-  const [mainTab, setMainTab]           = useState<MainTab>("markets");
+  const [mainTab, setMainTab]           = useState<MainTab>("calls");
+  const [calls, setCalls]               = useState<Call[]>([]);
+  const [callsLoading, setCallsLoading] = useState(false);
+  const [debates, setDebates]           = useState<Debate[]>([]);
+  const [callsFilter, setCallsFilter]   = useState<"fresh" | "debates">("fresh");
   const [ordersOpen, setOrdersOpen]     = useState(false);
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
   const [chartSymbol, setChartSymbol]   = useState<string | null>(null);
@@ -272,6 +278,29 @@ export default function FeedPage() {
     return () => clearInterval(i);
   }, []);
 
+  // Fetch recent calls + debates — refresh every 30s
+  useEffect(() => {
+    if (mainTab !== "calls") return;
+    let cancelled = false;
+    async function load(initial = false) {
+      if (initial) setCallsLoading(true);
+      try {
+        const [callsData, debatesData] = await Promise.all([
+          api.getRecentPositions(paperMode),
+          api.getDebates(paperMode).catch(() => []),
+        ]);
+        if (!cancelled) {
+          setCalls(callsData as unknown as Call[]);
+          setDebates(debatesData as Debate[]);
+        }
+      } catch {}
+      if (initial && !cancelled) setCallsLoading(false);
+    }
+    load(true);
+    const iv = setInterval(() => load(false), 30_000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [mainTab, paperMode]);
+
   // Fetch live coin data from DexScreener (price, mcap, 24h change) — refresh every 5 min
   useEffect(() => {
     fetchLiveCoins(setLiveCoins);
@@ -375,13 +404,13 @@ export default function FeedPage() {
     setOpenMarketCoin(coin);
   }
 
-  async function handleAdd(id: string, side: "short" | "long", amount: number, message?: string): Promise<string | null> {
+  async function handleAdd(id: string, side: "short" | "long", amount: number, message?: string, faded_position_id?: string): Promise<string | null> {
     if (!user) { setAuthOpen(true); return null; }
     // Mock challenges have simple numeric IDs; real markets have UUIDs
     const isRealMarket = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isRealMarket) return "Demo data — open a real market on any coin to trade.";
     try {
-      const result = await api.placeBet(id, side, amount, paperMode, message);
+      const result = await api.placeBet(id, side, amount, paperMode, message, faded_position_id);
       setMarkets(prev => prev.map(m =>
         m.id === id ? {
           ...m,
@@ -424,11 +453,23 @@ export default function FeedPage() {
   if (poolSortDir === "desc") filtered = [...filtered].sort((a, b) => (b.shortPool + b.longPool) - (a.shortPool + a.longPool));
   const trending = [...allChallenges].sort((a, b) => (b.longPool + b.shortPool) - (a.longPool + a.shortPool));
 
-  const handleCoinClick = (symbol: string) => {
-    setSelectedTokenInfo(null);
-    setSelectedCoin(null);
-    setChartSymbol(symbol);
-    setMainTab("chart");
+  const handleCoinClick = (symbol: string, chain?: string) => {
+    // Social-first: go to Token Profile, not Chart
+    const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+    const coin = liveCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase());
+    handleCATradeResult(rich ?? {
+      symbol: symbol.toUpperCase(),
+      name: coin?.name ?? symbol,
+      address: coin?.ca ?? "",
+      chainId: (chain ?? coin?.chain ?? "SOL").toLowerCase(),
+      chainLabel: chain ?? coin?.chain ?? "SOL",
+      price: coin?.price ?? 0,
+      change24h: coin?.change24h ?? 0,
+      liquidity: coin?.liquidity ?? 0,
+      volume24h: coin?.volume24h ?? 0,
+      marketCap: coin?.marketCap ?? 0,
+      pairAddress: "",
+    });
   };
 
   function handleCATradeResult(token: TokenInfo) {
@@ -521,20 +562,26 @@ export default function FeedPage() {
   ): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
     if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
-    if (!selectedCoin) return "No coin selected.";
+    const sym = selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol;
+    if (!sym) return "No coin selected.";
 
-    const autoTagline = taglineInput || `Will $${selectedCoin} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
+    const ch = selectedTokenInfo?.chainLabel ??
+      markets.find(m => m.symbol.toUpperCase() === sym.toUpperCase())?.chain?.toUpperCase() ??
+      liveCoins.find(c => c.symbol.toUpperCase() === sym.toUpperCase())?.chain ??
+      "SOL";
+
+    const autoTagline = taglineInput || `Will $${sym} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
 
     async function createFreshMarket() {
       const ca = selectedTokenInfo?.address;
-      const created = await api.createMarket(selectedCoin!, selectedChain, timeframe, autoTagline, paperMode, ca);
+      const created = await api.createMarket(sym!, ch, timeframe, autoTagline, paperMode, ca);
       if (!created) throw new Error("Failed to create market");
       setMarkets(prev => [created, ...prev]);
       return created;
     }
 
     let market = markets.find(m =>
-      m.symbol.toUpperCase() === selectedCoin.toUpperCase() &&
+      m.symbol.toUpperCase() === sym.toUpperCase() &&
       m.timeframe === timeframe &&
       m.status === "open" &&
       (m.is_paper === true) === paperMode &&
@@ -568,15 +615,21 @@ export default function FeedPage() {
     amount: number,
     timeframe: string,
     autoReopen: boolean,
+    symbol?: string,
+    chain?: string,
+    ca?: string,
   ): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
-    if (!selectedCoin) return "No coin selected.";
+    const sym = symbol ?? selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol;
+    const ch  = chain ?? selectedChain;
+    const addr = ca ?? selectedTokenInfo?.address;
+    if (!sym) return "No coin selected.";
     if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
     try {
       const result = await api.createOrders([{
-        symbol: selectedCoin,
-        chain: selectedChain,
-        ca: selectedTokenInfo?.address,
+        symbol: sym,
+        chain: ch,
+        ca: addr,
         timeframe,
         side,
         amount,
@@ -594,14 +647,18 @@ export default function FeedPage() {
     side: "long" | "short",
     amount: number,
     timeframe: string,
+    symbol?: string,
+    chain?: string,
   ): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
-    if (!selectedCoin) return "No coin selected.";
+    const sym = symbol ?? selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol;
+    const ch  = chain ?? selectedChain;
+    if (!sym) return "No coin selected.";
     if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
     try {
       const result = await api.sweep({
-        symbol: selectedCoin,
-        chain: selectedChain,
+        symbol: sym,
+        chain: ch,
         timeframe,
         side,
         amount,
@@ -615,6 +672,7 @@ export default function FeedPage() {
   }
 
   const MAIN_TABS: { key: MainTab; label: string }[] = [
+    { key: "calls",    label: "Calls" },
     { key: "markets",  label: "Markets" },
     { key: "chart",    label: "Chart" },
     { key: "feed",     label: "P2P" },
@@ -803,6 +861,8 @@ export default function FeedPage() {
                   });
                 }
               }}
+              onSweep={handleSweep}
+              onPlaceOrder={handlePlaceOrder}
               loggedIn={!!user}
               onAuthRequired={() => setAuthOpen(true)}
               paperMode={paperMode}
@@ -835,6 +895,112 @@ export default function FeedPage() {
           </motion.div>
         )}
 
+        {/* CALLS TAB — social-first feed of recent calls */}
+        {!tokenProfileToken && mainTab === "calls" && (
+          <motion.div key="calls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
+            {/* Sub-filter: Fresh Calls | Hot Debates */}
+            <div className={`flex gap-1.5 px-4 md:px-5 py-2 border-b shrink-0 ${T.navBorder}`}>
+              {(["fresh", "debates"] as const).map(f => (
+                <button key={f} onClick={() => setCallsFilter(f)}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${callsFilter === f ? T.filterActive : T.filterInactive}`}>
+                  {f === "fresh" ? "Fresh Calls" : `Hot Debates${debates.length > 0 ? ` (${debates.length})` : ""}`}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 md:px-5 py-4">
+              {callsFilter === "fresh" ? (
+                <>
+                  {callsLoading && calls.length === 0 ? (
+                    <div className={`flex items-center justify-center h-40 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                      <span className="text-[13px] font-bold">Loading calls…</span>
+                    </div>
+                  ) : calls.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {calls.map((c, i) => (
+                        <CallCard
+                          key={c.id}
+                          call={c}
+                          dk={dk}
+                          index={i}
+                          onViewProfile={(u) => setProfileUser(u)}
+                          onViewToken={(symbol, chain) => {
+                            const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+                            handleCATradeResult(rich ?? {
+                              symbol, name: symbol, address: "",
+                              chainId: chain.toLowerCase(), chainLabel: chain,
+                              price: 0, change24h: 0, liquidity: 0,
+                              volume24h: 0, marketCap: 0, pairAddress: "",
+                            });
+                          }}
+                          onFade={async (call, side, amount) => {
+                            if (!user) { setAuthOpen(true); return null; }
+                            if (!call.market_id) return "Cannot fade — market not found.";
+                            if (call.status !== "open") return "This market is already closed.";
+                            return handleAdd(call.market_id, side, amount, undefined, call.id);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={`flex flex-col items-center justify-center h-full gap-4 px-6`}>
+                      <span className="text-[40px]">📢</span>
+                      <div className="text-center">
+                        <p className={`text-[15px] font-black ${dk ? "text-white/70" : "text-gray-700"}`}>No calls yet</p>
+                        <p className={`text-[12px] font-bold mt-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                          Be the first to make a call. Open a market and share your thesis.
+                        </p>
+                      </div>
+                      <button onClick={() => setMainTab("trending")}
+                        className={`px-5 py-2.5 rounded-xl text-[12px] font-black tracking-wide transition-all ${dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700"}`}>
+                        Make a call →
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* HOT DEBATES */
+                debates.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {debates.map((d, i) => (
+                      <DebateCard
+                        key={d.market.id}
+                        debate={d}
+                        dk={dk}
+                        index={i}
+                        onViewProfile={(u) => setProfileUser(u)}
+                        onViewToken={(symbol, chain) => {
+                          const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+                          handleCATradeResult(rich ?? {
+                            symbol, name: symbol, address: "",
+                            chainId: chain.toLowerCase(), chainLabel: chain,
+                            price: 0, change24h: 0, liquidity: 0,
+                            volume24h: 0, marketCap: 0, pairAddress: "",
+                          });
+                        }}
+                        onFade={(marketId, side) => {
+                          if (!user) { setAuthOpen(true); return; }
+                          handleAdd(marketId, side, 25);
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`flex flex-col items-center justify-center h-full gap-4 px-6`}>
+                    <span className="text-[40px]">⚔️</span>
+                    <div className="text-center">
+                      <p className={`text-[15px] font-black ${dk ? "text-white/70" : "text-gray-700"}`}>No active debates</p>
+                      <p className={`text-[12px] font-bold mt-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                        Debates appear when both sides of a market have callers with strong positions.
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </motion.div>
+        )}
+
         {/* MARKETS TAB */}
         {!tokenProfileToken && mainTab === "markets" && (
           <motion.div key="markets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
@@ -847,8 +1013,7 @@ export default function FeedPage() {
               paperMode={paperMode}
               presets={tradePresets}
               onSelectToken={(symbol, chain) => {
-                setMainTab("chart");
-                handleCoinClick(symbol);
+                handleCoinClick(symbol, chain);
               }}
               onViewProfile={(u) => setProfileUser(u)}
               shakingIds={shakingIds}
@@ -1287,7 +1452,7 @@ export default function FeedPage() {
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
-                <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled}
+                <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
                   onViewToken={(symbol) => {
                     setOrdersOpen(false);
                     const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
@@ -2039,7 +2204,7 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
   useEffect(() => {
     async function loadPositions() {
       try {
-        const recent = await api.getRecentPositions();
+        const recent = await api.getRecentPositions(false);
         const posEntries: TapeEntry[] = recent.map(p => ({
           uid: `pos-${p.id}`,
           symbol: p.symbol,

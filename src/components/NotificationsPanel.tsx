@@ -82,6 +82,20 @@ function NotifRow({ n, dk, onViewProfile }: { n: AppNotification; dk: boolean; o
         </span>
       </span>
     );
+  } else if (n.type === "order_expired") {
+    icon = "⏰";
+    text = (
+      <span>
+        Your{" "}
+        <span className={`font-black ${payload.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
+          {payload.side === "long" ? "LONG" : "SHORT"}
+        </span>{" "}
+        order on <span className={`font-black ${strong}`}>${payload.symbol}</span>{" "}
+        <span className={muted}>{payload.timeframe}</span>{" "}
+        expired unfilled{" "}
+        {payload.refunded > 0 && <span className={muted}>· ${payload.refunded.toFixed(0)} refunded</span>}
+      </span>
+    );
   } else if (n.type === "followed_big_trade") {
     const won = payload.pnl >= 0;
     icon = won ? "🚀" : "💥";
@@ -102,10 +116,14 @@ function NotifRow({ n, dk, onViewProfile }: { n: AppNotification; dk: boolean; o
     );
   }
 
+  const clickTarget = payload.trader_username ?? payload.from_username ?? null;
+
   return (
-    <div className={`flex gap-3 px-5 py-3.5 border-b transition-colors ${
-      !n.read ? (dk ? "bg-white/[0.02]" : "bg-blue-50/60") : ""
-    } ${dk ? "border-white/5" : "border-gray-100"}`}>
+    <div
+      onClick={() => clickTarget && onViewProfile?.(clickTarget)}
+      className={`flex gap-3 px-5 py-3.5 border-b transition-colors ${clickTarget ? "cursor-pointer" : ""} ${
+        !n.read ? (dk ? "bg-white/[0.02]" : "bg-blue-50/60") : ""
+      } ${dk ? "border-white/5 hover:bg-white/[0.03]" : "border-gray-100 hover:bg-gray-50"}`}>
       <span className="text-[18px] shrink-0 mt-0.5">{icon}</span>
       <div className="flex-1 min-w-0">
         <p className={`text-[12px] leading-snug ${muted}`}>{text}</p>

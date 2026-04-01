@@ -47,7 +47,7 @@ export default function SpotView({
     }
   }, [externalSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedCoin = liveCoins.find(c => c.symbol.toUpperCase() === selectedSymbol.toUpperCase()) ?? liveCoins[0];
+  const selectedCoin = liveCoins.find(c => c.symbol.toUpperCase() === selectedSymbol.toUpperCase()) ?? null;
   const selectedChain = selectedCoin?.chain ?? "SOL";
 
   // scroll selected pill into view
@@ -66,67 +66,35 @@ export default function SpotView({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* ── Token picker bar ────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-0 border-b shrink-0 ${T.tokenBar}`}>
-        <div
-          ref={scrollRef}
-          className="flex items-center gap-1 overflow-x-auto px-3 py-2 scrollbar-none"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {liveCoins.map(coin => {
-            const active   = coin.symbol === selectedSymbol;
-            const positive = (coin.change24h ?? 0) >= 0;
-            return (
-              <button
-                key={coin.symbol}
-                data-symbol={coin.symbol}
-                onClick={() => setSelectedSymbol(coin.symbol)}
-                className={`flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${active ? T.pillActive : T.pillInactive}`}
-              >
-                <span>{coin.symbol}</span>
-                <span className={`text-[10px] font-bold ${positive ? T.pricePlus : T.priceMinus}`}>
-                  {positive ? "+" : ""}{(coin.change24h ?? 0).toFixed(1)}%
-                </span>
-                {coin.chain && (
-                  <span className={`text-[9px] font-bold opacity-50 ${CHAIN_COLORS[coin.chain] ?? ""}`}>
-                    {coin.chain}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* ── CoinDetail exchange view ─────────────────────────────────────── */}
-      {selectedCoin && (
-        <motion.div
-          key={selectedSymbol}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.12 }}
-          className="flex-1 overflow-hidden flex"
-        >
-          <CoinDetail
-            symbol={selectedCoin.symbol}
-            chain={selectedChain}
-            timeframe="1h"
-            theme={dk ? "dark" : "light"}
-            markets={markets}
-            onBet={onBet}
-            onAutoTrade={onAutoTrade}
-            onSweep={onSweep}
-            onPlaceOrder={onPlaceOrder}
-            onOpenMarket={() => onOpenMarket(selectedCoin)}
-            onViewProfile={onViewProfile}
-            loggedIn={loggedIn}
-            onAuthRequired={onAuthRequired}
-            presets={presets}
-            paperMode={paperMode}
-            tokenInfo={externalTokenInfo}
-          />
-        </motion.div>
-      )}
+      <motion.div
+        key={selectedSymbol}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.12 }}
+        className="flex-1 overflow-hidden flex"
+      >
+        <CoinDetail
+          symbol={selectedSymbol}
+          chain={selectedChain}
+          timeframe="1h"
+          theme={dk ? "dark" : "light"}
+          markets={markets}
+          onBet={onBet}
+          onAutoTrade={onAutoTrade}
+          onSweep={onSweep}
+          onPlaceOrder={onPlaceOrder}
+          onOpenMarket={() => {
+            if (selectedCoin) onOpenMarket(selectedCoin);
+          }}
+          onViewProfile={onViewProfile}
+          loggedIn={loggedIn}
+          onAuthRequired={onAuthRequired}
+          presets={presets}
+          paperMode={paperMode}
+          tokenInfo={externalTokenInfo}
+        />
+      </motion.div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { searchBySymbol, getOHLCV, resolutionForTf, getPriceByPair } from "@/lib
 import { api, Market, OrderBook } from "@/lib/api";
 
 const Chart = dynamic(() => import("./Chart"), { ssr: false });
+import CallerTokenModal from "./CallerTokenModal";
 
 function CopyCA({ ca, dk }: { ca: string; dk: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -105,6 +106,7 @@ export default function CoinDetail({
   const [loading, setLoading]     = useState(true);
   const [tick, setTick]           = useState(0);
   const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [callerModal, setCallerModal] = useState<{ username: string; symbol: string } | null>(null);
 
   // countdown ticker
   useEffect(() => {
@@ -450,7 +452,7 @@ export default function CoinDetail({
                     <p className={`text-[12px] italic ${dk ? "text-white/20" : "text-gray-300"}`}>no message</p>
                   )}
                   <div className="flex items-center gap-1.5 mt-1">
-                    <button onClick={() => onViewProfile?.(m.opener_username ?? "")}
+                    <button onClick={() => m.opener_username && setCallerModal({ username: m.opener_username, symbol })}
                       className={`text-[10px] font-bold ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-700"} transition-colors`}>
                       {m.opener_username ?? "—"}
                     </button>
@@ -834,7 +836,7 @@ export default function CoinDetail({
                 </p>
                 {hasFills ? fills.map((f, i) => (
                   <div key={i} className="flex items-center justify-between">
-                    <button onClick={() => onViewProfile?.(f.username)} className={`text-[10px] font-bold ${dk ? "text-white/50 hover:text-white/80" : "text-gray-600 hover:text-gray-900"} transition-opacity`}>{f.username}</button>
+                    <button onClick={() => setCallerModal({ username: f.username, symbol })} className={`text-[10px] font-bold ${dk ? "text-white/50 hover:text-white/80" : "text-gray-600 hover:text-gray-900"} transition-opacity`}>{f.username}</button>
                     <span className={`text-[10px] font-black tabular-nums ${dk ? "text-white/70" : "text-gray-800"}`}>${f.amount.toFixed(0)}</span>
                   </div>
                 )) : (
@@ -1029,6 +1031,15 @@ export default function CoinDetail({
 
       </div>{/* end 3-col */}
 
+      {callerModal && (
+        <CallerTokenModal
+          username={callerModal.username}
+          symbol={callerModal.symbol}
+          dk={dk}
+          onClose={() => setCallerModal(null)}
+          onViewProfile={(u) => { setCallerModal(null); onViewProfile?.(u); }}
+        />
+      )}
     </div>
   );
 }

@@ -115,6 +115,8 @@ interface Props {
   onViewChart: () => void;
   onBet: (marketId: string, side: "long" | "short", amount: number, message?: string) => Promise<string | null>;
   onOpenMarket: () => void;
+  onSweep?: (side: "long" | "short", amount: number, timeframe: string, symbol?: string, chain?: string) => Promise<string | null>;
+  onPlaceOrder?: (side: "long" | "short", amount: number, timeframe: string, autoReopen: boolean, symbol?: string, chain?: string, ca?: string) => Promise<string | null>;
   loggedIn: boolean;
   onAuthRequired: () => void;
   paperMode: boolean;
@@ -122,7 +124,7 @@ interface Props {
 }
 
 export default function TokenProfilePage({
-  token, dk, onClose, onViewChart, onBet, onOpenMarket, loggedIn, onAuthRequired, paperMode, presets,
+  token, dk, onClose, onViewChart, onBet, onOpenMarket, onSweep, onPlaceOrder, loggedIn, onAuthRequired, paperMode, presets,
 }: Props) {
   const [markets, setMarkets]     = useState<MarketRow[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -137,6 +139,14 @@ export default function TokenProfilePage({
   const [betLoading, setBetLoading] = useState(false);
   const [betError, setBetError]   = useState<string | null>(null);
   const [betDone, setBetDone]     = useState(false);
+  const [advSide, setAdvSide]     = useState<"long" | "short" | null>(null);
+  const [advAmt, setAdvAmt]       = useState<number | null>(null);
+  const [advCustom, setAdvCustom] = useState("");
+  const [advType, setAdvType]     = useState<"call" | "sweep" | "limit">("call");
+  const [advAutoReopen, setAdvAutoReopen] = useState(true);
+  const [advLoading, setAdvLoading] = useState(false);
+  const [advError, setAdvError]   = useState<string | null>(null);
+  const [advDone, setAdvDone]     = useState(false);
   const [resolvedCA, setResolvedCA] = useState(token.address ?? "");
 
   // If address is empty (navigated from feed card), look it up
@@ -203,6 +213,29 @@ export default function TokenProfilePage({
     setTimeout(() => { setBetMarket(null); setBetSide(null); setBetAmt(null); setBetCustom(""); setBetMsg(""); setBetDone(false); setBetError(null); }, 2000);
   }
 
+  const finalAdvAmt = advCustom ? parseFloat(advCustom) : advAmt;
+
+  async function handleAdvanced() {
+    if (!advSide || !finalAdvAmt || !betMarket) return;
+    if (!loggedIn) { onAuthRequired(); return; }
+    setAdvLoading(true);
+    setAdvError(null);
+    let err: string | null = null;
+    if (advType === "sweep" && onSweep) {
+      err = await onSweep(advSide, finalAdvAmt, betMarket.timeframe, token.symbol, token.chainLabel);
+    } else if (advType === "limit" && onPlaceOrder) {
+      err = await onPlaceOrder(advSide, finalAdvAmt, betMarket.timeframe, advAutoReopen, token.symbol, token.chainLabel, token.address);
+    }
+    setAdvLoading(false);
+    if (err) { setAdvError(err); return; }
+    setAdvDone(true);
+    api.getTokenFeed(token.symbol).then(data => {
+      setMarkets(data.markets ?? []);
+      setPositions(data.positions ?? []);
+    }).catch(() => {});
+    setTimeout(() => { setAdvSide(null); setAdvAmt(null); setAdvCustom(""); setAdvDone(false); setAdvError(null); }, 2000);
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -254,69 +287,113 @@ export default function TokenProfilePage({
           </button>
         </div>
 
-        {/* Pool bar */}
-        {totalVol > 0 && (
-          <div className="mt-3">
-            <div className="flex justify-between text-[10px] font-bold mb-1">
-              <span className="text-emerald-400">▲ Long {longPct.toFixed(0)}%</span>
-              <span className="text-red-400">{(100 - longPct).toFixed(0)}% Short ▼</span>
-            </div>
-            <div className={`h-1.5 rounded-full overflow-hidden ${dk ? "bg-red-500/20" : "bg-red-100"}`}>
-              <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${longPct}%` }} />
-            </div>
-            <p className={`text-[10px] font-bold text-center mt-1 ${muted}`}>
-              Total volume: {formatNum(totalVol)} · {positions.length} trader{positions.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Markets + bet */}
-      {markets.length > 0 && (
-        <div className={`px-5 py-3 border-b ${border}`}>
-          <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${muted}`}>Open markets</p>
-          <div className="flex flex-wrap gap-2">
-            {markets.filter(m => m.status === "open" && !!m.is_paper === paperMode).map(m => (
-              <button key={m.id}
-                onClick={() => { setBetMarket(m); setBetSide(null); setBetAmt(null); setBetCustom(""); setBetMsg(""); setBetDone(false); setBetError(null); }}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition-all ${
-                  betMarket?.id === m.id
-                    ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
-                    : dk ? "bg-white/5 text-white/60 border-white/10 hover:bg-white/10" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+      {(() => {
+        const openMarkets = markets.filter(m => m.status === "open" && !!m.is_paper === paperMode);
+        // Group by timeframe — pick the market with highest pool for each tf
+        const byTf = new Map<string, MarketRow>();
+        for (const m of openMarkets) {
+          const existing = byTf.get(m.timeframe);
+          if (!existing || (parseFloat(m.long_pool) + parseFloat(m.short_pool)) > (parseFloat(existing.long_pool) + parseFloat(existing.short_pool))) {
+            byTf.set(m.timeframe, m);
+          }
+        }
+        const tfMarkets = Array.from(byTf.values());
+        if (tfMarkets.length === 0 && markets.length === 0) return null;
+        return (
+          <div className={`px-5 py-3 border-b ${border}`}>
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${muted}`}>Active calls</p>
+            <div className="flex flex-wrap gap-2">
+              {tfMarkets.map(m => {
+                const isActive = betMarket?.id === m.id;
+                const count = openMarkets.filter(om => om.timeframe === m.timeframe).length;
+                return (
+                  <button key={m.id}
+                    onClick={() => {
+                      if (isActive) {
+                        setBetMarket(null); setBetSide(null); setBetAmt(null); setBetCustom(""); setBetMsg(""); setBetDone(false); setBetError(null);
+                      } else {
+                        setBetMarket(m); setBetSide(null); setBetAmt(null); setBetCustom(""); setBetMsg(""); setBetDone(false); setBetError(null);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition-all ${
+                      isActive
+                        ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
+                        : dk ? "bg-white/5 text-white/60 border-white/10 hover:bg-white/10" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                    }`}>
+                    {m.timeframe}{count > 1 ? ` (${count})` : ""}
+                  </button>
+                );
+              })}
+              <button onClick={onOpenMarket}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black border border-dashed transition-all ${
+                  dk ? "border-white/15 text-white/30 hover:border-white/30 hover:text-white/60" : "border-gray-300 text-gray-400 hover:text-gray-600"
                 }`}>
-                {m.timeframe}
+                + Make a call
               </button>
-            ))}
-            <button onClick={onOpenMarket}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-black border border-dashed transition-all ${
-                dk ? "border-white/15 text-white/30 hover:border-white/30 hover:text-white/60" : "border-gray-300 text-gray-400 hover:text-gray-600"
-              }`}>
-              + Open market
-            </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Bet panel */}
+      {/* Unified trade panel */}
       <AnimatePresence>
         {betMarket && !betDone && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
             className={`overflow-hidden border-b ${border}`}>
             <div className="px-5 py-4 space-y-3">
-              <p className={`text-[10px] font-black uppercase tracking-widest ${muted}`}>Trade · {betMarket.timeframe}</p>
+              {/* Pool bar for selected market */}
+              {(() => {
+                const lp = parseFloat(betMarket.long_pool);
+                const sp = parseFloat(betMarket.short_pool);
+                const tv = lp + sp;
+                if (tv <= 0) return null;
+                const lpct = (lp / tv) * 100;
+                return (
+                  <div>
+                    <div className="flex justify-between text-[10px] font-bold mb-1">
+                      <span className="text-emerald-400">▲ Long {lpct.toFixed(0)}% · ${lp >= 1000 ? `${(lp/1000).toFixed(1)}k` : lp.toFixed(0)}</span>
+                      <span className="text-red-400">${sp >= 1000 ? `${(sp/1000).toFixed(1)}k` : sp.toFixed(0)} · {(100 - lpct).toFixed(0)}% Short ▼</span>
+                    </div>
+                    <div className={`h-1.5 rounded-full overflow-hidden ${dk ? "bg-red-500/20" : "bg-red-100"}`}>
+                      <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${lpct}%` }} />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Type selector: Call / Sweep / Limit */}
+              <div className={`flex rounded-xl overflow-hidden border ${dk ? "border-white/10" : "border-gray-200"}`}>
+                {(["call", ...(onSweep ? ["sweep"] : []), ...(onPlaceOrder ? ["limit"] : [])] as const).map(t => (
+                  <button key={t} onClick={() => setAdvType(t as any)}
+                    className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wide transition-all ${
+                      advType === t
+                        ? dk ? "bg-white/10 text-white" : "bg-gray-100 text-gray-900"
+                        : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"
+                    }`}>
+                    {t === "call" ? "Make call" : t === "sweep" ? "Sweep" : "Limit"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Side */}
               <div className="flex gap-2">
-                <button onClick={() => setBetSide("long")}
+                <button onClick={() => { setBetSide("long"); setAdvSide("long"); }}
                   className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all ${betSide === "long" ? "bg-emerald-500 text-white" : dk ? "bg-emerald-500/10 text-emerald-400/60 hover:bg-emerald-500/20" : "bg-emerald-50 text-emerald-600"}`}>
                   ▲ Long
                 </button>
-                <button onClick={() => setBetSide("short")}
+                <button onClick={() => { setBetSide("short"); setAdvSide("short"); }}
                   className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all ${betSide === "short" ? "bg-red-500 text-white" : dk ? "bg-red-500/10 text-red-400/60 hover:bg-red-500/20" : "bg-rose-50 text-red-600"}`}>
                   ▼ Short
                 </button>
               </div>
+
+              {/* Amount */}
               <div className="grid grid-cols-4 gap-1">
                 {presets.map(a => (
-                  <button key={a} onClick={() => { setBetAmt(a); setBetCustom(String(a)); }}
+                  <button key={a} onClick={() => { setBetAmt(a); setBetCustom(String(a)); setAdvAmt(a); setAdvCustom(String(a)); }}
                     className={`py-1.5 rounded-lg text-[11px] font-black transition-all ${
                       betAmt === a && betCustom === String(a)
                         ? dk ? "bg-white/20 text-white" : "bg-gray-300 text-gray-900"
@@ -327,27 +404,72 @@ export default function TokenProfilePage({
               <div className="relative">
                 <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-bold ${muted}`}>$</span>
                 <input type="number" placeholder="custom" value={betCustom}
-                  onChange={e => { setBetCustom(e.target.value); setBetAmt(null); }}
+                  onChange={e => { setBetCustom(e.target.value); setBetAmt(null); setAdvCustom(e.target.value); setAdvAmt(null); }}
                   className={`w-full pl-6 pr-3 py-2 rounded-xl text-[12px] font-bold border outline-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
               </div>
-              <div className="relative">
-                <textarea value={betMsg} onChange={e => setBetMsg(e.target.value)} maxLength={60} rows={2}
-                  placeholder="Your take (optional)"
-                  className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
-                <span className={`absolute bottom-2 right-3 text-[9px] font-bold tabular-nums pointer-events-none ${betMsg.length > 50 ? "text-amber-400" : dk ? "text-white/20" : "text-gray-300"}`}>{betMsg.length}/60</span>
-              </div>
-              {betError && <p className="text-[11px] text-red-400">{betError}</p>}
-              <button onClick={handleBet} disabled={!betSide || !finalBetAmt || betLoading}
-                className={`w-full py-3 rounded-xl text-[13px] font-black transition-all disabled:opacity-40 ${dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white"}`}>
-                {betLoading ? "Placing…" : `${betSide === "long" ? "▲ Long" : betSide === "short" ? "▼ Short" : "Place"} $${finalBetAmt ?? "—"}`}
-              </button>
-              <button onClick={() => setBetMarket(null)} className={`text-[11px] font-bold ${muted} hover:opacity-70 transition-opacity`}>← Cancel</button>
+
+              {/* Thesis — call mode only */}
+              {advType === "call" && (
+                <div className="relative">
+                  <textarea value={betMsg} onChange={e => setBetMsg(e.target.value)} maxLength={60} rows={2}
+                    placeholder="Your thesis — what's your conviction?"
+                    className={`w-full border text-[12px] font-bold p-3 rounded-xl outline-none resize-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+                  <span className={`absolute bottom-2 right-3 text-[9px] font-bold tabular-nums pointer-events-none ${betMsg.length > 50 ? "text-amber-400" : dk ? "text-white/20" : "text-gray-300"}`}>{betMsg.length}/60</span>
+                </div>
+              )}
+
+              {/* Auto-reopen — limit mode only */}
+              {advType === "limit" && (
+                <button onClick={() => setAdvAutoReopen(!advAutoReopen)}
+                  className={`flex items-center gap-2 text-[11px] font-bold ${muted}`}>
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                    advAutoReopen
+                      ? dk ? "bg-white/20 border-white/30" : "bg-gray-300 border-gray-400"
+                      : dk ? "border-white/15" : "border-gray-300"
+                  }`}>
+                    {advAutoReopen && <span className="text-[9px]">✓</span>}
+                  </span>
+                  Auto-reopen after fill
+                </button>
+              )}
+
+              {(betError || advError) && <p className="text-[11px] text-red-400">{betError || advError}</p>}
+
+              {/* Submit button — changes label based on type */}
+              {advType === "call" ? (
+                <button onClick={handleBet} disabled={!betSide || !finalBetAmt || betLoading}
+                  className={`w-full py-3 rounded-xl text-[13px] font-black transition-all disabled:opacity-40 ${dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white"}`}>
+                  {betLoading ? "Placing…" : `${betSide === "long" ? "▲ Long" : betSide === "short" ? "▼ Short" : "Make call"} $${finalBetAmt ?? "—"} · ${betMarket.timeframe}`}
+                </button>
+              ) : (
+                <button onClick={handleAdvanced} disabled={!advSide || !finalAdvAmt || advLoading}
+                  className={`w-full py-3 rounded-xl text-[13px] font-black transition-all disabled:opacity-40 ${dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white"}`}>
+                  {advLoading ? "Executing…" : advType === "sweep"
+                    ? `Sweep ${betSide ?? "—"} $${finalBetAmt ?? "—"} · ${betMarket.timeframe}`
+                    : `Limit ${betSide ?? "—"} $${finalBetAmt ?? "—"} · ${betMarket.timeframe}`
+                  }
+                </button>
+              )}
+
+              {/* Hint */}
+              {advType !== "call" && (
+                <p className={`text-[9px] font-bold ${muted}`}>
+                  {advType === "sweep"
+                    ? "Instantly fills against existing orders in the book"
+                    : "Posts a resting order — filled when someone takes the other side"
+                  }
+                </p>
+              )}
+
+              <button onClick={() => setBetMarket(null)} className={`text-[11px] font-bold ${muted} hover:opacity-70 transition-opacity`}>← Close</button>
             </div>
           </motion.div>
         )}
         {betDone && (
           <div className={`px-5 py-3 border-b ${border}`}>
-            <p className="text-emerald-400 text-[13px] font-black text-center">Trade placed ✓</p>
+            <p className="text-emerald-400 text-[13px] font-black text-center">
+              {advType === "call" ? "Call placed ✓" : advType === "sweep" ? "Sweep executed ✓" : "Order placed ✓"}
+            </p>
           </div>
         )}
       </AnimatePresence>
@@ -362,8 +484,8 @@ export default function TokenProfilePage({
 
         {!loading && sortedPositions.length === 0 && (
           <div className="text-center py-10">
-            <p className={`text-[13px] font-bold ${muted}`}>No positions yet</p>
-            <p className={`text-[11px] ${muted} mt-1`}>Be the first to open a market</p>
+            <p className={`text-[13px] font-bold ${muted}`}>No calls yet</p>
+            <p className={`text-[11px] ${muted} mt-1`}>Be the first to make a call on ${token.symbol}</p>
           </div>
         )}
 

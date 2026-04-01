@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, Market, LeaderboardEntry } from "@/lib/api";
 
@@ -250,57 +250,123 @@ function RightPanel({ dk, paperMode, onSelectToken, onViewProfile }: { dk: boole
   );
 }
 
-// ── Quick Trade Modal ─────────────────────────────────────────────────────────
+// ── Quick Trade Modal — multi-tf sweep with order book view ───────────────────
 function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: Market; dk: boolean; onClose: () => void; paperMode: boolean; presets: number[] }) {
-  const longPool  = parseFloat(market.long_pool);
-  const shortPool = parseFloat(market.short_pool);
   const [side, setSide]     = useState<"long"|"short"|null>(null);
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone]     = useState<string | null>(null);
   const [err, setErr]       = useState<string | null>(null);
+  const [book, setBook]     = useState<import("@/lib/api").OrderBook | null>(null);
+  const [bookLoading, setBookLoading] = useState(true);
+
+  // Fetch order book on mount
+  useEffect(() => {
+    api.getOrderBook(market.symbol, market.chain, paperMode)
+      .then(setBook)
+      .catch(() => {})
+      .finally(() => setBookLoading(false));
+  }, [market.symbol, market.chain, paperMode]);
 
   const amt = parseFloat(amount) || 0;
-  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool + (side === "long" ? amt : 0), 5) : 1.95;
-  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool + (side === "short" ? amt : 0), 5) : 1.95;
-  const currentMult = side === "long" ? longMult : side === "short" ? shortMult : null;
 
+  // Compute fill preview: how would $amt get distributed across timeframes
+  const fillPreview = useMemo(() => {
+    if (!book || !side || amt <= 0) return [];
+    const makerSide = side === "long" ? "short" : "long";
+    const tfs = Object.values(book.timeframes)
+      .filter(tf => tf[makerSide].total > 0);
+
+    if (tfs.length === 0) return [];
+
+    // Distribute proportionally across all tfs, capped by available liquidity
+    const totalAvailable = tfs.reduce((s, tf) => s + tf[makerSide].total, 0);
+    const fills: { timeframe: string; fillAmt: number; available: number; mult: number }[] = [];
+    let allocated = 0;
+
+    for (let i = 0; i < tfs.length; i++) {
+      const tf = tfs[i];
+      const available = tf[makerSide].total;
+      const share = available / totalAvailable;
+      // Last tf gets the remainder to avoid rounding issues
+      const fillAmt = i === tfs.length - 1
+        ? Math.min(amt - allocated, available)
+        : Math.min(Math.round(amt * share), available);
+      if (fillAmt <= 0) continue;
+      const myPool = fillAmt;
+      const otherPool = available;
+      const mult = 1 + (otherPool * 0.95) / Math.max(myPool, 1);
+      fills.push({ timeframe: tf.timeframe, fillAmt, available, mult });
+      allocated += fillAmt;
+    }
+    return fills;
+  }, [book, side, amt]);
+
+  const totalFill = fillPreview.reduce((s, f) => s + f.fillAmt, 0);
+  const unfilled = Math.max(0, amt - totalFill);
+
+  // Multi-tf sweep: use the same proportional distribution as fillPreview
   async function execute() {
-    if (!side || amt <= 0) return;
+    if (!side || amt <= 0 || !book) return;
     setLoading(true); setErr(null);
-    try {
-      const res = await api.sweep({ symbol: market.symbol, chain: market.chain, timeframe: market.timeframe, side, amount: amt, is_paper: paperMode });
-      const filled = res.filled_amount ?? amt;
-      setDone(`${side.toUpperCase()} $${filled.toFixed(0)} @ ${fmtMult(currentMult ?? 1)} filled`);
-    } catch (e: any) {
-      // fallback: place limit order
+
+    // Use fillPreview to determine how much goes to each tf
+    let totalFilled = 0;
+    let tfsFilled = 0;
+
+    for (const f of fillPreview) {
+      if (f.fillAmt <= 0) continue;
       try {
-        await api.createOrders([{ symbol: market.symbol, chain: market.chain, timeframe: market.timeframe, side, amount: amt, is_paper: paperMode }]);
-        setDone(`Order placed — waiting for match`);
+        const res = await api.sweep({
+          symbol: market.symbol, chain: market.chain,
+          timeframe: f.timeframe, side, amount: f.fillAmt, is_paper: paperMode,
+        });
+        totalFilled += res.filled_amount ?? f.fillAmt;
+        tfsFilled++;
+      } catch {
+        // This tf failed, continue to next
+      }
+    }
+
+    // If nothing filled, fall back to limit order on the originally clicked tf
+    if (totalFilled === 0) {
+      try {
+        await api.createOrders([{
+          symbol: market.symbol, chain: market.chain,
+          timeframe: market.timeframe, side, amount: amt, is_paper: paperMode,
+        }]);
+        setDone(`No fills available — limit order placed for $${amt.toFixed(0)}`);
       } catch (e2: any) {
         setErr(e2.message ?? "Failed");
       }
-    } finally {
-      setLoading(false);
+    } else {
+      setDone(`Swept $${totalFilled.toFixed(0)} across ${tfsFilled} timeframe${tfsFilled > 1 ? "s" : ""}${unfilled > 0 ? ` · $${unfilled.toFixed(0)} unfilled` : ""}`);
     }
+    setLoading(false);
   }
 
-  const overlay  = "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4";
-  const backdrop = "absolute inset-0 bg-black/60 backdrop-blur-sm";
-  const panel    = dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200";
+  const longPool  = parseFloat(market.long_pool);
+  const shortPool = parseFloat(market.short_pool);
+  const longMult  = shortPool > 0 ? 1 + (shortPool * 0.95) / Math.max(longPool + (side === "long" ? amt : 0), 5) : 1.95;
+  const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool + (side === "short" ? amt : 0), 5) : 1.95;
+
+  const [showBook, setShowBook] = useState(false);
+  const panel = dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200";
+  const muted = dk ? "text-white/25" : "text-gray-400";
+  const bookTfs = book ? Object.values(book.timeframes) : [];
 
   return (
-    <div className={overlay} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.2 }}
-        className={`relative w-full max-w-sm rounded-2xl border ${panel} p-5 flex flex-col gap-4`}
+        className={`relative w-full max-w-sm rounded-2xl border ${panel} p-5 flex flex-col gap-3 max-h-[85vh] overflow-y-auto`}
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className={`text-[18px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${market.symbol}</span>
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500"}`}>{market.timeframe}</span>
+            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500"}`}>{market.chain}</span>
           </div>
           <button onClick={onClose} className={`text-[18px] leading-none ${dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"}`}>×</button>
         </div>
@@ -308,20 +374,20 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
         {done ? (
           <div className="text-center py-4">
             <p className="text-[28px] mb-2">✅</p>
-            <p className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>{done}</p>
+            <p className={`text-[14px] font-black ${dk ? "text-white" : "text-gray-900"}`}>{done}</p>
             <button onClick={onClose} className="mt-4 text-[13px] font-bold text-emerald-400 hover:text-emerald-300">Close</button>
           </div>
         ) : (
           <>
-            {/* Side selector */}
+            {/* Side selector with multiplier */}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setSide("long")}
                 className={`py-3 rounded-xl font-black text-[14px] transition-all border ${side === "long" ? "bg-emerald-500 border-emerald-500 text-white" : dk ? "border-white/10 text-white/40 hover:border-emerald-500/40 hover:text-emerald-400" : "border-gray-200 text-gray-400 hover:border-emerald-400 hover:text-emerald-500"}`}>
-                ▲ LONG{side === "long" && currentMult ? ` · ${fmtMult(currentMult)}` : ` · ${fmtMult(longMult)}`}
+                ▲ LONG · {fmtMult(longMult)}
               </button>
               <button onClick={() => setSide("short")}
                 className={`py-3 rounded-xl font-black text-[14px] transition-all border ${side === "short" ? "bg-red-500 border-red-500 text-white" : dk ? "border-white/10 text-white/40 hover:border-red-500/40 hover:text-red-400" : "border-gray-200 text-gray-400 hover:border-red-400 hover:text-red-500"}`}>
-                ▼ SHORT{side === "short" && currentMult ? ` · ${fmtMult(currentMult)}` : ` · ${fmtMult(shortMult)}`}
+                ▼ SHORT · {fmtMult(shortMult)}
               </button>
             </div>
 
@@ -331,9 +397,6 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
                 <span className={`text-[14px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
                 <input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)}
                   className={`flex-1 bg-transparent text-[16px] font-black outline-none ${dk ? "text-white placeholder:text-white/20" : "text-gray-900 placeholder:text-gray-300"}`} />
-                {amt > 0 && currentMult && (
-                  <span className={`text-[12px] font-black ${multColor(currentMult)}`}>{fmtMult(currentMult)}</span>
-                )}
               </div>
               <div className="flex gap-1.5 mt-2">
                 {presets.map(q => (
@@ -345,16 +408,79 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
               </div>
             </div>
 
+            {/* Fill preview — only when side + amount selected */}
+            {side && amt > 0 && fillPreview.length > 0 && (
+              <div className="space-y-1">
+                {fillPreview.map(f => (
+                  <div key={f.timeframe} className={`flex items-center justify-between text-[10px] font-bold ${dk ? "text-white/50" : "text-gray-500"}`}>
+                    <span>{f.timeframe} — <span className={dk ? "text-white/80" : "text-gray-700"}>${f.fillAmt.toFixed(0)}</span></span>
+                    <span className={multColor(f.mult)}>{fmtMult(f.mult)}</span>
+                  </div>
+                ))}
+                {unfilled > 0 && (
+                  <p className={`text-[10px] font-bold ${dk ? "text-amber-400/60" : "text-amber-600"}`}>
+                    ${unfilled.toFixed(0)} unfilled → limit order
+                  </p>
+                )}
+              </div>
+            )}
+
+            {side && amt > 0 && fillPreview.length === 0 && !bookLoading && (
+              <p className={`text-[10px] font-bold ${dk ? "text-amber-400/60" : "text-amber-600"}`}>
+                No liquidity — will post as limit order
+              </p>
+            )}
+
             {err && <p className="text-[12px] text-red-400">{err}</p>}
 
             <button onClick={execute} disabled={!side || amt <= 0 || loading}
-              className={`w-full py-3.5 rounded-xl font-black text-[15px] transition-all ${
+              className={`w-full py-3.5 rounded-xl font-black text-[14px] transition-all ${
                 side === "long"  ? "bg-emerald-500 hover:bg-emerald-400 text-white" :
                 side === "short" ? "bg-red-500 hover:bg-red-400 text-white" :
                 dk ? "bg-white/6 text-white/20" : "bg-gray-100 text-gray-300"
               } disabled:opacity-50`}>
-              {loading ? "…" : side ? `${side === "long" ? "▲ Long" : "▼ Short"} $${amt > 0 ? amt : "—"}` : "Select a side"}
+              {loading ? "Sweeping…" : side ? `Sweep ${side === "long" ? "▲ Long" : "▼ Short"} $${amt > 0 ? amt : "—"}` : "Select a side"}
             </button>
+
+            {/* Order book — collapsible */}
+            <button onClick={() => setShowBook(!showBook)}
+              className={`flex items-center justify-between w-full text-[10px] font-bold ${muted} hover:opacity-70 transition-opacity`}>
+              <span>Order book</span>
+              <span className={`transition-transform ${showBook ? "rotate-180" : ""}`}>▾</span>
+            </button>
+            <AnimatePresence>
+              {showBook && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  {bookLoading ? (
+                    <p className={`text-[11px] ${muted} animate-pulse`}>Loading…</p>
+                  ) : bookTfs.length === 0 ? (
+                    <p className={`text-[11px] ${muted}`}>Empty book</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {bookTfs.map(tf => {
+                        const sl = tf.short.total;
+                        const ll = tf.long.total;
+                        const t = sl + ll;
+                        if (t === 0) return null;
+                        return (
+                          <div key={tf.timeframe} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${dk ? "bg-white/[0.03]" : "bg-gray-50"}`}>
+                            <span className={`text-[10px] font-black w-8 ${dk ? "text-white/50" : "text-gray-500"}`}>{tf.timeframe}</span>
+                            <div className="flex-1 flex h-1.5 rounded-full overflow-hidden gap-px">
+                              {sl > 0 && <div className="bg-red-500 rounded-l-full" style={{ width: `${(sl/t)*100}%` }} />}
+                              {ll > 0 && <div className="bg-emerald-500 rounded-r-full" style={{ width: `${(ll/t)*100}%` }} />}
+                            </div>
+                            <div className="flex gap-2 text-[9px] font-bold tabular-nums shrink-0">
+                              <span className="text-red-400 w-10 text-right">${sl.toFixed(0)}</span>
+                              <span className="text-emerald-400 w-10">${ll.toFixed(0)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </>
         )}
       </motion.div>
@@ -442,26 +568,20 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
       {isHot ? (
         /* ── HOT CARD: contrarian opportunity hero layout ── */
         <>
-          {/* Top row: symbol + chain + tf */}
+          {/* Top row: symbol + chain + multi-tf */}
           <div className="flex items-center gap-1.5">
             <span className={`text-[15px] font-black ${strong}`}>${market.symbol}</span>
             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${chainCls}`}>{market.chain?.toUpperCase()}</span>
-            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-white/6 text-white/30" : "bg-gray-100 text-gray-400"}`}>{market.timeframe}</span>
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-white/6 text-white/30" : "bg-gray-100 text-gray-400"}`}>multi-tf</span>
             <span className="ml-auto text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-400 tracking-wide">🔥 HOT</span>
           </div>
 
           {/* Hero: big multiplier + fade label */}
-          <div className="flex items-end justify-between gap-2">
-            <div>
-              <p className="text-[38px] font-black tabular-nums leading-none text-amber-400">{fmtMult(bestMult)}</p>
-              <p className={`text-[11px] font-black mt-1 ${contrarian === "LONG" ? "text-emerald-400" : "text-red-400"}`}>
-                {contrarian === "LONG" ? "▲ LONG" : "▼ SHORT"} — fade the crowd
-              </p>
-            </div>
-            <div className="text-right">
-              <p className={`text-[22px] font-black tabular-nums leading-none ${majorityPct >= 80 ? "text-red-400" : "text-white/50"}`}>{majorityPct}%</p>
-              <p className={`text-[9px] font-bold mt-0.5 ${muted}`}>betting {majoritySide}</p>
-            </div>
+          <div>
+            <p className="text-[38px] font-black tabular-nums leading-none text-amber-400">{fmtMult(bestMult)}</p>
+            <p className={`text-[11px] font-black mt-1 ${contrarian === "LONG" ? "text-emerald-400" : "text-red-400"}`}>
+              {contrarian === "LONG" ? "▲ LONG" : "▼ SHORT"} — fade the crowd
+            </p>
           </div>
 
           {/* Message */}
@@ -492,7 +612,7 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
           <button
             onClick={e => { e.stopPropagation(); onTrade(); }}
             className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-amber-400 text-black hover:bg-amber-300 active:scale-95 transition-all">
-            Trade {fmtMult(bestMult)} · {contrarian}
+            Sweep {fmtMult(bestMult)} · {contrarian}
           </button>
         </>
       ) : (
@@ -525,7 +645,6 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
             {/* Multiplier */}
             <div className="text-right shrink-0">
               <p className={`text-[18px] font-black tabular-nums leading-none ${multColor(bestMult)}`}>{fmtMult(bestMult)}</p>
-              <p className={`text-[9px] font-black mt-0.5 ${bestSide === "LONG" ? "text-emerald-400/60" : "text-red-400/60"}`}>{bestSide}</p>
             </div>
           </div>
 
@@ -545,7 +664,7 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
           <button
             onClick={e => { e.stopPropagation(); onTrade(); }}
             className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-white text-black hover:bg-white/90 active:scale-95 transition-all">
-            Trade
+            Sweep
           </button>
         </>
       )}

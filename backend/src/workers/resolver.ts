@@ -115,7 +115,7 @@ export async function resolveMarket(marketId: string) {
       try {
         const BIG_TRADE_THRESHOLD = 50;
         const { rows: allPositions } = await db.query(
-          `SELECT p.*, u.username FROM positions p JOIN users u ON u.id = p.user_id WHERE p.market_id = $1 AND p.is_paper = false`,
+          `SELECT p.*, u.username FROM positions p JOIN users u ON u.id = p.user_id WHERE p.market_id = $1`,
           [market.id]
         );
 
@@ -218,5 +218,39 @@ export async function resolveExpiredMarkets() {
   for (let i = 0; i < rows.length; i += BATCH) {
     await Promise.allSettled(rows.slice(i, i + BATCH).map(m => resolveMarket(m.id)));
     if (i + BATCH < rows.length) await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+// Expire unfilled orders and notify users (runs every 60s alongside resolver)
+export async function expireUnfilledOrders() {
+  try {
+    const { rows } = await db.query(`
+      UPDATE orders SET status = 'expired'
+      WHERE status IN ('pending', 'partially_filled')
+        AND expires_at IS NOT NULL AND expires_at <= NOW()
+      RETURNING id, user_id, symbol, chain, timeframe, side, amount, remaining_amount, is_paper
+    `);
+    for (const o of rows) {
+      // Refund remaining amount
+      const refund = parseFloat(o.remaining_amount);
+      if (refund > 0) {
+        const col = o.is_paper ? "paper_balance_usd" : "balance_usd";
+        await db.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [refund, o.user_id]);
+      }
+      // Notify
+      await db.query(
+        `INSERT INTO notifications (user_id, type, payload) VALUES ($1, 'order_expired', $2)`,
+        [o.user_id, JSON.stringify({
+          symbol: o.symbol,
+          timeframe: o.timeframe,
+          side: o.side,
+          amount: parseFloat(o.amount),
+          refunded: refund,
+        })]
+      );
+    }
+    if (rows.length > 0) console.log(`[resolver] Expired ${rows.length} unfilled order(s)`);
+  } catch (err) {
+    console.error("[resolver] expireUnfilledOrders error:", err);
   }
 }

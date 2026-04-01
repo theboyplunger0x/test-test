@@ -106,7 +106,7 @@ export type FollowStatus = {
 
 export type AppNotification = {
   id: string;
-  type: "market_resolved" | "new_follower" | "followed_big_trade" | "followed_trade" | "order_filled";
+  type: "market_resolved" | "new_follower" | "followed_big_trade" | "followed_trade" | "order_filled" | "order_expired";
   payload: Record<string, any>;
   read: boolean;
   created_at: string;
@@ -304,16 +304,19 @@ export const api = {
   getMarkets: (timeframe?: string) =>
     req<Market[]>(`/markets${timeframe ? `?timeframe=${timeframe}` : ""}`),
 
+  getDebates: (paper = false) =>
+    req<{ market: Market; shortCaller: { username: string; avatar_url: string | null; side: "short"; amount: string; message: string }; longCaller: { username: string; avatar_url: string | null; side: "long"; amount: string; message: string }; totalPool: number; ratio: number }[]>(`/markets/debates?paper=${paper}`),
+
   createMarket: (symbol: string, chain: string, timeframe: string, tagline: string, paper = false, ca?: string) =>
     req<Market>("/markets", {
       method: "POST",
       body: JSON.stringify({ symbol, chain, timeframe, tagline, paper, ca }),
     }),
 
-  placeBet: (marketId: string, side: "long" | "short", amount: number, paper = false, message?: string) =>
+  placeBet: (marketId: string, side: "long" | "short", amount: number, paper = false, message?: string, faded_position_id?: string) =>
     req<{ position: object; new_balance: string; new_paper_balance: string }>(`/markets/${marketId}/bet`, {
       method: "POST",
-      body: JSON.stringify({ side, amount, paper, message }),
+      body: JSON.stringify({ side, amount, paper, message, faded_position_id: faded_position_id || undefined }),
     }),
 
   getTokenFeed: (symbol: string) =>
@@ -322,8 +325,8 @@ export const api = {
   getMarketPositions: (marketId: string) =>
     req<any[]>(`/markets/${marketId}/positions`),
 
-  getRecentPositions: () =>
-    req<{ id: string; side: "long" | "short"; amount: string; message: string | null; placed_at: string; is_paper: boolean; username: string; avatar_url: string | null; tier: string; symbol: string; chain: string; timeframe: string; status: string; is_opener: boolean }[]>("/positions/recent"),
+  getRecentPositions: (paper = false) =>
+    req<{ id: string; side: "long" | "short"; amount: string; message: string | null; placed_at: string; is_paper: boolean; username: string; avatar_url: string | null; tier: string; market_id: string; symbol: string; chain: string; timeframe: string; status: string; winner_side: "long" | "short" | null; closes_at: string; is_opener: boolean }[]>(`/positions/recent?paper=${paper}`),
 
   getSymbolPositions: (symbol: string, paper = false) =>
     req<{ id: string; side: "long" | "short"; amount: string; message: string | null; placed_at: string; is_paper: boolean; username: string; avatar_url: string | null; tier: string; market_id: string; timeframe: string; status: string; winner_side: "long" | "short" | null; closes_at: string; is_opener: boolean }[]>(

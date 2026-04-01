@@ -27,6 +27,48 @@ export async function marketRoutes(app: FastifyInstance) {
     return rows;
   });
 
+  // GET /markets/debates — contested markets with top callers on each side
+  app.get("/markets/debates", async (req, reply) => {
+    const { paper } = req.query as any;
+    const isPaper = paper === "true";
+    // Find open markets where both pools > 0 and ratio between 30/70
+    const { rows: markets } = await db.query(
+      `SELECT m.*, u.username AS opener_username, u.avatar_url AS opener_avatar, u.tier AS opener_tier
+       FROM markets m
+       JOIN users u ON m.opener_id = u.id
+       WHERE m.status = 'open'
+         AND m.is_paper = $1
+         AND m.long_pool > 0 AND m.short_pool > 0
+         AND LEAST(m.long_pool, m.short_pool) / GREATEST(m.long_pool, m.short_pool) >= 0.3
+       ORDER BY (m.long_pool + m.short_pool) DESC
+       LIMIT 20`,
+      [isPaper]
+    );
+    // For each market, get the top caller on each side (highest amount with a message)
+    const debates = [];
+    for (const m of markets) {
+      const { rows: positions } = await db.query(
+        `SELECT p.side, p.amount, p.message, u.username, u.avatar_url
+         FROM positions p JOIN users u ON p.user_id = u.id
+         WHERE p.market_id = $1 AND p.message IS NOT NULL AND p.message != ''
+         ORDER BY p.amount DESC`,
+        [m.id]
+      );
+      const shortCaller = positions.find((p: any) => p.side === "short");
+      const longCaller  = positions.find((p: any) => p.side === "long");
+      if (!shortCaller || !longCaller) continue; // need both sides with messages
+      const total = parseFloat(m.long_pool) + parseFloat(m.short_pool);
+      debates.push({
+        market: m,
+        shortCaller,
+        longCaller,
+        totalPool: total,
+        ratio: parseFloat(m.short_pool) / total,
+      });
+    }
+    return debates;
+  });
+
   // GET /markets/:id
   app.get("/markets/:id", async (req, reply) => {
     const { id } = req.params as any;
@@ -80,7 +122,7 @@ export async function marketRoutes(app: FastifyInstance) {
   // POST /markets/:id/bet — 30 bets / minute per IP
   app.post("/markets/:id/bet", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const { id }   = req.params as any;
-    const { side, amount, message } = req.body as any;
+    const { side, amount, message, faded_position_id } = req.body as any;
     const user     = (req as any).user;
 
     if (!["long", "short"].includes(side)) return reply.status(400).send({ error: "side must be long or short" });
@@ -120,8 +162,8 @@ export async function marketRoutes(app: FastifyInstance) {
 
       // Record position with is_paper matching the market
       const { rows: [position] } = await client.query(
-        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, message) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [user.userId, id, side, amount, isPaper, message?.trim() || null]
+        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, message, faded_position_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [user.userId, id, side, amount, isPaper, message?.trim() || null, faded_position_id || null]
       );
 
       await client.query("COMMIT");
@@ -284,8 +326,30 @@ export async function marketRoutes(app: FastifyInstance) {
   // GET /positions/symbol/:symbol — bid history for a token (open + recent closed)
   app.get("/positions/symbol/:symbol", async (req, reply) => {
     const { symbol } = req.params as any;
-    const { paper } = req.query as any;
+    const { paper, username } = req.query as any;
     const isPaper = paper === "true";
+
+    if (username) {
+      // caller × token view
+      const { rows } = await db.query(
+        `SELECT p.id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
+                u.username, u.avatar_url, u.tier,
+                m.id AS market_id, m.timeframe, m.entry_price, m.exit_price,
+                m.status, m.winner_side, m.closes_at,
+                (m.opener_id = p.user_id) AS is_opener
+         FROM positions p
+         JOIN users u ON p.user_id = u.id
+         JOIN markets m ON p.market_id = m.id
+         WHERE m.symbol ILIKE $1 AND u.username ILIKE $2
+         ORDER BY p.placed_at DESC
+         LIMIT 50`,
+        [symbol, username]
+      );
+      const total = rows.length;
+      const wins  = rows.filter((r: any) => r.winner_side && r.side === r.winner_side).length;
+      return { positions: rows, total, wins };
+    }
+
     const { rows } = await db.query(
       `SELECT p.id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
               u.username, u.avatar_url, u.tier,
@@ -304,18 +368,23 @@ export async function marketRoutes(app: FastifyInstance) {
 
   // GET /positions/recent — latest positions with messages for the tape
   app.get("/positions/recent", async (req, reply) => {
+    const { paper } = req.query as any;
+    const isPaper = paper === "true";
     const { rows } = await db.query(
       `SELECT p.id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
               u.username, u.avatar_url, u.tier,
-              m.symbol, m.chain, m.timeframe, m.status,
+              m.id AS market_id, m.symbol, m.chain, m.timeframe, m.status,
+              m.winner_side, m.closes_at,
               (m.opener_id = p.user_id) AS is_opener
        FROM positions p
        JOIN users u ON p.user_id = u.id
        JOIN markets m ON p.market_id = m.id
        WHERE p.placed_at > NOW() - INTERVAL '48 hours'
          AND p.message IS NOT NULL AND p.message != ''
+         AND p.is_paper = $1
        ORDER BY p.placed_at DESC
-       LIMIT 60`
+       LIMIT 60`,
+      [isPaper]
     );
     return rows;
   });

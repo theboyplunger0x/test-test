@@ -433,7 +433,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
   );
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken, paperMode = false }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void; paperMode?: boolean }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -570,21 +570,16 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
     setClaiming(false);
   }
 
-  const realOrders  = orders.filter((o) => !o.isPaper);
-  const paperOrders = orders.filter((o) => o.isPaper);
+  const modeOrders = orders.filter((o) => o.isPaper === paperMode);
 
-  const active  = realOrders.filter((o) => o.status === "open" || o.status === "live");
-  const settled = realOrders.filter((o) => o.status === "won"  || o.status === "lost");
+  const active  = modeOrders.filter((o) => o.status === "open" || o.status === "live");
+  const settled = modeOrders.filter((o) => o.status === "won"  || o.status === "lost");
 
   const { sweeps: activeSweeps, solo: activeSolo } = groupBySweep(active);
-  const paperActive  = paperOrders.filter((o) => o.status === "open" || o.status === "live");
-  const paperSettled = paperOrders.filter((o) => o.status === "won"  || o.status === "lost");
 
   const grossWon    = settled.filter((o) => o.status === "won").reduce((s, o) => s + calcPayout(o), 0);
   const totalStaked = settled.reduce((s, o) => s + o.amount, 0);
   const pnl         = grossWon - totalStaked;
-
-  const hasPaper = paperOrders.length > 0;
 
   // theme tokens
   const T = {
@@ -804,57 +799,6 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           </div>
         )}
 
-        {/* Order History (filled / cancelled / expired intents) */}
-        <div>
-          <button
-            onClick={() => setShowOrderHistory(v => !v)}
-            className={`flex items-center gap-2 text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl} hover:opacity-80 transition-opacity`}
-          >
-            <span>Order History</span>
-            <span>{showOrderHistory ? "▲" : "▼"}</span>
-          </button>
-          <AnimatePresence>
-            {showOrderHistory && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                {orderHistory.length === 0 ? (
-                  <p className={`text-[13px] font-bold mb-3 ${T.muted}`}>No order history yet.</p>
-                ) : (
-                  <div className="space-y-2 mb-3">
-                    {orderHistory.map(o => {
-                      const isFilled    = o.status === "filled";
-                      const isCancelled = o.status === "cancelled";
-                      const statusColor = isFilled ? "text-emerald-400" : isCancelled ? T.muted : "text-amber-400";
-                      const statusLabel = isFilled ? "filled" : isCancelled ? "cancelled" : "expired";
-                      return (
-                        <div key={o.id} className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${T.cardBase} opacity-60`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={`text-[11px] font-black ${o.side === "short" ? "text-red-400" : "text-emerald-400"}`}>
-                              {o.side.toUpperCase()}
-                            </span>
-                            <span className={`text-[12px] font-bold truncate ${T.strong}`}>{o.symbol}</span>
-                            <span className={`text-[11px] font-mono ${T.muted}`}>{o.timeframe}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className={`text-[12px] font-black ${T.normal}`}>
-                              ${parseFloat(o.amount).toFixed(0)}
-                            </span>
-                            <span className={`text-[10px] font-black ${statusColor}`}>{statusLabel}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
         {/* Open positions */}
         <div>
           <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>
@@ -884,18 +828,6 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           </div>
         )}
 
-        {/* Paper positions */}
-        {hasPaper && (
-          <div>
-            <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>
-              Paper Trading {paperActive.length > 0 && <span className={`ml-1 ${T.muted}`}>· {paperActive.length} open</span>}
-            </p>
-            <div className="space-y-2">
-              {paperActive.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
-              {paperSettled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
-            </div>
-          </div>
-        )}
 
         {/* Empty state */}
         {!loading && orders.length === 0 && (

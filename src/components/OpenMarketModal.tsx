@@ -108,7 +108,7 @@ export default function OpenMarketModal({
         {/* Tagline */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <p className={`text-[10px] font-black uppercase tracking-widest ${labelCls}`}>Your call <span className={labelCls}>(optional)</span></p>
+            <p className={`text-[10px] font-black uppercase tracking-widest ${labelCls}`}>Your thesis</p>
             <span className={`text-[9px] font-bold tabular-nums ${tagline.length > 50 ? "text-amber-400" : labelCls}`}>{tagline.length}/60</span>
           </div>
           <input
@@ -123,7 +123,7 @@ export default function OpenMarketModal({
 
         {/* Side + first bet */}
         <div>
-          <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${labelCls}`}>Your first bet</p>
+          <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${labelCls}`}>Your position</p>
           <div className="flex gap-2 mb-3">
             <button onClick={() => setSide("short")}
               className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all border ${
@@ -173,7 +173,7 @@ export default function OpenMarketModal({
           className={`w-full py-3 rounded-xl text-[13px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
             paperMode ? "bg-yellow-400 text-black hover:bg-yellow-300" : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-black"
           }`}>
-          {loading ? "Opening market…" : paperMode ? `Open ${tf} market (paper)` : `Open ${tf} market`}
+          {loading ? "Posting call…" : paperMode ? `Make ${tf} call (paper)` : `Make ${tf} call`}
         </button>
       </motion.div>
     </div>

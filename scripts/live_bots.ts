@@ -1,12 +1,13 @@
 /**
  * live_bots.ts
- * Simulates 20 bots trading continuously for 10 minutes.
+ * Simulates 20 bots trading at a relaxed pace for 4 hours.
+ * Each bot acts every 4-7 minutes, staggered so only 2-4 fire at any given time.
  * Usage: BASE_URL=https://fud-markets-backend-production.up.railway.app npx tsx scripts/live_bots.ts
  */
 
 export {};
 const BASE = process.env.BASE_URL ?? "http://localhost:3001";
-const DURATION_MS = 24 * 60 * 60 * 1000;
+const DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const BOTS = [
   { username: "degen_alpha",    password: "botpass123" },
@@ -184,6 +185,10 @@ async function botLoop(bot: { username: string; password: string }, endAt: numbe
     return;
   }
 
+  // Stagger initial start: each bot waits 0-5 min before first action
+  const initialDelay = Math.floor(Math.random() * 5 * 60 * 1000);
+  await sleep(Math.min(initialDelay, endAt - Date.now()));
+
   while (Date.now() < endAt) {
     try {
       const action = await doAction(token);
@@ -191,8 +196,8 @@ async function botLoop(bot: { username: string; password: string }, endAt: numbe
     } catch (e: any) {
       // silently skip (insufficient balance, no liquidity, etc.)
     }
-    // Each bot waits 15–45s between actions to feel organic
-    const wait = 15000 + Math.floor(Math.random() * 30000);
+    // Each bot waits 4-7 min between actions — relaxed pace, ~3-5 bots active per window
+    const wait = 4 * 60 * 1000 + Math.floor(Math.random() * 3 * 60 * 1000);
     await sleep(Math.min(wait, endAt - Date.now()));
   }
 }
@@ -202,7 +207,7 @@ async function main() {
   console.log(`\n🤖 FUD.markets live bot simulation`);
   console.log(`   target:  ${BASE}`);
   console.log(`   bots:    ${BOTS.length}`);
-  console.log(`   runtime: 10 minutes\n`);
+  console.log(`   runtime: 4 hours (~3-5 bots active per 5-min window)\n`);
 
   // Login all bots first
   console.log("Logging in all bots...");
@@ -211,7 +216,7 @@ async function main() {
   // Stagger starts slightly so they don't all hit at once
   await Promise.all(loops);
 
-  console.log("\n✅ 10 minutes done.\n");
+  console.log("\n✅ 4 hours done.\n");
 }
 
 main().catch(console.error);

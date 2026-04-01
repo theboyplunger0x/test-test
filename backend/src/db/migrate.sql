@@ -10,7 +10,11 @@ CREATE TABLE IF NOT EXISTS tg_link_tokens (
   expires_at TIMESTAMPTZ NOT NULL
 );
 
--- v3: performance indexes
+-- v3: social fade link — connects a position to the call it's fading
+ALTER TABLE positions ADD COLUMN IF NOT EXISTS faded_position_id UUID REFERENCES positions(id);
+CREATE INDEX IF NOT EXISTS idx_positions_faded ON positions(faded_position_id) WHERE faded_position_id IS NOT NULL;
+
+-- v4: performance indexes
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS idx_users_username_trgm ON users USING gin(username gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_positions_user_paper ON positions(user_id, is_paper);
