@@ -12,6 +12,7 @@ interface Props {
   presets?:       number[];
   onSelectToken?: (symbol: string, chain: string) => void;
   onViewProfile?: (username: string) => void;
+  onBet?:         (id: string, side: "long" | "short", amount: number) => Promise<string | null>;
   shakingIds?:    Set<string>;
 }
 
@@ -23,9 +24,9 @@ function fmtPool(n: number): string {
 function fmtMult(m: number): string {
   if (!m || m <= 0) return "—";
   if (m >= 100) return "100x+";
-  if (m >= 10)  return `${Math.floor(m / 10) * 10}x`;
-  if (m >= 5)   return `${Math.floor(m)}x`;
-  return `${m.toFixed(1)}x`;
+  if (m >= 10)  return `${Math.floor(m)}x`;
+  if (m >= 2)   return `${m.toFixed(1)}x`;
+  return `${m.toFixed(2)}x`;
 }
 function multColor(m: number): string {
   if (!m || m <= 0) return "text-white/20";
@@ -439,7 +440,7 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
                 side === "short" ? "bg-red-500 hover:bg-red-400 text-white" :
                 dk ? "bg-white/6 text-white/20" : "bg-gray-100 text-gray-300"
               } disabled:opacity-50`}>
-              {loading ? "Sweeping…" : side ? `Sweep ${side === "long" ? "▲ Long" : "▼ Short"} $${amt > 0 ? amt : "—"}` : "Select a side"}
+              {loading ? "Executing…" : !side ? "Select a side" : side && amt > 0 && fillPreview.length === 0 && !bookLoading ? `Place order ${side === "long" ? "▲ Long" : "▼ Short"} $${amt}` : `Sweep ${side === "long" ? "▲ Long" : "▼ Short"} $${amt > 0 ? amt : "—"}`}
             </button>
 
             {/* Order book — collapsible */}
@@ -489,7 +490,9 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
 }
 
 // ── Live Market Card ──────────────────────────────────────────────────────────
-function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market; dk: boolean; onClick: () => void; onTrade: () => void; shaking?: boolean }) {
+const P2P_AMOUNTS = [10, 25, 50, 100];
+
+function MarketCard({ market, dk, onClick, onTrade, onBet, shaking, isP2PView, paperMode }: { market: Market; dk: boolean; onClick: () => void; onTrade: () => void; onBet?: (id: string, side: "long" | "short", amount: number) => Promise<string | null>; shaking?: boolean; isP2PView?: boolean; paperMode?: boolean }) {
   const longPool  = parseFloat(market.long_pool);
   const shortPool = parseFloat(market.short_pool);
   const total     = longPool + shortPool;
@@ -535,8 +538,35 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
   const shortMult = longPool  > 0 ? 1 + (longPool  * 0.95) / Math.max(shortPool, 5) : 1.95;
   const bestMult  = Math.max(longMult, shortMult);
   const bestSide  = longMult >= shortMult ? "LONG" : "SHORT";
+  const shortIsJuicy = longPool > shortPool * 2;
+  const longIsJuicy  = shortPool > longPool * 2;
 
-  const isHot = bestMult >= 15;
+  // P2P inline bet state
+  const [p2pSide, setP2pSide]       = useState<"long" | "short" | null>(null);
+  const [p2pCustom, setP2pCustom]   = useState("");
+  const [p2pLoading, setP2pLoading] = useState(false);
+  const [p2pError, setP2pError]     = useState("");
+
+  const handleP2pQuick = async (amount: number) => {
+    if (!p2pSide || !onBet) return;
+    setP2pLoading(true); setP2pError("");
+    const err = await onBet(market.id, p2pSide, amount);
+    setP2pLoading(false);
+    if (err) setP2pError(err);
+    else { setP2pSide(null); setP2pCustom(""); }
+  };
+
+  const handleP2pCustom = async () => {
+    const amt = parseFloat(p2pCustom);
+    if (!p2pSide || !amt || amt <= 0 || !onBet) return;
+    setP2pLoading(true); setP2pError("");
+    const err = await onBet(market.id, p2pSide, amt);
+    setP2pLoading(false);
+    if (err) setP2pError(err);
+    else { setP2pSide(null); setP2pCustom(""); }
+  };
+
+  const isHot = bestMult >= 15 && !isP2PView;
   // For hot cards: the majority side is the one with LOWER mult (more money there)
   const majoritySide  = bestSide === "LONG" ? "SHORT" : "LONG";
   const majorityPct   = bestSide === "LONG" ? shortPct : longPct;
@@ -618,54 +648,189 @@ function MarketCard({ market, dk, onClick, onTrade, shaking }: { market: Market;
       ) : (
         /* ── NORMAL CARD ── */
         <>
-          {/* Header: symbol + chain + timeframe | multiplier */}
-          <div className="flex items-start justify-between gap-2">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-2 w-full">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className={`text-[16px] font-black ${strong}`}>${market.symbol}</span>
-                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${chainCls}`}>{market.chain?.toUpperCase()}</span>
-                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-white/6 text-white/30" : "bg-gray-100 text-gray-400"}`}>{market.timeframe}</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[18px] font-black ${strong}`}>${market.symbol}</span>
               </div>
-              {/* Rotating message + user inline */}
-              <div className="min-h-[28px]">
-                <AnimatePresence mode="wait">
-                  {currentMsg && (
-                    <motion.div key={msgIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.3 }}>
-                      <p className={`text-[10px] italic line-clamp-2 leading-[14px] ${currentMsg.isOpener ? (dk ? "text-yellow-400/80" : "text-yellow-600") : muted}`}>
-                        "{currentMsg.text}"
-                        {currentMsg.user && (
-                          <span className={`not-italic ml-1 ${dk ? "text-white/20" : "text-gray-400"}`}>— {currentMsg.user}</span>
-                        )}
-                      </p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${chainCls}`}>{market.chain?.toUpperCase()}</span>
+                <span className={`text-[10px] font-mono ${muted}`}>@ ${(() => {
+                  const p = parseFloat(market.entry_price);
+                  if (p >= 1) return p.toFixed(2);
+                  return p.toPrecision(4);
+                })()}</span>
               </div>
             </div>
-            {/* Multiplier */}
-            <div className="text-right shrink-0">
+            <div className="text-right">
               <p className={`text-[18px] font-black tabular-nums leading-none ${multColor(bestMult)}`}>{fmtMult(bestMult)}</p>
+              <span className={`text-[12px] font-bold ${muted}`}>{market.timeframe}</span>
+              <p className={`text-[10px] mt-0.5 tabular-nums ${muted}`}>
+                {(() => {
+                  const ms = Math.max(0, new Date(market.closes_at).getTime() - Date.now());
+                  if (ms <= 0) return "expired";
+                  const s = Math.floor(ms / 1000);
+                  const m = Math.floor(s / 60);
+                  const h = Math.floor(m / 60);
+                  if (ms < 60_000) return `${s}s left`;
+                  if (ms < 60 * 60_000) return `${m}m left`;
+                  return `${h}h left`;
+                })()}
+              </p>
             </div>
           </div>
 
-          {/* Pool bar */}
-          <div className={`pt-2 border-t ${divCls} flex items-center gap-2`}>
-            <span className="text-[9px] font-black text-emerald-400 shrink-0">▲ {fmtPool(longPool)}</span>
-            <div className="flex-1 h-2 rounded-full overflow-hidden flex">
-              <motion.div initial={{ width: 0 }} animate={{ width: `${longPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
-                className="h-full bg-emerald-500" />
-              <motion.div initial={{ width: 0 }} animate={{ width: `${shortPct}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
-                className="h-full bg-red-500" />
-            </div>
-            <span className="text-[9px] font-black text-red-400 shrink-0">{fmtPool(shortPool)} ▼</span>
+          {/* Message */}
+          <div className="min-h-[28px] w-full">
+            <AnimatePresence mode="wait">
+              {currentMsg && (
+                <motion.div key={msgIdx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.3 }}>
+                  <div className="flex items-start gap-2">
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 mt-0.5 ${
+                      currentMsg.isOpener
+                        ? dk ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"
+                        : dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {currentMsg.user.charAt(0).toUpperCase()}
+                    </span>
+                    <p className={`text-[12px] italic leading-snug font-bold ${
+                      currentMsg.isOpener
+                        ? dk ? "text-yellow-400/80" : "text-yellow-600"
+                        : dk ? "text-white/60" : "text-gray-700"
+                    }`}>
+                      "{currentMsg.text}"
+                      {!currentMsg.isOpener && currentMsg.user && (
+                        <span className={`not-italic font-normal ml-1.5 text-[10px] ${dk ? "text-white/25" : "text-gray-400"}`}>— {currentMsg.user}</span>
+                      )}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Trade CTA */}
-          <button
-            onClick={e => { e.stopPropagation(); onTrade(); }}
-            className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-white text-black hover:bg-white/90 active:scale-95 transition-all">
-            Sweep
-          </button>
+          {/* Pool section */}
+          <div className={`w-full rounded-xl p-3 space-y-2.5 ${dk ? "bg-white/4" : "bg-gray-50"}`}>
+            <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
+              <motion.div animate={{ width: `${shortPct}%` }} transition={{ type: "spring", stiffness: 180, damping: 22 }}
+                className="h-full rounded-l-full bg-red-500" />
+              <motion.div animate={{ width: `${longPct}%` }} transition={{ type: "spring", stiffness: 180, damping: 22 }}
+                className="h-full rounded-r-full bg-emerald-500" />
+            </div>
+            <table className="w-full">
+              <tbody>
+                <tr>
+                  <td className="align-top">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] font-black text-red-400">▼ SHORT</span>
+                      {shortIsJuicy && <span className="text-[9px] font-bold text-yellow-500 bg-yellow-400/15 px-1.5 rounded-full">juicy</span>}
+                    </div>
+                    <span className={`text-[16px] font-black ${dk ? "text-white" : "text-gray-900"}`}>{fmtPool(shortPool)}</span>
+                    <p className={`text-[10px] font-bold ${muted}`}>→ {fmtMult(shortMult)}</p>
+                  </td>
+                  <td className="align-top text-right">
+                    <div className="flex items-center gap-1 justify-end">
+                      {longIsJuicy && <span className="text-[9px] font-bold text-yellow-500 bg-yellow-400/15 px-1.5 rounded-full">juicy</span>}
+                      <span className="text-[11px] font-black text-emerald-400">LONG ▲</span>
+                    </div>
+                    <span className={`text-[16px] font-black ${dk ? "text-white" : "text-gray-900"}`}>{fmtPool(longPool)}</span>
+                    <p className={`text-[10px] font-bold ${muted}`}>{fmtMult(longMult)} ←</p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* User + time */}
+          <div className={`flex justify-between text-[10px] font-bold ${muted}`}>
+            <span className="flex items-center gap-1.5">
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black ${dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500"}`}>
+                {(market.opener_username ?? "?").charAt(0).toUpperCase()}
+              </span>
+              {market.opener_username ?? "anon"}
+            </span>
+            <span>{(() => {
+              const s = Math.floor((Date.now() - new Date(market.created_at).getTime()) / 1000);
+              if (s < 60) return `${s}s ago`;
+              const m = Math.floor(s / 60);
+              if (m < 60) return `${m}m ago`;
+              return `${Math.floor(m / 60)}h ago`;
+            })()}</span>
+          </div>
+
+          {/* CTA */}
+          {onBet ? (
+            <AnimatePresence mode="wait">
+              {p2pSide === null ? (
+                <motion.div key="btns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1.5">
+                  {paperMode && (
+                    <div className="flex items-center gap-1.5 px-0.5">
+                      <span className="text-[10px] font-black text-yellow-500 bg-yellow-400/15 px-2 py-0.5 rounded-full">PAPER</span>
+                      <span className={`text-[10px] font-bold ${muted}`}>simulated bet — no real money</span>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <motion.button whileTap={{ scale: 0.94 }} onClick={e => { e.stopPropagation(); setP2pSide("short"); setP2pError(""); }}
+                      className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all border ${dk ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 border-red-500/20" : "bg-red-50 text-red-600 hover:bg-red-100 border-red-200"}`}>
+                      ▼ Short
+                    </motion.button>
+                    <motion.button whileTap={{ scale: 0.94 }} onClick={e => { e.stopPropagation(); setP2pSide("long"); setP2pError(""); }}
+                      className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all border ${dk ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"}`}>
+                      Long ▲
+                    </motion.button>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div key="picker" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2"
+                  onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center">
+                    <span className={`text-[12px] font-black ${p2pSide === "short" ? "text-red-400" : "text-emerald-400"}`}>
+                      {p2pSide === "short" ? "▼ Short" : "Long ▲"} · {p2pSide === "short" ? fmtMult(shortMult) : fmtMult(longMult)}
+                    </span>
+                    <button onClick={() => { setP2pSide(null); setP2pCustom(""); setP2pError(""); }}
+                      className={`text-[11px] font-bold ${dk ? "text-white/25 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>✕</button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {P2P_AMOUNTS.map(a => (
+                      <button key={a} onClick={() => handleP2pQuick(a)} disabled={p2pLoading}
+                        className={`py-2 rounded-xl text-[11px] font-black transition-all disabled:opacity-50 ${dk ? "bg-white/6 text-white/50 hover:bg-white/12 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-100"}`}>
+                        ${a}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <div className="relative flex-1">
+                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                      <input autoFocus type="number" placeholder="custom" value={p2pCustom}
+                        onChange={e => setP2pCustom(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleP2pCustom()}
+                        className={`w-full text-[12px] font-bold pl-6 pr-3 py-2 rounded-xl outline-none ${dk ? "bg-white/6 text-white placeholder:text-white/20 focus:bg-white/10" : "bg-gray-50 border border-gray-200 text-gray-900"}`} />
+                    </div>
+                    <button onClick={handleP2pCustom} disabled={p2pLoading}
+                      className={`px-4 py-2 rounded-xl text-[12px] font-black transition-all disabled:opacity-50 ${
+                        p2pSide === "short"
+                          ? dk ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-red-50 text-red-600 hover:bg-red-100"
+                          : dk ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                      }`}>
+                      {p2pLoading ? "…" : "Add"}
+                    </button>
+                  </div>
+                  {p2pError && (
+                    <p className={`text-[11px] font-bold px-2 py-1.5 rounded-lg ${dk ? "text-red-400 bg-red-500/10" : "text-red-600 bg-red-50"}`}>
+                      {p2pError}
+                    </p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); onTrade(); }}
+              className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-white text-black hover:bg-white/90 active:scale-95 transition-all">
+              Trade
+            </button>
+          )}
         </>
       )}
 
@@ -774,7 +939,7 @@ function OBCard({ entry, dk, onClick }: { entry: OBEntry; dk: boolean; onClick: 
             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-600"}`}>ORDER BOOK</span>
           </div>
           {/* Waiting traders */}
-          <div className="min-h-[28px]">
+          <div className="min-h-[28px] w-full">
             {waiters.length > 0 && (
               <p className={`text-[10px] line-clamp-2 leading-[14px] ${muted}`}>
                 {waiters.map((w, i) => (
@@ -814,7 +979,10 @@ function OBCard({ entry, dk, onClick }: { entry: OBEntry; dk: boolean; onClick: 
   );
 }
 
-const TIMEFRAMES = ["all", "1m", "5m", "15m", "1h", "4h", "24h"];
+const MARKET_FILTERS = ["all", "hot", "sweep", "p2p"] as const;
+type MarketFilter = typeof MARKET_FILTERS[number];
+const FILTER_LABELS: Record<MarketFilter, string> = { all: "All", hot: "Hot X's", sweep: "Sweep", p2p: "P2P" };
+const HOT_THRESHOLD = 5; // multiplier above this = hot
 
 // ── Markets Tape Sidebar ───────────────────────────────────────────────────────
 type TapeEntry = { uid: string; symbol: string; chain: string; timeframe: string; side: "long" | "short"; amount: number; message: string; user: string; ts: number; isOpener: boolean; isOpen: boolean };
@@ -914,27 +1082,46 @@ function MarketsTape({ dk, onSelectToken, onViewProfile }: { dk: boolean; onSele
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, shakingIds }: Props) {
-  const [selectedTf, setSelectedTf]       = useState<string>("all");
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds }: Props) {
+  const [selectedFilter, setSelectedFilter] = useState<MarketFilter>("all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 
   const strong  = dk ? "text-white"     : "text-gray-900";
   const muted   = dk ? "text-white/30"  : "text-gray-400";
   const divider = dk ? "border-white/6" : "border-gray-200";
 
-  const openMarkets = liveMarkets.filter(m => m.status === "open");
+  const openMarkets = liveMarkets.filter(m => m.status === "open" && (parseFloat(m.long_pool) + parseFloat(m.short_pool)) > 0);
 
   // Hero: pick market with highest pool
   const hero = [...openMarkets].sort((a, b) =>
     (parseFloat(b.long_pool) + parseFloat(b.short_pool)) - (parseFloat(a.long_pool) + parseFloat(a.short_pool))
   )[0];
 
-  // Filter markets by timeframe
-  const filteredMarkets = selectedTf === "all"
-    ? openMarkets
-    : openMarkets.filter(m => m.timeframe === selectedTf);
+  // Compute multiplier for each market
+  const marketsWithMult = openMarkets.map(m => {
+    const lp = parseFloat(m.long_pool);
+    const sp = parseFloat(m.short_pool);
+    const longMult  = sp > 0 ? 1 + (sp * 0.95) / Math.max(lp, 5) : 1.95;
+    const shortMult = lp > 0 ? 1 + (lp * 0.95) / Math.max(sp, 5) : 1.95;
+    const bestMult = Math.max(longMult, shortMult);
+    return { ...m, bestMult };
+  });
 
-  const hasGrid = filteredMarkets.length > 0;
+  // Filter by category
+  const filteredMarkets = selectedFilter === "all"
+    ? marketsWithMult
+    : selectedFilter === "hot"
+    ? marketsWithMult.filter(m => m.bestMult >= HOT_THRESHOLD)
+    : selectedFilter === "sweep"
+    ? marketsWithMult.filter(m => !!m.sweep_id)
+    : marketsWithMult; // p2p = all individual markets
+
+  // Sort: by recent activity in "all", by multiplier in "hot"
+  const sortedMarkets = selectedFilter === "hot"
+    ? [...filteredMarkets].sort((a, b) => b.bestMult - a.bestMult)
+    : filteredMarkets;
+
+  const hasGrid = sortedMarkets.length > 0;
 
   return (
     <>
@@ -945,7 +1132,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
         {/* Hero row */}
         {hero ? (
           <div className="flex gap-4 items-start">
-            <HeroCard market={hero} dk={dk} onTrade={() => onSelectToken?.(hero.symbol, hero.chain)} />
+            <HeroCard market={hero} dk={dk} onTrade={() => setTradeMarket(hero)} />
             <div className="hidden lg:block">
               <RightPanel dk={dk} paperMode={paperMode} onSelectToken={onSelectToken} onViewProfile={onViewProfile} />
             </div>
@@ -962,21 +1149,18 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
         {hasGrid && (
           <>
             <div className={`flex items-center justify-between border-b ${divider} pb-3`}>
-              <div className="flex items-center gap-3">
-                <h2 className={`text-[16px] font-black ${strong}`}>All Markets</h2>
-              </div>
-              {/* Timeframe pills */}
+              <h2 className={`text-[16px] font-black ${strong}`}>All Markets</h2>
               <div className="flex items-center gap-1">
-                {TIMEFRAMES.map(tf => {
-                  const active = tf === selectedTf;
+                {MARKET_FILTERS.map(f => {
+                  const active = f === selectedFilter;
                   return (
-                    <button key={tf} onClick={() => setSelectedTf(tf)}
-                      className={`text-[12px] px-3 py-1.5 rounded-xl font-bold transition-all ${
+                    <button key={f} onClick={() => setSelectedFilter(f)}
+                      className={`text-[12px] px-3 py-1.5 rounded-xl font-black transition-all ${
                         active
-                          ? dk ? "bg-white/15 text-white" : "bg-gray-900 text-white"
+                          ? f === "hot" ? "bg-amber-400/20 text-amber-400" : dk ? "bg-white/15 text-white" : "bg-gray-900 text-white"
                           : dk ? "text-white/40 hover:text-white/70 hover:bg-white/6" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
                       }`}>
-                      {tf === "all" ? "All" : tf}
+                      {FILTER_LABELS[f]}
                     </button>
                   );
                 })}
@@ -984,9 +1168,9 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {filteredMarkets.map((m, i) => (
+              {sortedMarkets.map((m, i) => (
                 <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
-                  <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} shaking={shakingIds?.has(m.id)} />
+                  <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} onBet={onBet} shaking={shakingIds?.has(m.id)} isP2PView={selectedFilter === "p2p"} paperMode={paperMode} />
                 </motion.div>
               ))}
             </div>

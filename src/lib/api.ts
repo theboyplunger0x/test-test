@@ -155,6 +155,7 @@ export type Market = {
   exit_price?: string | null;
   winner_side?: "long" | "short" | null;
   is_paper: boolean;
+  sweep_id?: string | null;
   opener_username?: string;
   opener_avatar?: string;
   opener_tier?: string;

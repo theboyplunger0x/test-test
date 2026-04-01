@@ -1016,6 +1016,7 @@ export default function FeedPage() {
                 handleCoinClick(symbol, chain);
               }}
               onViewProfile={(u) => setProfileUser(u)}
+              onBet={handleAdd}
               shakingIds={shakingIds}
             />
           </motion.div>
