@@ -445,9 +445,6 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
   const [claimDone, setClaimDone]     = useState(false);
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
   const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
-  const [pendingExpanded, setPendingExpanded] = useState(false);
-  const [historyExpanded, setHistoryExpanded] = useState(false);
-  const [accountExpanded, setAccountExpanded] = useState(false);
   const [orderHistory, setOrderHistory]   = useState<PendingOrder[]>([]);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
 
@@ -601,124 +598,216 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
   return (
     <>
       <ProfileHeader dk={dk} onViewProfile={onViewOwnProfile} onUserUpdate={onUserUpdate} />
-      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
-        {/* Stats row: Balance + P&L + Win Rate */}
+        {/* Balance + P&L */}
         <div className="flex gap-2">
-          <div className={`flex-1 rounded-xl border px-3 py-2.5 ${T.statBox}`}>
-            <p className={`text-[9px] font-black uppercase tracking-widest ${T.sectionLbl}`}>Balance</p>
-            <p className={`text-[18px] font-black ${T.strong}`}>${balance.toFixed(0)}</p>
-          </div>
-          <div className={`flex-1 rounded-xl border px-3 py-2.5 ${T.statBox}`}>
-            <p className={`text-[9px] font-black uppercase tracking-widest ${T.sectionLbl}`}>P&L</p>
-            <p className={`text-[18px] font-black ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {settled.length === 0 ? "—" : `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(0)}`}
+          <div className={`flex-1 rounded-2xl border px-4 py-3 ${T.statBox}`}>
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${T.sectionLbl}`}>Balance</p>
+            <p className={`text-[22px] font-black ${T.strong}`}>
+              ${balance.toFixed(2)}
             </p>
           </div>
-          <div className={`flex-1 rounded-xl border px-3 py-2.5 ${T.statBox}`}>
-            <p className={`text-[9px] font-black uppercase tracking-widest ${T.sectionLbl}`}>Win Rate</p>
-            <p className={`text-[18px] font-black ${T.strong}`}>
-              {settled.length === 0 ? "—" : `${Math.round((settled.filter(o => o.status === "won").length / settled.length) * 100)}%`}
+          <div className={`flex-1 rounded-2xl border px-4 py-3 ${T.statBox}`}>
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${T.sectionLbl}`}>All-time P&L</p>
+            <p className={`text-[22px] font-black ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {settled.length === 0 ? "—" : `${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)}`}
             </p>
           </div>
         </div>
 
-        {/* Social links — inline compact */}
-        <div className="flex gap-2">
-          {xUsername ? (
-            <div className={`flex-1 flex items-center gap-1.5 px-3 py-2 rounded-xl border ${dk ? "border-white/8 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className={T.muted}><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              <span className={`text-[11px] font-bold truncate ${T.muted}`}>@{xUsername}</span>
-            </div>
-          ) : (
-            <button onClick={async () => { try { const { url } = await api.getXAuthUrl(); window.location.href = url; } catch {} }}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-black ${dk ? "border-white/10 text-white/30 hover:text-white/60" : "border-gray-200 text-gray-400 hover:text-gray-600"}`}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              Connect X
-            </button>
-          )}
-          {telegramUsername ? (
-            <div className={`flex-1 flex items-center gap-1.5 px-3 py-2 rounded-xl border ${dk ? "border-white/8 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className={T.muted}><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/></svg>
-              <span className={`text-[11px] font-bold truncate ${T.muted}`}>@{telegramUsername}</span>
-            </div>
-          ) : (
-            <button onClick={async () => { try { const { token } = await api.tgInitLink(); window.open(`https://t.me/FUDmarkets_BOT?start=link_${token}`, "_blank"); onTelegramConnect?.(); } catch {} }}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-black ${dk ? "border-sky-500/20 text-sky-400/60 hover:text-sky-400" : "border-sky-200 text-sky-500 hover:text-sky-600"}`}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/></svg>
-              Telegram
-            </button>
-          )}
-        </div>
-
-        {/* Pending Orders — collapsed by default */}
-        {pendingOrders.length > 0 && (() => {
-          const [expanded, setExpanded] = [pendingExpanded, setPendingExpanded];
+        {/* Tier + Claim */}
+        {referral && (() => {
+          const claimable = Number(referral.claimable_usd);
+          const hasRewards = claimable > 0;
+          const tierLabel = referral.tier === "elite" ? "Elite" : referral.tier === "top" ? "Top" : referral.tier === "pro" ? "Pro" : "Basic";
+          const rebate    = referral.tier === "elite" ? "25% fee rebate" : referral.tier === "top" ? "20% fee rebate" : referral.tier === "pro" ? "10% fee rebate" : "5% fee rebate";
           return (
-            <div>
-              <button onClick={() => setExpanded(!expanded)}
-                className={`flex items-center justify-between w-full mb-2`}>
-                <p className={`text-[10px] font-black tracking-widest uppercase ${T.sectionLbl}`}>
-                  Pending Orders · <span className={T.muted}>{pendingOrders.length}</span>
-                </p>
-                <span className={`text-[10px] font-bold transition-transform ${expanded ? "rotate-180" : ""} ${T.muted}`}>▾</span>
-              </button>
-              <AnimatePresence>
-                {expanded && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                    <div className="space-y-2">
-                      {pendingOrders.map(o => (
-                        <div key={o.id} className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${T.cardBase}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={`text-[11px] font-black ${o.side === "short" ? "text-red-400" : "text-emerald-400"}`}>
-                              {o.side.toUpperCase()}
-                            </span>
-                            <span className={`text-[12px] font-bold truncate ${T.strong}`}>{o.symbol}</span>
-                            <span className={`text-[11px] font-mono ${T.muted}`}>{o.timeframe}</span>
-                            {o.status === "partially_filled" && (
-                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${dk ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
-                                partial
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className={`text-[12px] font-black ${T.normal}`}>
-                              ${parseFloat(o.remaining_amount).toFixed(0)}
-                            </span>
-                            <button
-                              onClick={() => toggleAutoReopen(o.id, o.auto_reopen)}
-                              title={o.auto_reopen ? "Auto-reopen ON" : "Auto-reopen OFF"}
-                              className={`text-[13px] px-1.5 py-0.5 rounded-lg transition-colors ${
-                                o.auto_reopen
-                                  ? dk ? "text-white/70 bg-white/10 hover:bg-white/5" : "text-gray-700 bg-gray-200 hover:bg-gray-100"
-                                  : dk ? "text-white/20 bg-transparent hover:text-white/50" : "text-gray-300 bg-transparent hover:text-gray-500"
-                              }`}>↻</button>
-                            <button
-                              onClick={() => cancelPendingOrder(o.id)}
-                              disabled={cancellingOrder === o.id}
-                              className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors ${dk ? "bg-white/6 text-white/40 hover:bg-red-500/15 hover:text-red-400" : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"}`}>
-                              {cancellingOrder === o.id ? "…" : "cancel"}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div className={`rounded-2xl border px-4 py-3 transition-all ${
+              hasRewards
+                ? dk ? "bg-emerald-500/10 border-emerald-500/20" : "bg-emerald-50 border-emerald-200"
+                : T.statBox
+            }`}>
+              {/* tier row */}
+              <div className="flex items-center gap-1.5 mb-3">
+                <TierBadge tier={referral.tier} tgUsername={telegramUsername} />
+                <span className={`text-[11px] font-black ${T.strong}`}>{tierLabel}</span>
+                <span className={`text-[10px] ${T.muted}`}>· {rebate}</span>
+              </div>
+              {/* pending rewards + claim */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${
+                    hasRewards ? dk ? "text-emerald-400/70" : "text-emerald-600/70" : T.muted
+                  }`}>Pending rewards</p>
+                  <p className={`text-[22px] font-black ${hasRewards ? dk ? "text-emerald-400" : "text-emerald-600" : T.muted}`}>
+                    ${claimable.toFixed(2)}
+                  </p>
+                </div>
+                <button
+                  onClick={handleClaim}
+                  disabled={claiming || !hasRewards}
+                  className={`px-5 py-2.5 rounded-xl text-[13px] font-black transition-all ${
+                    claimDone   ? "bg-emerald-500 text-white" :
+                    claiming    ? "bg-emerald-500/40 text-white/50 cursor-not-allowed" :
+                    hasRewards  ? "bg-emerald-500 hover:bg-emerald-400 text-white" :
+                    dk          ? "bg-white/5 text-white/20 cursor-not-allowed" :
+                                  "bg-gray-100 text-gray-300 cursor-not-allowed"
+                  }`}
+                >
+                  {claimDone ? "✓ Claimed!" : claiming ? "Claiming..." : "Claim"}
+                </button>
+              </div>
             </div>
           );
         })()}
 
-        {/* Active Calls — always visible */}
+        {/* Withdraw button */}
+        <button
+          onClick={() => setShowWithdraw(true)}
+          className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all ${
+            dk
+              ? "border-white/8 bg-white/[0.02] text-white/50 hover:bg-white/6 hover:text-white/80"
+              : "border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
+          }`}
+        >
+          Withdraw →
+        </button>
+
+        {/* Connect Telegram */}
+        {telegramUsername ? (
+          <div className={`group w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between cursor-pointer ${
+            dk ? "border-white/8 bg-white/[0.02] text-white/60 hover:border-red-500/30 hover:bg-red-500/5" : "border-gray-200 bg-gray-50 text-gray-500 hover:border-red-200 hover:bg-red-50"
+          }`} onClick={onDisconnectTelegram}>
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
+              </svg>
+              @{telegramUsername}
+            </span>
+            <span className={`text-[11px] font-bold transition-colors group-hover:text-red-400 ${dk ? "text-white/30" : "text-gray-400"}`}>
+              <span className="group-hover:hidden">connected ✓</span>
+              <span className="hidden group-hover:inline">disconnect</span>
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={async () => {
+              try {
+                const { token } = await api.tgInitLink();
+                window.open(`https://t.me/FUDmarkets_BOT?start=link_${token}`, "_blank");
+                onTelegramConnect?.();
+              } catch (e: any) {
+                alert(e.message ?? "Error connecting Telegram");
+              }
+            }}
+            className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+              dk
+                ? "border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20"
+                : "border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.247l-2.01 9.468c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.48l-2.95-.924c-.64-.203-.653-.64.136-.953l11.52-4.443c.537-.194 1.006.13.836.952l-.46-.865z"/>
+            </svg>
+            Connect Telegram
+          </button>
+        )}
+
+        {/* Connect X */}
+        {xUsername ? (
+          <div className={`group w-full py-3 px-4 rounded-2xl text-[12px] font-black border flex items-center justify-between cursor-pointer ${
+            dk ? "border-white/8 bg-white/[0.02] text-white/60 hover:border-red-500/30 hover:bg-red-500/5" : "border-gray-200 bg-gray-50 text-gray-500 hover:border-red-200 hover:bg-red-50"
+          }`} onClick={onDisconnectX}>
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              @{xUsername}
+            </span>
+            <span className={`text-[11px] font-bold transition-colors group-hover:text-red-400 ${dk ? "text-white/30" : "text-gray-400"}`}>
+              <span className="group-hover:hidden">connected ✓</span>
+              <span className="hidden group-hover:inline">disconnect</span>
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={async () => {
+              try {
+                const { url } = await api.getXAuthUrl();
+                window.location.href = url;
+              } catch (e: any) {
+                alert(e.message ?? "Error connecting X");
+              }
+            }}
+            className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+              dk
+                ? "border-white/20 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                : "border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            Connect X
+          </button>
+        )}
+
+        {/* Pending Orders (order book intents) */}
+        {pendingOrders.length > 0 && (
+          <div>
+            <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>
+              Pending Orders · <span className={T.muted}>{pendingOrders.length}</span>
+            </p>
+            <div className="space-y-2">
+              {pendingOrders.map(o => (
+                <div key={o.id} className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${T.cardBase}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-[11px] font-black ${o.side === "short" ? "text-red-400" : "text-emerald-400"}`}>
+                      {o.side.toUpperCase()}
+                    </span>
+                    <span className={`text-[12px] font-bold truncate ${T.strong}`}>{o.symbol}</span>
+                    <span className={`text-[11px] font-mono ${T.muted}`}>{o.timeframe}</span>
+                    {o.status === "partially_filled" && (
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${dk ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
+                        partial
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[12px] font-black ${T.normal}`}>
+                      ${parseFloat(o.remaining_amount).toFixed(0)}
+                    </span>
+                    <button
+                      onClick={() => toggleAutoReopen(o.id, o.auto_reopen)}
+                      title={o.auto_reopen ? "Auto-reopen ON — click to disable" : "Auto-reopen OFF — click to enable"}
+                      className={`text-[13px] px-1.5 py-0.5 rounded-lg transition-colors ${
+                        o.auto_reopen
+                          ? dk ? "text-white/70 bg-white/10 hover:bg-white/5" : "text-gray-700 bg-gray-200 hover:bg-gray-100"
+                          : dk ? "text-white/20 bg-transparent hover:text-white/50" : "text-gray-300 bg-transparent hover:text-gray-500"
+                      }`}
+                    >↻</button>
+                    <button
+                      onClick={() => cancelPendingOrder(o.id)}
+                      disabled={cancellingOrder === o.id}
+                      className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors
+                        ${dk ? "bg-white/6 text-white/40 hover:bg-red-500/15 hover:text-red-400"
+                              : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"}`}
+                    >
+                      {cancellingOrder === o.id ? "…" : "cancel"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Open positions */}
         <div>
-          <p className={`text-[10px] font-black tracking-widest uppercase mb-2 ${T.sectionLbl}`}>
-            Active Calls {active.length > 0 && <span className={T.muted}>· {active.length}</span>}
+          <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>
+            Open Positions {active.length > 0 && <span className={`ml-1 ${T.muted}`}>· {active.length}</span>}
           </p>
           {loading ? (
-            <p className={`text-[12px] font-bold ${T.muted}`}>Loading…</p>
+            <p className={`text-[13px] font-bold ${T.muted}`}>Loading…</p>
           ) : active.length === 0 ? (
-            <p className={`text-[12px] font-bold ${T.muted}`}>No active calls.</p>
+            <p className={`text-[13px] font-bold ${T.muted}`}>No open positions.</p>
           ) : (
             <div className="space-y-2">
               {activeSweeps.map(g => (
@@ -729,75 +818,21 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           )}
         </div>
 
-        {/* History — collapsed by default */}
+        {/* History */}
         {settled.length > 0 && (
           <div>
-            <button onClick={() => setHistoryExpanded(!historyExpanded)}
-              className="flex items-center justify-between w-full mb-2">
-              <p className={`text-[10px] font-black tracking-widest uppercase ${T.sectionLbl}`}>
-                History · <span className={T.muted}>{settled.length}</span>
-              </p>
-              <span className={`text-[10px] font-bold transition-transform ${historyExpanded ? "rotate-180" : ""} ${T.muted}`}>▾</span>
-            </button>
-            <AnimatePresence>
-              {historyExpanded && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                  <div className="space-y-2">
-                    {settled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>History</p>
+            <div className="space-y-2">
+              {settled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
+            </div>
           </div>
         )}
 
 
-        {/* Account — collapsible */}
-        <div>
-          <button onClick={() => setAccountExpanded(!accountExpanded)}
-            className="flex items-center justify-between w-full mb-2">
-            <p className={`text-[10px] font-black tracking-widest uppercase ${T.sectionLbl}`}>Account</p>
-            <span className={`text-[10px] font-bold transition-transform ${accountExpanded ? "rotate-180" : ""} ${T.muted}`}>▾</span>
-          </button>
-          <AnimatePresence>
-            {accountExpanded && (
-              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden space-y-3">
-                {/* Tier + Claim */}
-                {referral && (() => {
-                  const claimable = Number(referral.claimable_usd);
-                  const hasRewards = claimable > 0;
-                  const tierLabel = referral.tier === "elite" ? "Elite" : referral.tier === "top" ? "Top" : referral.tier === "pro" ? "Pro" : "Basic";
-                  return (
-                    <div className={`rounded-xl border px-3 py-2.5 ${hasRewards ? dk ? "bg-emerald-500/10 border-emerald-500/20" : "bg-emerald-50 border-emerald-200" : T.statBox}`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <TierBadge tier={referral.tier} tgUsername={telegramUsername} />
-                            <span className={`text-[11px] font-black ${T.strong}`}>{tierLabel}</span>
-                          </div>
-                          <p className={`text-[14px] font-black ${hasRewards ? "text-emerald-400" : T.muted}`}>${claimable.toFixed(2)} pending</p>
-                        </div>
-                        <button onClick={handleClaim} disabled={claiming || !hasRewards}
-                          className={`px-4 py-2 rounded-xl text-[11px] font-black ${hasRewards ? "bg-emerald-500 text-white hover:bg-emerald-400" : dk ? "bg-white/5 text-white/20" : "bg-gray-100 text-gray-300"}`}>
-                          {claimDone ? "✓" : claiming ? "…" : "Claim"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <button onClick={() => setShowWithdraw(true)}
-                  className={`w-full py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest border ${dk ? "border-white/8 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-600"}`}>
-                  Withdraw →
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
         {/* Empty state */}
         {!loading && orders.length === 0 && (
-          <p className={`text-[12px] font-bold ${T.muted}`}>
-            No calls yet. Head to the Feed and make your first call.
+          <p className={`text-[13px] font-bold ${T.muted}`}>
+            No bets yet. Head to the Feed and make your first call.
           </p>
         )}
       </div>

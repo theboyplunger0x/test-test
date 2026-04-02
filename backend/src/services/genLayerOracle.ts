@@ -45,28 +45,49 @@ export async function getPriceFromGenLayer(symbol: string, chain: string): Promi
   const client = getClient();
   const oracleCode = readFileSync(ORACLE_PATH, "utf-8");
 
+  // Step 1: Deploy the oracle contract
   console.log(`[genlayer] Deploying price oracle for ${symbol}/${chain}...`);
-
-  const hash = await client.deployContract({
+  const deployHash = await client.deployContract({
     code: oracleCode,
     args: [symbol, chain],
-    leaderOnly: false,   // all validators must agree
+    leaderOnly: false,
   });
 
-  console.log(`[genlayer] TX: ${hash} — awaiting consensus...`);
-
-  const receipt = await client.waitForTransactionReceipt({
-    hash,
-    status: "ACCEPTED",
+  console.log(`[genlayer] Deploy TX: ${deployHash}`);
+  const deployReceipt = await client.waitForTransactionReceipt({
+    hash: deployHash,
+    status: "FINALIZED",
     retries: 30,
     interval: 2000,
   });
 
-  const oracleAddress = receipt.data?.contract_address;
-  if (!oracleAddress) {
-    throw new Error(`GenLayer oracle failed — no contract address in receipt`);
-  }
+  const oracleAddress = deployReceipt.data?.contract_address;
+  if (!oracleAddress) throw new Error(`GenLayer deploy failed — no contract address`);
 
+  // Check if deploy execution succeeded
+  const execResult = (deployReceipt as any).consensus_data?.leader_receipt?.[0]?.execution_result;
+  if (execResult === "ERROR") throw new Error(`GenLayer deploy execution error`);
+
+  console.log(`[genlayer] Contract deployed @ ${oracleAddress}`);
+
+  // Step 2: Call resolve() to fetch price via DexScreener + LLM consensus
+  console.log(`[genlayer] Calling resolve()...`);
+  const resolveHash = await client.writeContract({
+    address: oracleAddress,
+    functionName: "resolve",
+    args: [],
+    leaderOnly: true, // leader-only for speed on studionet
+  });
+
+  console.log(`[genlayer] Resolve TX: ${resolveHash}`);
+  await client.waitForTransactionReceipt({
+    hash: resolveHash,
+    status: "FINALIZED",
+    retries: 60,
+    interval: 3000,
+  });
+
+  // Step 3: Read the resolved price
   const result = await client.readContract({
     address: oracleAddress,
     functionName: "get_price",
@@ -76,7 +97,7 @@ export async function getPriceFromGenLayer(symbol: string, chain: string): Promi
   const price = Number(result.price_usd);
   if (!price || price <= 0) throw new Error(`GenLayer returned invalid price: ${result.price_usd}`);
 
-  console.log(`[genlayer] ${symbol} = $${price} (consensus @ ${oracleAddress})`);
+  console.log(`[genlayer] ${symbol} = $${price} (oracle @ ${oracleAddress})`);
   return price;
 }
 

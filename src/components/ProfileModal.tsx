@@ -199,7 +199,7 @@ export default function ProfileModal({
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 mb-4">
               <div className={`rounded-2xl px-3 py-2.5 text-center ${dk ? "bg-white/5" : "bg-gray-50"}`}>
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Calls</p>
+                <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Bets</p>
                 <p className={`text-[18px] font-black ${strong}`}>{profile.total_bets}</p>
               </div>
               <div className={`rounded-2xl px-3 py-2.5 text-center ${dk ? "bg-white/5" : "bg-gray-50"}`}>

@@ -17,7 +17,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.get("/users/:username", async (req, reply) => {
     const { username } = req.params as any;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, avatar_url, bio, tier, created_at, x_username FROM users WHERE username = $1`,
+      `SELECT id, username, avatar_url, bio, tier, created_at, x_username, balance_usd, paper_balance_usd FROM users WHERE username = $1`,
       [username]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
@@ -29,15 +29,15 @@ export async function userRoutes(app: FastifyInstance) {
       [user.id]
     );
 
-    // Stats from non-paper settled positions
+    // Total bets = all positions ever; wins/volume = from resolved only
     const { rows: [stats] } = await db.query(
       `SELECT
-        COUNT(p.id)::int AS total_bets,
+        (SELECT COUNT(*)::int FROM positions WHERE user_id = $1) AS total_bets,
         COUNT(CASE WHEN m.winner_side = p.side THEN 1 END)::int AS wins,
         COALESCE(SUM(p.amount), 0) AS volume
        FROM positions p
        JOIN markets m ON m.id = p.market_id
-       WHERE p.user_id = $1 AND p.is_paper = false AND m.status = 'resolved'`,
+       WHERE p.user_id = $1 AND m.status = 'resolved'`,
       [user.id]
     );
 
@@ -79,6 +79,8 @@ export async function userRoutes(app: FastifyInstance) {
       wins: stats?.wins ?? 0,
       pnl: pnl.toFixed(2),
       volume: volume.toFixed(2),
+      balance_usd: user.balance_usd,
+      paper_balance_usd: user.paper_balance_usd,
       follower_count: counts?.follower_count ?? 0,
       following_count: counts?.following_count ?? 0,
       recent_trades: recentTrades,
