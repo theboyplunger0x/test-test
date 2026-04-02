@@ -50,6 +50,7 @@ export default function ProfileModal({
   currentUser?: string;
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(true);
   const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
@@ -117,7 +118,7 @@ export default function ProfileModal({
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 40, opacity: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className={`relative w-full max-w-sm rounded-3xl border p-5 ${bg} shadow-2xl`}
+        className={`relative w-full max-w-sm rounded-3xl border p-5 ${bg} shadow-2xl max-h-[80vh] overflow-y-auto`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -198,7 +199,7 @@ export default function ProfileModal({
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 mb-4">
               <div className={`rounded-2xl px-3 py-2.5 text-center ${dk ? "bg-white/5" : "bg-gray-50"}`}>
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Bets</p>
+                <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Calls</p>
                 <p className={`text-[18px] font-black ${strong}`}>{profile.total_bets}</p>
               </div>
               <div className={`rounded-2xl px-3 py-2.5 text-center ${dk ? "bg-white/5" : "bg-gray-50"}`}>
@@ -220,35 +221,38 @@ export default function ProfileModal({
               </button>
             )}
 
-            {/* Recent trades */}
-            {profile.recent_trades.length > 0 && (
-              <div>
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${muted}`}>Recent trades</p>
-                <div className="space-y-1.5">
-                  {profile.recent_trades.map((t, i) => {
-                    const won = t.status === "resolved" && t.winner_side === t.side;
-                    const lost = t.status === "resolved" && t.winner_side !== t.side;
-                    return (
-                      <div key={i} className={`flex items-center justify-between rounded-xl px-3 py-2 ${dk ? "bg-white/[0.03]" : "bg-gray-50"}`}>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[11px] font-black ${t.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
-                            {t.side === "long" ? "▲" : "▼"}
-                          </span>
-                          <span className={`text-[12px] font-black ${strong}`}>{t.symbol}</span>
-                          <span className={`text-[10px] ${muted}`}>{t.timeframe}</span>
+            {/* Active calls — collapsed by default */}
+            {(() => {
+              const openTrades = profile.recent_trades.filter(t => t.status === "open");
+              if (openTrades.length === 0) return null;
+              return (
+                <div>
+                  <button onClick={() => setShowHistory(!showHistory)} className="flex items-center justify-between w-full mb-2">
+                    <p className={`text-[10px] font-black uppercase tracking-widest ${muted}`}>Active calls · {openTrades.length}</p>
+                    <span className={`text-[10px] font-bold transition-transform ${showHistory ? "rotate-180" : ""} ${muted}`}>▾</span>
+                  </button>
+                  {showHistory && (
+                    <div className="space-y-1.5">
+                      {openTrades.map((t, i) => (
+                        <div key={i} className={`flex items-center justify-between rounded-xl px-3 py-2 ${dk ? "bg-white/[0.03]" : "bg-gray-50"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[11px] font-black ${t.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
+                              {t.side === "long" ? "▲" : "▼"}
+                            </span>
+                            <span className={`text-[12px] font-black ${strong}`}>{t.symbol}</span>
+                            <span className={`text-[10px] ${muted}`}>{t.timeframe}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[11px] font-bold ${muted}`}>${parseFloat(t.amount).toFixed(0)}</span>
+                            <span className={`text-[10px] font-black ${muted}`}>open</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[11px] font-bold ${muted}`}>${parseFloat(t.amount).toFixed(0)}</span>
-                          {won && <span className="text-[10px] font-black text-emerald-400">W</span>}
-                          {lost && <span className="text-[10px] font-black text-red-400">L</span>}
-                          {t.status === "open" && <span className={`text-[10px] font-black ${muted}`}>open</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         )}
       </motion.div>
