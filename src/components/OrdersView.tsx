@@ -445,6 +445,8 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
   const [claimDone, setClaimDone]     = useState(false);
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
   const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
+  const [pendingExpanded, setPendingExpanded] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [orderHistory, setOrderHistory]   = useState<PendingOrder[]>([]);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
 
@@ -749,55 +751,64 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           </button>
         )}
 
-        {/* Pending Orders (order book intents) */}
-        {pendingOrders.length > 0 && (
-          <div>
-            <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>
-              Pending Orders · <span className={T.muted}>{pendingOrders.length}</span>
-            </p>
-            <div className="space-y-2">
-              {pendingOrders.map(o => (
-                <div key={o.id} className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${T.cardBase}`}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`text-[11px] font-black ${o.side === "short" ? "text-red-400" : "text-emerald-400"}`}>
-                      {o.side.toUpperCase()}
-                    </span>
-                    <span className={`text-[12px] font-bold truncate ${T.strong}`}>{o.symbol}</span>
-                    <span className={`text-[11px] font-mono ${T.muted}`}>{o.timeframe}</span>
-                    {o.status === "partially_filled" && (
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${dk ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
-                        partial
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[12px] font-black ${T.normal}`}>
-                      ${parseFloat(o.remaining_amount).toFixed(0)}
-                    </span>
-                    <button
-                      onClick={() => toggleAutoReopen(o.id, o.auto_reopen)}
-                      title={o.auto_reopen ? "Auto-reopen ON — click to disable" : "Auto-reopen OFF — click to enable"}
-                      className={`text-[13px] px-1.5 py-0.5 rounded-lg transition-colors ${
-                        o.auto_reopen
-                          ? dk ? "text-white/70 bg-white/10 hover:bg-white/5" : "text-gray-700 bg-gray-200 hover:bg-gray-100"
-                          : dk ? "text-white/20 bg-transparent hover:text-white/50" : "text-gray-300 bg-transparent hover:text-gray-500"
-                      }`}
-                    >↻</button>
-                    <button
-                      onClick={() => cancelPendingOrder(o.id)}
-                      disabled={cancellingOrder === o.id}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors
-                        ${dk ? "bg-white/6 text-white/40 hover:bg-red-500/15 hover:text-red-400"
-                              : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"}`}
-                    >
-                      {cancellingOrder === o.id ? "…" : "cancel"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+        {/* Pending Orders — collapsed by default */}
+        {pendingOrders.length > 0 && (() => {
+          const [expanded, setExpanded] = [pendingExpanded, setPendingExpanded];
+          return (
+            <div>
+              <button onClick={() => setExpanded(!expanded)}
+                className={`flex items-center justify-between w-full mb-2`}>
+                <p className={`text-[10px] font-black tracking-widest uppercase ${T.sectionLbl}`}>
+                  Pending Orders · <span className={T.muted}>{pendingOrders.length}</span>
+                </p>
+                <span className={`text-[10px] font-bold transition-transform ${expanded ? "rotate-180" : ""} ${T.muted}`}>▾</span>
+              </button>
+              <AnimatePresence>
+                {expanded && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="space-y-2">
+                      {pendingOrders.map(o => (
+                        <div key={o.id} className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${T.cardBase}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`text-[11px] font-black ${o.side === "short" ? "text-red-400" : "text-emerald-400"}`}>
+                              {o.side.toUpperCase()}
+                            </span>
+                            <span className={`text-[12px] font-bold truncate ${T.strong}`}>{o.symbol}</span>
+                            <span className={`text-[11px] font-mono ${T.muted}`}>{o.timeframe}</span>
+                            {o.status === "partially_filled" && (
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${dk ? "bg-amber-500/15 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
+                                partial
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-[12px] font-black ${T.normal}`}>
+                              ${parseFloat(o.remaining_amount).toFixed(0)}
+                            </span>
+                            <button
+                              onClick={() => toggleAutoReopen(o.id, o.auto_reopen)}
+                              title={o.auto_reopen ? "Auto-reopen ON" : "Auto-reopen OFF"}
+                              className={`text-[13px] px-1.5 py-0.5 rounded-lg transition-colors ${
+                                o.auto_reopen
+                                  ? dk ? "text-white/70 bg-white/10 hover:bg-white/5" : "text-gray-700 bg-gray-200 hover:bg-gray-100"
+                                  : dk ? "text-white/20 bg-transparent hover:text-white/50" : "text-gray-300 bg-transparent hover:text-gray-500"
+                              }`}>↻</button>
+                            <button
+                              onClick={() => cancelPendingOrder(o.id)}
+                              disabled={cancellingOrder === o.id}
+                              className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors ${dk ? "bg-white/6 text-white/40 hover:bg-red-500/15 hover:text-red-400" : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"}`}>
+                              {cancellingOrder === o.id ? "…" : "cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Open positions */}
         <div>
@@ -818,13 +829,25 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           )}
         </div>
 
-        {/* History */}
+        {/* History — collapsed by default */}
         {settled.length > 0 && (
           <div>
-            <p className={`text-[10px] font-black tracking-widest uppercase mb-3 ${T.sectionLbl}`}>History</p>
-            <div className="space-y-2">
-              {settled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
-            </div>
+            <button onClick={() => setHistoryExpanded(!historyExpanded)}
+              className="flex items-center justify-between w-full mb-2">
+              <p className={`text-[10px] font-black tracking-widest uppercase ${T.sectionLbl}`}>
+                History · <span className={T.muted}>{settled.length}</span>
+              </p>
+              <span className={`text-[10px] font-bold transition-transform ${historyExpanded ? "rotate-180" : ""} ${T.muted}`}>▾</span>
+            </button>
+            <AnimatePresence>
+              {historyExpanded && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                  <div className="space-y-2">
+                    {settled.map((o) => <PositionRow key={o.id} order={o} tick={tick} dk={dk} T={T} onViewToken={onViewToken} />)}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 

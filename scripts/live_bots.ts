@@ -10,26 +10,26 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3001";
 const DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const BOTS = [
-  { username: "degen_alpha",    password: "botpass123" },
-  { username: "moon_chaser",    password: "botpass123" },
-  { username: "rug_detector",   password: "botpass123" },
-  { username: "chad_longer",    password: "botpass123" },
-  { username: "perma_short",    password: "botpass123" },
-  { username: "fud_lord",       password: "botpass123" },
-  { username: "wagmi_bro",      password: "botpass123" },
-  { username: "ngmi_guy",       password: "botpass123" },
-  { username: "apein_hard",     password: "botpass123" },
-  { username: "exit_liquidity", password: "botpass123" },
-  { username: "based_gigachad", password: "botpass123" },
-  { username: "pump_enjoyer",   password: "botpass123" },
-  { username: "bear_trap",      password: "botpass123" },
-  { username: "solana_maxi",    password: "botpass123" },
-  { username: "eth_killer",     password: "botpass123" },
-  { username: "memecoin_god",   password: "botpass123" },
-  { username: "liquidation_lv", password: "botpass123" },
-  { username: "alpha_leak",     password: "botpass123" },
-  { username: "paper_hands",    password: "botpass123" },
-  { username: "diamond_hands",  password: "botpass123" },
+  { username: "degen_alpha",    password: "botpass123", bio: "full degen. no regrets." },
+  { username: "moon_chaser",    password: "botpass123", bio: "chasing pumps since 2021" },
+  { username: "rug_detector",   password: "botpass123", bio: "i smell rugs before they pull" },
+  { username: "chad_longer",    password: "botpass123", bio: "only longs. bears get rekt." },
+  { username: "perma_short",    password: "botpass123", bio: "everything goes to zero eventually" },
+  { username: "fud_lord",       password: "botpass123", bio: "spreading fear since day one" },
+  { username: "wagmi_bro",      password: "botpass123", bio: "we're all gonna make it ser" },
+  { username: "ngmi_guy",       password: "botpass123", bio: "narrator: they did not make it" },
+  { username: "apein_hard",     password: "botpass123", bio: "ape first, think never" },
+  { username: "exit_liquidity", password: "botpass123", bio: "someone has to hold the bag" },
+  { username: "based_gigachad", password: "botpass123", bio: "based and conviction-pilled" },
+  { username: "pump_enjoyer",   password: "botpass123", bio: "i enjoy the pump. simple as." },
+  { username: "bear_trap",      password: "botpass123", bio: "setting traps since the merge" },
+  { username: "solana_maxi",    password: "botpass123", bio: "sol or nothing. fast chain only." },
+  { username: "eth_killer",     password: "botpass123", bio: "eth is cooked. prove me wrong." },
+  { username: "memecoin_god",   password: "botpass123", bio: "turned $50 into $50k (once)" },
+  { username: "liquidation_lv", password: "botpass123", bio: "i live for the liquidation candle" },
+  { username: "alpha_leak",     password: "botpass123", bio: "leaking alpha nobody asked for" },
+  { username: "paper_hands",    password: "botpass123", bio: "i sell every top. accidentally." },
+  { username: "diamond_hands",  password: "botpass123", bio: "never sold. never will. down 90%." },
 ];
 
 const TOKENS = [
@@ -180,6 +180,9 @@ async function botLoop(bot: { username: string; password: string }, endAt: numbe
   try {
     token = await registerOrLogin(bot.username, bot.password);
     await req("/auth/paper-credit", { method: "POST", body: JSON.stringify({ amount: 2000 }) }, token).catch(() => {});
+    // Set avatar + bio
+    const avatarUrl = `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${bot.username}`;
+    await req("/auth/update-profile", { method: "POST", body: JSON.stringify({ avatar_url: avatarUrl, bio: bot.bio ?? "" }) }, token).catch(() => {});
   } catch (e: any) {
     console.error(`[${bot.username}] login failed: ${e.message}`);
     return;

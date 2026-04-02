@@ -987,7 +987,7 @@ const HOT_THRESHOLD = 5; // multiplier above this = hot
 // ── Markets Tape Sidebar ───────────────────────────────────────────────────────
 type TapeEntry = { uid: string; symbol: string; chain: string; timeframe: string; side: "long" | "short"; amount: number; message: string; user: string; ts: number; isOpener: boolean; isOpen: boolean };
 
-function MarketsTape({ dk, onSelectToken, onViewProfile }: { dk: boolean; onSelectToken?: (s: string, c: string) => void; onViewProfile?: (u: string) => void }) {
+function MarketsTape({ dk, onSelectToken, onViewProfile, paperMode }: { dk: boolean; onSelectToken?: (s: string, c: string) => void; onViewProfile?: (u: string) => void; paperMode?: boolean }) {
   const [open, setOpen]       = useState(true);
   const [entries, setEntries] = useState<TapeEntry[]>([]);
   const scrollRef             = useRef<HTMLDivElement>(null);
@@ -995,7 +995,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile }: { dk: boolean; onSele
   useEffect(() => {
     async function load() {
       try {
-        const recent = await api.getRecentPositions();
+        const recent = await api.getRecentPositions(paperMode);
         const items: TapeEntry[] = recent.map(p => ({
           uid:       `pos-${p.id}`,
           symbol:    p.symbol,
@@ -1015,7 +1015,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile }: { dk: boolean; onSele
     load();
     const iv = setInterval(load, 30_000);
     return () => clearInterval(iv);
-  }, []);
+  }, [paperMode]);
 
   const border  = dk ? "border-white/5"  : "border-gray-100";
   const label   = dk ? "text-white/25"   : "text-gray-500";
@@ -1025,6 +1025,8 @@ function MarketsTape({ dk, onSelectToken, onViewProfile }: { dk: boolean; onSele
   const msgTxt  = dk ? "text-white/30"   : "text-gray-700";
   const userTxt = dk ? "text-white/20"   : "text-gray-500";
   const strong  = dk ? "text-white"      : "text-gray-900";
+
+  if (entries.length === 0) return null;
 
   return (
     <div style={{ width: open ? "240px" : "32px", minWidth: open ? "240px" : "32px" }}
@@ -1179,7 +1181,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
 
       </div>
       </div>
-      <MarketsTape dk={dk} onSelectToken={onSelectToken} onViewProfile={onViewProfile} />
+      <MarketsTape dk={dk} onSelectToken={onSelectToken} onViewProfile={onViewProfile} paperMode={paperMode} />
     </div>
 
     <AnimatePresence>

@@ -134,7 +134,7 @@ export default function AuthModal({
                 ← Back
               </button>
               <div className="mb-5">
-                <span className="text-[18px] font-black tracking-tight">MemeBets</span>
+                <span className="text-[18px] font-black tracking-tight">FUD.markets</span>
                 <p className={`text-[12px] mt-0.5 ${labelCls}`}>Reset your password</p>
               </div>
               <form onSubmit={handleForgot} className="space-y-3">
@@ -185,7 +185,7 @@ export default function AuthModal({
             <motion.div key="auth" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
               {/* Logo */}
               <div className="mb-5">
-                <span className="text-[18px] font-black tracking-tight">MemeBets</span>
+                <span className="text-[18px] font-black tracking-tight">FUD.markets</span>
                 <p className={`text-[12px] mt-0.5 ${labelCls}`}>
                   {tab === "login" ? "Welcome back." : "Create your account."}
                 </p>

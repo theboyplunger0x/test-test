@@ -1128,7 +1128,7 @@ export default function FeedPage() {
                 }} dk={dk}
                 tapeBorder={T.sidebarBorder} sidebarLabel={T.sidebarLabel} tapeColLabel={T.tapeColLabel}
                 open={tapeOpen} onToggle={() => setTapeOpen(o => !o)}
-                onViewProfile={(u) => setProfileUser(u)} />
+                onViewProfile={(u) => setProfileUser(u)} paperMode={paperMode} />
             </div>
           </motion.div>
         )}
@@ -2180,9 +2180,9 @@ type TapeEntry = {
   isOpen: boolean; isOpener?: boolean;
 };
 
-function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle, onViewProfile }: {
+function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, sidebarLabel, tapeColLabel, open, onToggle, onViewProfile, paperMode }: {
   challenges: Challenge[]; onViewCoin: (symbol: string) => void; onViewToken?: (symbol: string) => void; dk: boolean;
-  tapeBorder: string; sidebarLabel: string; tapeColLabel: string; open: boolean; onToggle: () => void;
+  tapeBorder: string; sidebarLabel: string; tapeColLabel: string; open: boolean; onToggle: () => void; paperMode?: boolean;
   onViewProfile?: (username: string) => void;
 }) {
   const toEntries = (cs: Challenge[]) =>
@@ -2205,7 +2205,7 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
   useEffect(() => {
     async function loadPositions() {
       try {
-        const recent = await api.getRecentPositions(false);
+        const recent = await api.getRecentPositions(paperMode);
         const posEntries: TapeEntry[] = recent.map(p => ({
           uid: `pos-${p.id}`,
           symbol: p.symbol,
@@ -2241,6 +2241,8 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
   const amtTxt = dk ? "text-white/50" : "text-gray-800 font-black";
   const msgTxt = dk ? "text-white/30" : "text-gray-700";
   const userTxt = dk ? "text-white/20" : "text-gray-600";
+
+  if (entries.length === 0) return null;
 
   return (
     <div style={{ width: open ? "250px" : "32px", minWidth: open ? "250px" : "32px" }} className={`shrink-0 border-l ${tapeBorder} flex flex-col overflow-hidden transition-all duration-200`}>
