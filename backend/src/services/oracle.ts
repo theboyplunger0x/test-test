@@ -35,17 +35,9 @@ const CHAIN_MAP: Record<string, string> = {
 const DEXSCREENER = "https://api.dexscreener.com/latest/dex/search";
 
 export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
-  // Try GenLayer consensus oracle first
-  if (isGenLayerConfigured()) {
-    try {
-      return await getPriceFromGenLayer(symbol, chain);
-    } catch (err) {
-      console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
-    }
-  }
-
-  // Fallback: direct DexScreener call (centralized)
-  console.log(`[oracle] Using DexScreener for ${symbol}/${chain}`);
+  // Always use DexScreener for fast price lookups (market creation, entry price)
+  // GenLayer is used only for settlement resolution (see resolveWithGenLayer below)
+  console.log(`[oracle] DexScreener for ${symbol}/${chain}`);
   const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
 
   const data = await dexFetch(`${DEXSCREENER}?q=${encodeURIComponent(symbol)}`) as any;
@@ -68,6 +60,21 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
   if (sorted.length === 0) throw new Error(`No valid price for ${symbol} on ${chainId}`);
 
   return parseFloat(sorted[0].priceUsd);
+}
+
+/**
+ * Get price for market resolution — tries GenLayer first (decentralized consensus),
+ * falls back to DexScreener if GenLayer fails or is not configured.
+ */
+export async function getPriceForResolution(symbol: string, chain = "SOL"): Promise<number> {
+  if (isGenLayerConfigured()) {
+    try {
+      return await getPriceFromGenLayer(symbol, chain);
+    } catch (err) {
+      console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
+    }
+  }
+  return getPrice(symbol, chain);
 }
 
 // Entry screening thresholds — applied only to tokens not yet in the system

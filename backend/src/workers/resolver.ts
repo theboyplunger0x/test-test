@@ -2,7 +2,7 @@
 // On startup, reschedules all open markets (handles backend restarts).
 
 import { db } from "../db/client.js";
-import { getPrice } from "../services/oracle.js";
+import { getPriceForResolution as getPrice } from "../services/oracle.js";
 import { calcPayout, calcHouseFee } from "../lib/market.js";
 
 /** Resolve a single market by ID. Safe to call multiple times (idempotent via FOR UPDATE). */
