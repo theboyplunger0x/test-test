@@ -102,7 +102,19 @@ export async function marketRoutes(app: FastifyInstance) {
 
     let entryPrice: number;
     try {
-      entryPrice = await getPrice(symbol, chain);
+      // Use CA-specific endpoint when available for exact price
+      if (ca) {
+        const CHAIN_MAP: Record<string, string> = { SOL: "solana", BASE: "base", ETH: "ethereum", BSC: "bsc" };
+        const chainId = CHAIN_MAP[chain?.toUpperCase()] ?? "solana";
+        const data = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(ca.trim())}`, { headers: { "User-Agent": "FUDMarkets/1.0" } }).then(r => r.json()) as any;
+        const pairs = (data.pairs ?? []).filter((p: any) => p.priceUsd && parseFloat(p.priceUsd) > 0);
+        const onChain = pairs.filter((p: any) => p.chainId === chainId);
+        const sorted = (onChain.length > 0 ? onChain : pairs).sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+        if (sorted.length === 0) throw new Error(`No price for CA ${ca}`);
+        entryPrice = parseFloat(sorted[0].priceUsd);
+      } else {
+        entryPrice = await getPrice(symbol, chain);
+      }
     } catch (e: any) {
       return reply.status(503).send({ error: `Could not fetch price for ${symbol}: ${e.message}` });
     }
