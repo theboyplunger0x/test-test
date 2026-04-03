@@ -73,10 +73,10 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
 export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: string | null): Promise<number> {
   const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
 
-  // Try GenLayer (always uses symbol + chainId search)
+  // Try GenLayer — pass CA for exact token matching
   if (isGenLayerConfigured()) {
     try {
-      return await getPriceFromGenLayer(symbol, chainId);
+      return await getPriceFromGenLayer(symbol, chainId, ca);
     } catch (err) {
       console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
     }
