@@ -41,7 +41,7 @@ function getClient() {
  * Uses DexScreener — covers all meme coins and DEX pairs.
  * Timeout: ~60s (30 retries × 2s interval).
  */
-export async function getPriceFromGenLayer(symbol: string, chain: string, ca?: string): Promise<number> {
+export async function getPriceFromGenLayer(symbol: string, chain: string): Promise<number> {
   const client = getClient();
   const oracleCode = readFileSync(ORACLE_PATH, "utf-8");
 
@@ -49,7 +49,7 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca?: s
   console.log(`[genlayer] Deploying price oracle for ${symbol}/${chain}...`);
   const deployHash = await client.deployContract({
     code: oracleCode,
-    args: [symbol, chain, ca ?? ""],
+    args: [symbol, chain],
     leaderOnly: false,
   });
 
@@ -94,8 +94,8 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca?: s
     args: [],
   });
 
-  const price = Number(result.price_usd);
-  if (!price || price <= 0) throw new Error(`GenLayer returned invalid price: ${result.price_usd}`);
+  const price = Number(result.price);
+  if (!price || price <= 0) throw new Error(`GenLayer returned invalid price: ${result.price}`);
 
   console.log(`[genlayer] ${symbol} = $${price} (oracle @ ${oracleAddress})`);
   return price;

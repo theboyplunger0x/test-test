@@ -73,20 +73,7 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
 export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: string | null): Promise<number> {
   const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
 
-  // If we have a CA, use the exact token endpoint on DexScreener (no ambiguity)
-  if (ca) {
-    if (isGenLayerConfigured()) {
-      try {
-        return await getPriceFromGenLayer(symbol, chainId, ca);
-      } catch (err) {
-        console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
-      }
-    }
-    // Fallback: direct DexScreener by CA
-    return getPriceByCA(ca, chainId);
-  }
-
-  // No CA: use symbol search
+  // Try GenLayer (always uses symbol + chainId search)
   if (isGenLayerConfigured()) {
     try {
       return await getPriceFromGenLayer(symbol, chainId);
@@ -94,6 +81,9 @@ export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: 
       console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
     }
   }
+
+  // Fallback: DexScreener — use CA if available for exact match
+  if (ca) return getPriceByCA(ca, chainId);
   return getPrice(symbol, chain);
 }
 
