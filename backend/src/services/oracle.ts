@@ -73,8 +73,8 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
 export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: string | null): Promise<number> {
   const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
 
-  // Try GenLayer — pass CA for exact token matching
-  if (isGenLayerConfigured()) {
+  // GenLayer only when we have a CA (exact token, no ambiguity)
+  if (ca && isGenLayerConfigured()) {
     try {
       return await getPriceFromGenLayer(symbol, chainId, ca);
     } catch (err) {
@@ -82,7 +82,7 @@ export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: 
     }
   }
 
-  // Fallback: DexScreener — use CA if available for exact match
+  // Fallback: DexScreener direct
   if (ca) return getPriceByCA(ca, chainId);
   return getPrice(symbol, chain);
 }
