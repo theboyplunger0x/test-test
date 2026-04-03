@@ -110,9 +110,9 @@ export async function marketRoutes(app: FastifyInstance) {
     const closesAt = nextWindowClose(timeframe as Timeframe);
 
     const { rows } = await db.query(
-      `INSERT INTO markets (symbol, chain, timeframe, entry_price, tagline, opener_id, closes_at, is_paper)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, !!paper]
+      `INSERT INTO markets (symbol, chain, timeframe, entry_price, tagline, opener_id, closes_at, is_paper, ca)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, !!paper, ca ?? null]
     );
     const newMarket = rows[0];
     scheduleResolution(newMarket.id, new Date(newMarket.closes_at));

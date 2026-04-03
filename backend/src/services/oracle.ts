@@ -66,15 +66,46 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
  * Get price for market resolution — tries GenLayer first (decentralized consensus),
  * falls back to DexScreener if GenLayer fails or is not configured.
  */
-export async function getPriceForResolution(symbol: string, chain = "SOL"): Promise<number> {
+/**
+ * Get price for market resolution — tries GenLayer first (decentralized consensus),
+ * falls back to DexScreener. When CA is provided, uses the exact token endpoint.
+ */
+export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: string | null): Promise<number> {
+  const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
+
+  // If we have a CA, use the exact token endpoint on DexScreener (no ambiguity)
+  if (ca) {
+    if (isGenLayerConfigured()) {
+      try {
+        return await getPriceFromGenLayer(symbol, chainId, ca);
+      } catch (err) {
+        console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
+      }
+    }
+    // Fallback: direct DexScreener by CA
+    return getPriceByCA(ca, chainId);
+  }
+
+  // No CA: use symbol search
   if (isGenLayerConfigured()) {
     try {
-      return await getPriceFromGenLayer(symbol, chain);
+      return await getPriceFromGenLayer(symbol, chainId);
     } catch (err) {
       console.warn(`[oracle] GenLayer failed for ${symbol}, falling back to DexScreener:`, err);
     }
   }
   return getPrice(symbol, chain);
+}
+
+/** Fetch price by exact contract address — no ambiguity */
+async function getPriceByCA(ca: string, chainId: string): Promise<number> {
+  const data = await dexFetch(`https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(ca)}`) as any;
+  const pairs: any[] = data.pairs ?? [];
+  const onChain = pairs.filter((p: any) => p.chainId === chainId && p.priceUsd && parseFloat(p.priceUsd) > 0);
+  const pool = onChain.length > 0 ? onChain : pairs.filter((p: any) => p.priceUsd && parseFloat(p.priceUsd) > 0);
+  const sorted = pool.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+  if (sorted.length === 0) throw new Error(`No price for CA ${ca}`);
+  return parseFloat(sorted[0].priceUsd);
 }
 
 // Entry screening thresholds — applied only to tokens not yet in the system
