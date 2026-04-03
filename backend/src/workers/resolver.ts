@@ -16,6 +16,25 @@ export async function resolveMarket(marketId: string) {
     );
     if (!market) { await client.query("COMMIT"); return; } // already resolved
 
+    const longPool  = parseFloat(market.long_pool);
+    const shortPool = parseFloat(market.short_pool);
+
+    // No counterparty — cancel and refund, no oracle needed
+    if (longPool === 0 || shortPool === 0) {
+      await client.query(`UPDATE markets SET status = 'cancelled' WHERE id = $1`, [market.id]);
+      const { rows: positions } = await client.query(
+        `SELECT * FROM positions WHERE market_id = $1`, [market.id]
+      );
+      for (const pos of positions) {
+        const col = pos.is_paper ? "paper_balance_usd" : "balance_usd";
+        await client.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [pos.amount, pos.user_id]);
+      }
+      await client.query("COMMIT");
+      console.log(`[resolver] Market ${market.id} (${market.symbol}) cancelled — no counterparty (L:$${longPool} S:$${shortPool})`);
+      client.release();
+      return;
+    }
+
     let exitPrice: number;
     try {
       exitPrice = await getPrice(market.symbol, market.chain, market.ca);
