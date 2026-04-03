@@ -17,7 +17,7 @@ export async function marketRoutes(app: FastifyInstance) {
       FROM markets m
       JOIN users u ON m.opener_id = u.id
       LEFT JOIN positions p ON p.market_id = m.id
-      WHERE (m.status = 'open' OR (m.status IN ('resolved','cancelled') AND m.closes_at > NOW() - INTERVAL '4 hours'))`;
+      WHERE (m.status = 'open' OR (m.status IN ('resolved','cancelled') AND m.closes_at > NOW() - INTERVAL '5 minutes'))`;
     const groupBy = `GROUP BY m.id, u.username, u.avatar_url, u.tier`;
     const order   = `ORDER BY last_bet_at DESC`;
     const query   = timeframe
@@ -313,7 +313,7 @@ export async function marketRoutes(app: FastifyInstance) {
               m.opener_id, u.username AS opener_username, u.avatar_url AS opener_avatar, u.tier AS opener_tier
        FROM markets m JOIN users u ON m.opener_id = u.id
        WHERE UPPER(m.symbol) = UPPER($1)
-         AND (m.status = 'open' OR (m.status = 'resolved' AND m.closes_at > NOW() - INTERVAL '4 hours'))
+         AND (m.status = 'open' OR (m.status = 'resolved' AND m.closes_at > NOW() - INTERVAL '5 minutes'))
        ORDER BY m.created_at DESC
        LIMIT 20`,
       [symbol]
@@ -391,7 +391,7 @@ export async function marketRoutes(app: FastifyInstance) {
        FROM positions p
        JOIN users u ON p.user_id = u.id
        JOIN markets m ON p.market_id = m.id
-       WHERE p.placed_at > NOW() - INTERVAL '4 hours'
+       WHERE p.placed_at > NOW() - INTERVAL '5 minutes'
          AND p.message IS NOT NULL AND p.message != ''
          AND p.is_paper = $1
        ORDER BY p.placed_at DESC
@@ -401,4 +401,15 @@ export async function marketRoutes(app: FastifyInstance) {
     return rows;
   });
 
+  app.post("/admin/cleanup", async (req, reply) => {
+    const { secret } = req.body as any;
+    if (secret !== "fud-cleanup-2026") return reply.status(403).send({ error: "Forbidden" });
+    await db.query(`DELETE FROM notifications`);
+    await db.query(`DELETE FROM house_revenue WHERE market_id IN (SELECT id FROM markets WHERE is_paper = true)`);
+    await db.query(`DELETE FROM fills WHERE market_id IN (SELECT id FROM markets WHERE is_paper = true)`);
+    await db.query(`DELETE FROM positions WHERE is_paper = true`);
+    await db.query(`DELETE FROM orders WHERE is_paper = true`);
+    await db.query(`DELETE FROM markets WHERE is_paper = true`);
+    return { ok: true };
+  });
 }

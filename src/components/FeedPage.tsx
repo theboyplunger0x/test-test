@@ -2217,14 +2217,12 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
           isOpen: p.status === "open",
           isOpener: p.is_opener,
         }));
-        // Merge: position entries + market-level entries (taglines), deduplicate by uid, sort by time desc
-        setEntries(prev => {
-          const marketEntries = toEntries(challenges);
-          const all = [...posEntries, ...marketEntries];
-          const seen = new Set<string>();
-          const deduped = all.filter(e => { if (seen.has(e.uid)) return false; seen.add(e.uid); return true; });
-          return deduped.sort((a, b) => b.ts - a.ts).slice(0, 60);
-        });
+        // Replace entries completely — no stale data
+        const marketEntries = toEntries(challenges);
+        const all = [...posEntries, ...marketEntries];
+        const seen = new Set<string>();
+        const deduped = all.filter(e => { if (seen.has(e.uid)) return false; seen.add(e.uid); return true; });
+        setEntries(deduped.sort((a, b) => b.ts - a.ts).slice(0, 60));
       } catch {}
     }
     loadPositions();

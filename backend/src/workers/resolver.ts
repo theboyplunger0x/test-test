@@ -31,7 +31,6 @@ export async function resolveMarket(marketId: string) {
       }
       await client.query("COMMIT");
       console.log(`[resolver] Market ${market.id} (${market.symbol}) cancelled — no counterparty (L:$${longPool} S:$${shortPool})`);
-      client.release();
       return;
     }
 

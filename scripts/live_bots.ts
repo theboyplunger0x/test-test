@@ -189,9 +189,14 @@ async function botLoop(bot: { username: string; password: string }, endAt: numbe
     return;
   }
 
-  // Stagger initial start: each bot waits 0-5 min before first action
-  const initialDelay = Math.floor(Math.random() * 5 * 60 * 1000);
-  await sleep(Math.min(initialDelay, endAt - Date.now()));
+  // First action immediately — no stagger, populate UI fast
+  try {
+    const action = await doAction(token);
+    console.log(`  [${bot.username}] ${action}`);
+  } catch {}
+
+  // Small stagger after first action: 5-30s so they don't all hit second action at once
+  await sleep(5000 + Math.floor(Math.random() * 25000));
 
   while (Date.now() < endAt) {
     try {
@@ -200,7 +205,7 @@ async function botLoop(bot: { username: string; password: string }, endAt: numbe
     } catch (e: any) {
       // silently skip (insufficient balance, no liquidity, etc.)
     }
-    // Each bot waits 4-7 min between actions — relaxed pace, ~3-5 bots active per window
+    // Each bot waits 4-7 min between actions — relaxed pace
     const wait = 4 * 60 * 1000 + Math.floor(Math.random() * 3 * 60 * 1000);
     await sleep(Math.min(wait, endAt - Date.now()));
   }
