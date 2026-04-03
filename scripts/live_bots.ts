@@ -33,13 +33,13 @@ const BOTS = [
 ];
 
 const TOKENS = [
-  { symbol: "DOGE",  chain: "SOL" },
-  { symbol: "PEPE",  chain: "ETH" },
-  { symbol: "WIF",   chain: "SOL" },
-  { symbol: "BONK",  chain: "SOL" },
-  { symbol: "SHIB",  chain: "ETH" },
-  { symbol: "SOL",   chain: "SOL" },
-  { symbol: "BTC",   chain: "ETH" },
+  { symbol: "DOGE",  chain: "SOL", ca: "So11111111111111111111111111111111111111112" }, // wrapped DOGE on SOL
+  { symbol: "PEPE",  chain: "ETH", ca: "0x6982508145454ce325ddbe47a25d4ec3d2311933" },
+  { symbol: "WIF",   chain: "SOL", ca: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm" },
+  { symbol: "BONK",  chain: "SOL", ca: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" },
+  { symbol: "SHIB",  chain: "ETH", ca: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE" },
+  { symbol: "SOL",   chain: "SOL", ca: "So11111111111111111111111111111111111111112" },
+  { symbol: "BTC",   chain: "ETH", ca: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599" }, // WBTC
 ];
 
 const TIMEFRAMES = ["5m", "15m", "1h", "4h"];
@@ -138,7 +138,8 @@ async function registerOrLogin(username: string, password: string): Promise<stri
 }
 
 async function doAction(token: string) {
-  const { symbol, chain } = pick(TOKENS);
+  const tok = pick(TOKENS);
+  const { symbol, chain, ca } = tok;
   const timeframe = pick(TIMEFRAMES);
   const side      = pick(SIDES);
   const amount    = pick(AMOUNTS);
@@ -149,14 +150,14 @@ async function doAction(token: string) {
     const orderMsg = side === "short" ? pick(MESSAGES_SHORT) : pick(MESSAGES_LONG);
     await req("/orders", {
       method: "POST",
-      body: JSON.stringify({ symbol, chain, timeframe, side, amount, is_paper: true, auto_reopen: Math.random() > 0.4, tagline: orderMsg }),
+      body: JSON.stringify({ symbol, chain, ca, timeframe, side, amount, is_paper: true, auto_reopen: Math.random() > 0.4, tagline: orderMsg }),
     }, token);
     return `📋 limit ${side.toUpperCase()} ${symbol} ${timeframe} $${amount}`;
   } else if (roll < 0.65) {
     // Open market + bet
     const market: any = await req("/markets", {
       method: "POST",
-      body: JSON.stringify({ symbol, chain, timeframe, tagline: pick(TAGLINES), paper: true }),
+      body: JSON.stringify({ symbol, chain, timeframe, tagline: pick(TAGLINES), paper: true, ca }),
     }, token);
     const msg = side === "short" ? pick(MESSAGES_SHORT) : pick(MESSAGES_LONG);
     await req(`/markets/${market.id}/bet`, {
@@ -169,7 +170,7 @@ async function doAction(token: string) {
     const sweepMsg = side === "short" ? pick(MESSAGES_SHORT) : pick(MESSAGES_LONG);
     const result: any = await req("/orders/sweep", {
       method: "POST",
-      body: JSON.stringify({ symbol, chain, timeframe, side, amount, is_paper: true, message: sweepMsg }),
+      body: JSON.stringify({ symbol, chain, ca, timeframe, side, amount, is_paper: true, message: sweepMsg }),
     }, token);
     return `⚡ sweep   ${side.toUpperCase()} ${symbol} ${timeframe} $${result.filled_amount ?? 0} filled`;
   }

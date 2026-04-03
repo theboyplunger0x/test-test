@@ -41,14 +41,12 @@ function getClient() {
  * Uses DexScreener — covers all meme coins and DEX pairs.
  * Timeout: ~60s (30 retries × 2s interval).
  */
-export async function getPriceFromGenLayer(symbol: string, chain: string, ca?: string | null): Promise<number> {
+export async function getPriceFromGenLayer(symbol: string, chain: string, ca: string): Promise<number> {
   const client = getClient();
   const oracleCode = readFileSync(ORACLE_PATH, "utf-8");
 
-  // Build DexScreener URL — use CA for exact match, symbol search as fallback
-  const dexUrl = ca
-    ? `https://api.dexscreener.com/latest/dex/tokens/${ca}`
-    : `https://api.dexscreener.com/latest/dex/search?q=${symbol}`;
+  // Always use CA-specific DexScreener endpoint — exact token, zero ambiguity
+  const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${ca}`;
 
   // Step 1: Deploy the oracle contract (symbol + url)
   console.log(`[genlayer] Deploying price oracle for ${symbol} (${ca ? 'CA' : 'search'})...`);
