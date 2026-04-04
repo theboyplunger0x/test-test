@@ -82,7 +82,9 @@ export default function ProfileModal({
         const result = await api.followUser(username);
         setFollowStatus(result);
       }
-    } catch {} finally {
+    } catch (e: any) {
+      console.error("Follow/unfollow failed:", e);
+    } finally {
       setFollowLoading(false);
     }
   };

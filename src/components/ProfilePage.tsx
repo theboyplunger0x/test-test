@@ -435,6 +435,29 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                   ))}
                 </div>
 
+                {/* Best call highlight */}
+                {(() => {
+                  const won = modeTrades.filter(t => t.status === "resolved" && t.winner_side === t.side);
+                  if (won.length === 0) return null;
+                  const best = won.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))[0];
+                  return (
+                    <div className={`rounded-xl px-4 py-3 mb-3 ${dk ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-emerald-50 border border-emerald-200"}`}>
+                      <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${dk ? "text-emerald-400/60" : "text-emerald-600/60"}`}>Best call</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
+                            {best.side === "long" ? "▲" : "▼"} ${best.symbol} {best.timeframe}
+                          </span>
+                          {best.message && (
+                            <p className={`text-[11px] font-bold ${dk ? "text-emerald-400/70" : "text-emerald-600/80"}`}>&ldquo;{best.message}&rdquo;</p>
+                          )}
+                        </div>
+                        <span className="text-[15px] font-black text-emerald-400">+${parseFloat(best.amount).toFixed(0)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {filteredTrades.length === 0 ? (
                   <p className={`text-[13px] ${muted} text-center py-8`}>No positions found.</p>
                 ) : (
@@ -459,6 +482,11 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                               <span className={`text-[10px] font-bold ${muted}`}>{t.timeframe}</span>
                             </div>
                             <p className={`text-[13px] font-black mt-0.5 ${strong}`}>${t.symbol}</p>
+                            {t.message && (
+                              <p className={`text-[11px] font-bold truncate ${t.side === "long" ? (dk ? "text-emerald-400/70" : "text-emerald-600/80") : (dk ? "text-red-400/70" : "text-red-600/80")}`}>
+                                &ldquo;{t.message}&rdquo;
+                              </p>
+                            )}
                             <p className={`text-[10px] ${muted}`}>{t.chain.toUpperCase()}</p>
                           </div>
                           <div className="text-right">

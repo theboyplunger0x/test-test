@@ -9,14 +9,18 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
+    const headers: Record<string, string> = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string> ?? {}),
+    };
+    // Only set Content-Type for requests with a body
+    if (options.method !== "DELETE" || options.body) {
+      headers["Content-Type"] = "application/json";
+    }
     const res = await fetch(`${BASE}${path}`, {
       ...options,
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
+      headers,
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Request failed");
