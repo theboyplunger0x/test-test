@@ -127,7 +127,11 @@ export default function FeedPage() {
   const prevLastBetAt                   = useRef<Record<string, number>>({});
   const [filter, setFilter]             = useState<Filter>("all");
   const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
-  const [mainTab, setMainTab]           = useState<MainTab>("calls");
+  const [mainTab, setMainTab]           = useState<MainTab>(() => {
+    if (typeof window === "undefined") return "calls";
+    return (localStorage.getItem("fud_tab") as MainTab) || "calls";
+  });
+  useEffect(() => { localStorage.setItem("fud_tab", mainTab); }, [mainTab]);
   const [calls, setCalls]               = useState<Call[]>([]);
   const [callsLoading, setCallsLoading] = useState(false);
   const [debates, setDebates]           = useState<Debate[]>([]);
@@ -155,8 +159,13 @@ export default function FeedPage() {
   const [trendingChain, setTrendingChain] = useState<string | null>(null);
   const [trendingSort, setTrendingSort]   = useState<"mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null>(null);
   const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
-  const [paperMode, setPaperMode]           = useState(false);
+  const [paperMode, setPaperMode]           = useState(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem("fud_paper");
+    return saved !== null ? saved === "true" : true;
+  });
   const [followingList, setFollowingList]   = useState<string[]>([]);
+  useEffect(() => { localStorage.setItem("fud_paper", String(paperMode)); }, [paperMode]);
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
   const [paperCreditOpen, setPaperCreditOpen] = useState(false);
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");

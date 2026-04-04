@@ -340,7 +340,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                     )}
                   </div>
                 </div>
-                <div className={`border-t pt-3 ${border} grid grid-cols-3 gap-2`}>
+                <div className="grid grid-cols-3 gap-2 mt-3">
                   <div>
                     <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${muted}`}>Bets</p>
                     <p className={`text-[18px] font-black ${strong}`}>{profile.total_bets}</p>
@@ -355,7 +355,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                   </div>
                 </div>
                 {/* Followers / Following */}
-                <div className={`border-t pt-3 mt-2 ${border} flex gap-4`}>
+                <div className="flex gap-4 mt-2">
                   <div>
                     <span className={`text-[14px] font-black ${strong}`}>{profile.follower_count ?? 0}</span>
                     <span className={`text-[11px] font-bold ml-1 ${muted}`}>followers</span>
@@ -365,6 +365,26 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                     <span className={`text-[11px] font-bold ml-1 ${muted}`}>following</span>
                   </div>
                 </div>
+                {/* Best call */}
+                {(() => {
+                  const won = modeTrades.filter(t => t.status === "resolved" && t.winner_side === t.side);
+                  if (won.length === 0) return null;
+                  const best = won.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))[0];
+                  return (
+                    <div className={`mt-3 rounded-xl px-3 py-2.5 flex items-center gap-2.5 ${dk ? "bg-emerald-500/10" : "bg-emerald-50"}`}>
+                      <span className="text-[18px]">🏆</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[12px] font-black ${strong}`}>
+                          {best.side === "long" ? "▲" : "▼"} ${best.symbol} {best.timeframe}
+                        </p>
+                        {best.message && (
+                          <p className={`text-[10px] font-bold truncate ${dk ? "text-emerald-400/70" : "text-emerald-600/80"}`}>&ldquo;{best.message}&rdquo;</p>
+                        )}
+                      </div>
+                      <span className="text-[15px] font-black text-emerald-400 shrink-0">+${parseFloat(best.amount).toFixed(0)}</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* PnL card */}
@@ -434,29 +454,6 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                     </button>
                   ))}
                 </div>
-
-                {/* Best call highlight */}
-                {(() => {
-                  const won = modeTrades.filter(t => t.status === "resolved" && t.winner_side === t.side);
-                  if (won.length === 0) return null;
-                  const best = won.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))[0];
-                  return (
-                    <div className={`rounded-xl px-4 py-3 mb-3 ${dk ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-emerald-50 border border-emerald-200"}`}>
-                      <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${dk ? "text-emerald-400/60" : "text-emerald-600/60"}`}>Best call</p>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className={`text-[13px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
-                            {best.side === "long" ? "▲" : "▼"} ${best.symbol} {best.timeframe}
-                          </span>
-                          {best.message && (
-                            <p className={`text-[11px] font-bold ${dk ? "text-emerald-400/70" : "text-emerald-600/80"}`}>&ldquo;{best.message}&rdquo;</p>
-                          )}
-                        </div>
-                        <span className="text-[15px] font-black text-emerald-400">+${parseFloat(best.amount).toFixed(0)}</span>
-                      </div>
-                    </div>
-                  );
-                })()}
 
                 {filteredTrades.length === 0 ? (
                   <p className={`text-[13px] ${muted} text-center py-8`}>No positions found.</p>
