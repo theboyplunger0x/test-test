@@ -55,7 +55,22 @@ export async function resolveMarket(marketId: string) {
       return;
     }
 
-    const winnerSide = exitPrice > parseFloat(market.entry_price) ? "long" : "short";
+    const entryPrice = parseFloat(market.entry_price);
+
+    // Price unchanged = draw — refund everyone, no winner
+    if (exitPrice === entryPrice) {
+      await client.query(`UPDATE markets SET status = 'cancelled', exit_price = $1 WHERE id = $2`, [exitPrice, market.id]);
+      const { rows: positions } = await client.query(`SELECT * FROM positions WHERE market_id = $1`, [market.id]);
+      for (const pos of positions) {
+        const col = pos.is_paper ? "paper_balance_usd" : "balance_usd";
+        await client.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [pos.amount, pos.user_id]);
+      }
+      await client.query("COMMIT");
+      console.log(`[resolver] Market ${market.id} (${market.symbol}) draw — price unchanged @ $${exitPrice}, refunded`);
+      return;
+    }
+
+    const winnerSide = exitPrice > entryPrice ? "long" : "short";
     const loserSide  = winnerSide === "long" ? "short" : "long";
     const winPool    = parseFloat(market[`${winnerSide}_pool`]);
     const losePool   = parseFloat(market[`${loserSide}_pool`]);

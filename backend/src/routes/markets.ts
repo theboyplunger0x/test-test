@@ -223,8 +223,8 @@ export async function marketRoutes(app: FastifyInstance) {
     }
   });
 
-  // POST /markets/:id/resolve — trigger resolution (admin/cron only in prod)
-  app.post("/markets/:id/resolve", async (req, reply) => {
+  // POST /markets/:id/resolve — trigger resolution (admin only)
+  app.post("/markets/:id/resolve", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { id } = req.params as any;
 
     const client = await db.connect();
@@ -403,7 +403,8 @@ export async function marketRoutes(app: FastifyInstance) {
 
   app.post("/admin/cleanup", async (req, reply) => {
     const { secret } = req.body as any;
-    if (secret !== "fud-cleanup-2026") return reply.status(403).send({ error: "Forbidden" });
+    const adminSecret = process.env.ADMIN_SECRET ?? "fud-cleanup-2026";
+    if (!secret || secret !== adminSecret) return reply.status(403).send({ error: "Forbidden" });
     await db.query(`DELETE FROM notifications`);
     await db.query(`DELETE FROM house_revenue WHERE market_id IN (SELECT id FROM markets WHERE is_paper = true)`);
     await db.query(`DELETE FROM fills WHERE market_id IN (SELECT id FROM markets WHERE is_paper = true)`);
