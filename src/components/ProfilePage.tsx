@@ -73,7 +73,7 @@ function PnlChart({ trades, period, dk }: {
   );
 }
 
-export default function ProfilePage({ username, dk, onClose, currentUser, currentUserObj, onUserUpdate, paperMode = false }: {
+export default function ProfilePage({ username, dk, onClose, currentUser, currentUserObj, onUserUpdate, paperMode = false, onViewProfile }: {
   username: string;
   dk: boolean;
   onClose: () => void;
@@ -81,6 +81,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
   currentUserObj?: User;
   onUserUpdate?: (u: User) => void;
   paperMode?: boolean;
+  onViewProfile?: (username: string) => void;
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -590,7 +591,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                 <div className="space-y-1">
                   {followListData.map(u => (
                     <button key={u.username}
-                      onClick={() => { setFollowListType(null); onClose(); setTimeout(() => onClose(), 50); }}
+                      onClick={() => { setFollowListType(null); onViewProfile?.(u.username); }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}
                     >
                       {u.avatar_url ? (

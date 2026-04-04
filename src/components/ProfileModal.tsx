@@ -41,13 +41,14 @@ function TierBadge({ tier, tgUsername }: { tier?: string; tgUsername?: string })
 }
 
 export default function ProfileModal({
-  username, dk, onClose, onViewProfile, currentUser,
+  username, dk, onClose, onViewProfile, currentUser, onNavigateToUser,
 }: {
   username: string;
   dk: boolean;
   onClose: () => void;
   onViewProfile?: () => void;
   currentUser?: string;
+  onNavigateToUser?: (username: string) => void;
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -298,7 +299,7 @@ export default function ProfileModal({
               <div className="space-y-1">
                 {followListData.map(u => (
                   <button key={u.username}
-                    onClick={() => { setFollowListType(null); onViewProfile?.(); onClose(); }}
+                    onClick={() => { setFollowListType(null); if (onNavigateToUser) { onNavigateToUser(u.username); } else { onClose(); } }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}
                   >
                     {u.avatar_url ? (

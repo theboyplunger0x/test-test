@@ -700,9 +700,14 @@ export default function FeedPage() {
       {/* Top bar */}
       <div className={`relative flex items-center px-4 md:px-5 py-2.5 border-b-2 ${T.topBorder} shrink-0`}>
         {/* Logo */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[16px] md:text-[17px] font-black tracking-tight">FUD.</span>
-          <span className="text-[10px] font-medium tracking-widest uppercase opacity-35 ml-2 mt-0.5">Markets</span>
+          <span className="text-[10px] font-medium tracking-widest uppercase opacity-35 mt-0.5">Markets</span>
+          {paperMode && (
+            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black ${dk ? "bg-yellow-400/10 text-yellow-400/70" : "bg-yellow-100 text-yellow-700"}`}>
+              🤖 bots live
+            </span>
+          )}
         </div>
 
         {/* Search bar — absolutely centered */}
@@ -1534,12 +1539,14 @@ export default function FeedPage() {
         {profileUser && (
           <ProfileModal username={profileUser} dk={dk} onClose={() => setProfileUser(null)}
             onViewProfile={() => { setProfilePageUser(profileUser); setProfileUser(null); }}
+            onNavigateToUser={(u) => { setProfileUser(u); }}
             currentUser={user?.username} />
         )}
         {profilePageUser && (
           <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)}
             currentUser={user?.username} currentUserObj={user ?? undefined}
-            onUserUpdate={(u) => setUser(u)} paperMode={paperMode} />
+            onUserUpdate={(u) => setUser(u)} paperMode={paperMode}
+            onViewProfile={(u) => setProfilePageUser(u)} />
         )}
       </AnimatePresence>
 
