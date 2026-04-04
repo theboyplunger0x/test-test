@@ -67,3 +67,15 @@ lib/
 - Scout tiene sub-vistas: new, trending, untouched
 - Filtros de feed: all, hot, juicy
 - Quick amounts: $10, $25, $50, $100
+
+## Rules for AI Agents
+
+### MANDATORY before any git push or deploy:
+1. Run `npx tsc --noEmit` — must pass with zero errors
+2. Review the full diff (`git diff`) against `.claude/review-checklist.md`
+3. **NEVER deploy backend from project root** — always `cd backend && railway up`
+4. **NEVER deploy frontend from /backend** — always deploy from project root
+5. **NEVER commit directly to main without user approval**
+6. **NEVER force push without explicit user request**
+7. Group changes and deploy once — don't deploy after every small fix
+8. Preserve UTF-8 encoding — don't corrupt unicode characters in source files
