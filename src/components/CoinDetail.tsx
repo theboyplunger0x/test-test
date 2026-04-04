@@ -374,8 +374,8 @@ export default function CoinDetail({
       {/* ── Main 3-column area ───────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
 
-      {/* ── LEFT: Chart ──────────────────────────────────────────── */}
-      <div className={`flex-1 flex flex-col overflow-y-auto min-h-0 ${T.chartBg}`} style={{ minHeight: 0 }}>
+      {/* ── MAIN: Chart + Orders + Order Book (all scrollable) ──── */}
+      <div className={`flex-1 overflow-y-auto min-h-0 ${T.chartBg}`} style={{ minHeight: 0 }}>
 
         {/* Chart toolbar: TF selector + countdown */}
         <div className={`flex items-center gap-2 px-3 py-2 border-b shrink-0 ${dk ? "border-white/6" : "border-gray-100"}`}>
@@ -648,12 +648,12 @@ export default function CoinDetail({
           });
 
         return (
-          <div className={`hidden md:flex flex-col w-[170px] shrink-0 border-l overflow-hidden ${dk ? "border-white/8 bg-[#090909]" : "border-gray-100 bg-gray-50/30"}`}>
-            <div className={`px-3 py-2 border-b shrink-0 flex items-center justify-between ${dk ? "border-white/6" : "border-gray-100"}`}>
+          <div className={`border-t ${dk ? "border-white/8 bg-[#090909]" : "border-gray-100 bg-gray-50/30"}`}>
+            <div className={`px-3 py-2 border-b flex items-center justify-between ${dk ? "border-white/6" : "border-gray-100"}`}>
               <p className={`text-[9px] font-black uppercase tracking-widest ${T.sectionLbl}`}>Order Book</p>
               <span className={`text-[9px] ${T.sectionLbl}`}>{shorts.length + longs.length} orders</span>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div>
               {/* SHORTS → taker goes LONG */}
               <div className={`flex items-center justify-between px-3 pt-2 pb-0.5`}>
                 <span className="text-[8px] font-black uppercase tracking-wider text-red-400/50">Shorts</span>
@@ -686,8 +686,8 @@ export default function CoinDetail({
         );
       })()}
 
-      {/* ── RIGHT: Trade Panel ───────────────────────────────────── */}
-      <div className={`w-full md:w-[238px] shrink-0 flex flex-col border-t md:border-t-0 md:border-l overflow-y-auto ${dk ? "border-white/8 bg-[#0e0e0e]" : "border-gray-100 bg-white"}`}>
+      {/* ── RIGHT: Trade Panel (sticky sidebar) ─────────────────── */}
+      <div className={`w-full md:w-[260px] shrink-0 flex flex-col border-t md:border-t-0 md:border-l overflow-y-auto ${dk ? "border-white/8 bg-[#0e0e0e]" : "border-gray-100 bg-white"}`}>
 
         {/* Trade / Challenge tabs */}
         <div className={`flex shrink-0 border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
