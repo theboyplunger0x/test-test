@@ -108,12 +108,28 @@ export default function CoinDetail({
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [callerModal, setCallerModal] = useState<{ username: string; symbol: string } | null>(null);
 
+  // User's open positions for this token
+  type MyPosition = { id: string; side: "long" | "short"; amount: string; timeframe: string; market_id: string; entry_price: string; closes_at: string; sweep_id: string | null; is_paper: boolean; message: string | null };
+  const [myPositions, setMyPositions] = useState<MyPosition[]>([]);
+  const [myPosExpanded, setMyPosExpanded] = useState(false);
+
   // countdown ticker
   useEffect(() => {
     const i = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(i);
   }, []);
   void tick;
+
+  // Fetch user's positions for this token
+  useEffect(() => {
+    if (!loggedIn) { setMyPositions([]); return; }
+    api.portfolio().then(data => {
+      const mine = data.positions
+        .filter(p => p.symbol.toUpperCase() === symbol.toUpperCase() && p.market_status === "open" && !!p.is_paper === !!paperMode)
+        .map(p => ({ id: p.id, side: p.side, amount: p.amount_usd, timeframe: p.timeframe, market_id: p.market_id, entry_price: p.entry_price, closes_at: p.closes_at, sweep_id: p.sweep_id, is_paper: p.is_paper, message: p.message }));
+      setMyPositions(mine);
+    }).catch(() => {});
+  }, [symbol, loggedIn, paperMode]);
 
   // Fetch token info + pair address (skip if already provided)
   useEffect(() => {
@@ -413,6 +429,91 @@ export default function CoinDetail({
             <div className={`absolute inset-0 flex items-center justify-center ${T.textMuted} text-[12px] font-bold`}>No chart data</div>
           )}
         </div>
+
+        {/* ── Your Positions ────────────────────────────────────────── */}
+        {myPositions.length > 0 && (() => {
+          // Group by sweep_id for multi-tf view
+          const sweepGroups = new Map<string, MyPosition[]>();
+          const soloPositions: MyPosition[] = [];
+          for (const p of myPositions) {
+            if (p.sweep_id) {
+              const arr = sweepGroups.get(p.sweep_id) ?? [];
+              arr.push(p);
+              sweepGroups.set(p.sweep_id, arr);
+            } else {
+              soloPositions.push(p);
+            }
+          }
+
+          const totalAmount = myPositions.reduce((s, p) => s + parseFloat(p.amount), 0);
+          const entryAvg = myPositions.reduce((s, p) => s + parseFloat(p.entry_price) * parseFloat(p.amount), 0) / totalAmount;
+          const pnlPct = livePrice && entryAvg > 0
+            ? ((livePrice - entryAvg) / entryAvg) * 100 * (myPositions[0]?.side === "long" ? 1 : -1)
+            : null;
+          const pnlUsd = pnlPct !== null ? (totalAmount * pnlPct / 100) : null;
+          const isLong = myPositions[0]?.side === "long";
+
+          return (
+            <div className={`mx-4 mb-3 rounded-xl border ${dk ? "border-white/10 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
+              <button onClick={() => setMyPosExpanded(!myPosExpanded)}
+                className="w-full flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11px] font-black ${isLong ? "text-emerald-400" : "text-red-400"}`}>
+                    {isLong ? "▲ LONG" : "▼ SHORT"}
+                  </span>
+                  <span className={`text-[12px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
+                    ${totalAmount.toFixed(0)}
+                  </span>
+                  {sweepGroups.size > 0 && (
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-white/8 text-white/40" : "bg-gray-200 text-gray-500"}`}>
+                      multi-tf · {myPositions.length} fills
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {pnlUsd !== null && (
+                    <span className={`text-[13px] font-black tabular-nums ${pnlUsd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {pnlUsd >= 0 ? "+" : ""}{pnlUsd.toFixed(2)} ({pnlPct!.toFixed(1)}%)
+                    </span>
+                  )}
+                  <span className={`text-[10px] transition-transform ${myPosExpanded ? "rotate-180" : ""} ${dk ? "text-white/30" : "text-gray-400"}`}>▾</span>
+                </div>
+              </button>
+
+              {myPosExpanded && (
+                <div className={`border-t ${dk ? "border-white/6" : "border-gray-200"}`}>
+                  {myPositions.map((p, i) => {
+                    const amt = parseFloat(p.amount);
+                    const entry = parseFloat(p.entry_price);
+                    const posPnl = livePrice && entry > 0
+                      ? amt * ((livePrice - entry) / entry) * (p.side === "long" ? 1 : -1)
+                      : null;
+                    const msLeft = Math.max(0, new Date(p.closes_at).getTime() - Date.now());
+                    const timeLeft = msLeft <= 0 ? "settling" : msLeft < 60000 ? `${Math.floor(msLeft/1000)}s` : msLeft < 3600000 ? `${Math.floor(msLeft/60000)}m` : `${Math.floor(msLeft/3600000)}h`;
+
+                    return (
+                      <div key={p.id} className={`flex items-center justify-between px-4 py-2.5 ${i < myPositions.length - 1 ? `border-b ${dk ? "border-white/4" : "border-gray-100"}` : ""}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-black ${dk ? "text-white/40" : "text-gray-400"}`}>{p.timeframe}</span>
+                          <span className={`text-[11px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${amt.toFixed(0)}</span>
+                          {p.message && <span className={`text-[10px] truncate max-w-[120px] ${dk ? "text-white/25" : "text-gray-400"}`}>&ldquo;{p.message}&rdquo;</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {posPnl !== null && (
+                            <span className={`text-[11px] font-black tabular-nums ${posPnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                              {posPnl >= 0 ? "+" : ""}{posPnl.toFixed(2)}
+                            </span>
+                          )}
+                          <span className={`text-[9px] font-bold ${dk ? "text-white/20" : "text-gray-300"}`}>{timeLeft}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Open Orders ─────────────────────────────────────────── */}
         {(() => {
