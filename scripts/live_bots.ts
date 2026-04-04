@@ -7,7 +7,9 @@
 
 export {};
 const BASE = process.env.BASE_URL ?? "http://localhost:3001";
-const DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
+const DURATION_MS = process.env.BOT_DURATION === "forever"
+  ? Infinity
+  : parseInt(process.env.BOT_DURATION ?? String(4 * 60 * 60 * 1000)); // default 4h, "forever" for persistent
 
 const BOTS = [
   { username: "degen_alpha",    password: "botpass123", bio: "full degen. no regrets." },
@@ -42,7 +44,13 @@ const TOKENS = [
   { symbol: "BTC",   chain: "ETH", ca: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599" }, // WBTC
 ];
 
-const TIMEFRAMES = ["5m", "15m", "1h", "4h"];
+// Weighted timeframes: short TFs get more action, long TFs less
+const TIMEFRAMES_WEIGHTED = [
+  "5m", "5m", "5m", "5m",     // 40%
+  "15m", "15m", "15m",        // 30%
+  "1h", "1h",                 // 20%
+  "4h",                       // 10%
+];
 const SIDES: ("long" | "short")[] = ["long", "short"];
 const AMOUNTS = [10, 25, 50, 100, 200];
 
@@ -140,7 +148,7 @@ async function registerOrLogin(username: string, password: string): Promise<stri
 async function doAction(token: string) {
   const tok = pick(TOKENS);
   const { symbol, chain, ca } = tok;
-  const timeframe = pick(TIMEFRAMES);
+  const timeframe = pick(TIMEFRAMES_WEIGHTED);
   const side      = pick(SIDES);
   const amount    = pick(AMOUNTS);
   const roll      = Math.random();
@@ -216,7 +224,7 @@ async function main() {
   console.log(`\n🤖 FUD.markets live bot simulation`);
   console.log(`   target:  ${BASE}`);
   console.log(`   bots:    ${BOTS.length}`);
-  console.log(`   runtime: 4 hours (~3-5 bots active per 5-min window)\n`);
+  console.log(`   runtime: ${DURATION_MS === Infinity ? "forever (persistent)" : `${Math.round(DURATION_MS / 3600000)}h`} (~3-5 bots active per 5-min window)\n`);
 
   // Login all bots first
   console.log("Logging in all bots...");
@@ -225,7 +233,7 @@ async function main() {
   // Stagger starts slightly so they don't all hit at once
   await Promise.all(loops);
 
-  console.log("\n✅ 4 hours done.\n");
+  console.log(`\n✅ ${DURATION_MS === Infinity ? "Bot loop ended" : "Done"}.\n`);
 }
 
 main().catch(console.error);
