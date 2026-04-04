@@ -93,6 +93,9 @@ export type WithdrawResponse = {
 
 export type LeaderboardEntry = {
   username: string;
+  avatar_url?: string | null;
+  bio?: string | null;
+  tier?: string;
   total_bets: number;
   wins: number;
   pnl: string;
@@ -136,6 +139,7 @@ export type UserProfile = {
     winner_side: "long" | "short" | null;
     chain: string;
     is_paper: boolean;
+    message?: string | null;
   }[];
 };
 
@@ -383,6 +387,9 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ notify_trades }),
     }),
+
+  getFollowingList: () =>
+    req<string[]>("/users/following/list"),
 
   getFollowStatus: (username: string) =>
     req<FollowStatus>(`/users/${encodeURIComponent(username)}/follow-status`),

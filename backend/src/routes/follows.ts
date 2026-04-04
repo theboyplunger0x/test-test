@@ -65,6 +65,16 @@ export async function followRoutes(app: FastifyInstance) {
     return { notify_trades: !!notify_trades };
   });
 
+  // GET /users/following/list — usernames I follow
+  app.get("/users/following/list", auth, async (req, reply) => {
+    const me = (req as any).user;
+    const { rows } = await db.query(
+      `SELECT u.username FROM follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = $1`,
+      [me.userId]
+    );
+    return rows.map((r: any) => r.username);
+  });
+
   // GET /users/:username/follow-status — am I following this user?
   app.get("/users/:username/follow-status", auth, async (req, reply) => {
     const { username } = req.params as any;

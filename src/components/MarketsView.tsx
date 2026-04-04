@@ -14,6 +14,7 @@ interface Props {
   onViewProfile?: (username: string) => void;
   onBet?:         (id: string, side: "long" | "short", amount: number) => Promise<string | null>;
   shakingIds?:    Set<string>;
+  followingUsernames?: string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -979,9 +980,9 @@ function OBCard({ entry, dk, onClick }: { entry: OBEntry; dk: boolean; onClick: 
   );
 }
 
-const MARKET_FILTERS = ["all", "hot", "sweep", "p2p"] as const;
+const MARKET_FILTERS = ["all", "hot", "sweep", "p2p", "following"] as const;
 type MarketFilter = typeof MARKET_FILTERS[number];
-const FILTER_LABELS: Record<MarketFilter, string> = { all: "All", hot: "Hot X's", sweep: "Sweep", p2p: "P2P" };
+const FILTER_LABELS: Record<MarketFilter, string> = { all: "All", hot: "Hot X's", sweep: "Sweep", p2p: "P2P", following: "Following" };
 const HOT_THRESHOLD = 5; // multiplier above this = hot
 
 // ── Markets Tape Sidebar ───────────────────────────────────────────────────────
@@ -1084,7 +1085,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile, paperMode }: { dk: bool
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds }: Props) {
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, followingUsernames = [] }: Props) {
   const [selectedFilter, setSelectedFilter] = useState<MarketFilter>("all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 
@@ -1110,12 +1111,15 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
   });
 
   // Filter by category
+  const followSet = new Set(followingUsernames.map(u => u.toLowerCase()));
   const filteredMarkets = selectedFilter === "all"
     ? marketsWithMult
     : selectedFilter === "hot"
     ? marketsWithMult.filter(m => m.bestMult >= HOT_THRESHOLD)
     : selectedFilter === "sweep"
     ? marketsWithMult.filter(m => !!m.sweep_id)
+    : selectedFilter === "following"
+    ? marketsWithMult.filter(m => m.opener_username && followSet.has(m.opener_username.toLowerCase()))
     : marketsWithMult; // p2p = all individual markets
 
   // Sort: by recent activity in "all", by multiplier in "hot"

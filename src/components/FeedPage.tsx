@@ -156,6 +156,7 @@ export default function FeedPage() {
   const [trendingSort, setTrendingSort]   = useState<"mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null>(null);
   const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
   const [paperMode, setPaperMode]           = useState(false);
+  const [followingList, setFollowingList]   = useState<string[]>([]);
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
   const [paperCreditOpen, setPaperCreditOpen] = useState(false);
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
@@ -189,7 +190,10 @@ export default function FeedPage() {
   // Restore session + listen for Google OAuth callback setting token in same tab
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) api.me().then(setUser).catch(() => localStorage.removeItem("token"));
+    if (token) {
+      api.me().then(setUser).catch(() => localStorage.removeItem("token"));
+      api.getFollowingList().then(setFollowingList).catch(() => {});
+    }
 
     function onStorage(e: StorageEvent) {
       if (e.key === "token" && e.newValue) {
@@ -676,7 +680,7 @@ export default function FeedPage() {
     { key: "markets",  label: "Markets" },
     { key: "chart",    label: "Chart" },
     { key: "feed",     label: "P2P" },
-    { key: "trending", label: "Trending" },
+    { key: "trending", label: "Discover" },
     { key: "ranks",    label: "Leaderboard" },
   ];
 
@@ -1018,6 +1022,7 @@ export default function FeedPage() {
               onViewProfile={(u) => setProfileUser(u)}
               onBet={handleAdd}
               shakingIds={shakingIds}
+              followingUsernames={followingList}
             />
           </motion.div>
         )}
@@ -1144,16 +1149,31 @@ export default function FeedPage() {
           return (
             <motion.div key="trending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 flex flex-col overflow-hidden">
 
-              {/* Header */}
+              {/* Header: sub-filters + chain */}
               <div className={`flex items-center justify-between px-5 py-2 border-b shrink-0 ${T.navBorder}`}>
-                <span className={`text-[11px] font-black uppercase tracking-widest ${dk ? "text-white/30" : "text-gray-400"}`}>
-                  🔥 Trending on DexScreener
-                </span>
-                <TrendingFilterBar
-                  dk={dk}
-                  chain={trendingChain} setChain={setTrendingChain}
-                  sort={trendingSort}   setSort={setTrendingSort}
-                />
+                <div className="flex items-center gap-1.5">
+                  {(["all", "new", "trending"] as const).map(f => (
+                    <button key={f} onClick={() => setTrendingSort(f === "all" ? null : f === "new" ? "vol-asc" : "mcap-desc")}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${
+                        (f === "all" && !trendingSort) || (f === "new" && trendingSort === "vol-asc") || (f === "trending" && trendingSort === "mcap-desc")
+                          ? T.filterActive : T.filterInactive
+                      }`}>
+                      {f === "all" ? "All" : f === "new" ? "New Pairs" : "Trending"}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  {["SOL", "ETH", "BASE"].map(c => (
+                    <button key={c} onClick={() => setTrendingChain(trendingChain === c ? null : c)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-black transition-all ${
+                        trendingChain === c
+                          ? c === "SOL" ? "bg-purple-500/20 text-purple-300" : c === "ETH" ? "bg-orange-500/20 text-orange-300" : "bg-blue-500/20 text-blue-300"
+                          : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"
+                      }`}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Content */}

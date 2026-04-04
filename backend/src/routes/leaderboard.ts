@@ -17,6 +17,9 @@ export async function leaderboardRoutes(app: FastifyInstance) {
     const { rows } = await db.query(
       `SELECT
          u.username,
+         u.avatar_url,
+         u.bio,
+         u.tier,
          COUNT(p.id)::int                                          AS total_bets,
          COUNT(CASE WHEN m.winner_side = p.side THEN 1 END)::int  AS wins,
          ROUND(
@@ -41,7 +44,7 @@ export async function leaderboardRoutes(app: FastifyInstance) {
        WHERE m.status = 'resolved'
          AND p.is_paper = $1
          ${dateFilter}
-       GROUP BY u.id, u.username
+       GROUP BY u.id, u.username, u.avatar_url, u.bio, u.tier
        HAVING COUNT(p.id) >= 1
        ORDER BY pnl DESC
        LIMIT 50`, [isPaper]

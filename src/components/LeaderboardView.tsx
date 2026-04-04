@@ -36,53 +36,17 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
     barFillNeg: dk ? "bg-red-400"     : "bg-red-500",
   };
 
-  const sorted = (dir: "asc" | "desc") =>
+  const sorted = (d: "asc" | "desc") =>
     [...rows].sort((a, b) =>
-      dir === "desc"
+      d === "desc"
         ? parseFloat(b.pnl) - parseFloat(a.pnl)
         : parseFloat(a.pnl) - parseFloat(b.pnl)
-    ).slice(0, 5);
+    ).slice(0, 10);
 
   const displayed = sorted(dir);
   const maxPnl  = rows.length > 0 ? Math.max(...rows.map(r => Math.abs(parseFloat(r.pnl)))) : 1;
 
-  const renderRow = (row: LeaderboardEntry, i: number, isGainers: boolean) => {
-    const pnl     = parseFloat(row.pnl);
-    const winRate = row.total_bets > 0 ? Math.round((row.wins / row.total_bets) * 100) : 0;
-    const barW    = maxPnl > 0 ? Math.abs(pnl) / maxPnl : 0;
-    const emoji   = isGainers
-      ? ["🥇","🥈","🥉"][i]
-      : ["💀","😬","😭"][i];
-
-    return (
-      <motion.div key={row.username} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-        className={`rounded-2xl border p-3.5 space-y-2 ${i === 0 ? T.cardTop : T.card}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-5 text-center text-[14px]">
-              {i < 3 ? emoji : <span className={`text-[11px] font-black tabular-nums ${T.muted}`}>{i + 1}</span>}
-            </span>
-            <div>
-              <button onClick={() => onViewProfile?.(row.username)}
-                className={`text-[13px] font-black ${T.strong} hover:opacity-70 transition-opacity`}>
-                {row.username}
-              </button>
-              <p className={`text-[10px] font-bold ${T.muted}`}>
-                {row.wins}W/{row.total_bets - row.wins}L · {winRate}%
-              </p>
-            </div>
-          </div>
-          <p className={`text-[15px] font-black tabular-nums ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-            {pnl >= 0 ? "+" : "-"}${Math.abs(pnl).toFixed(0)}
-          </p>
-        </div>
-        <div className={`h-0.5 rounded-full overflow-hidden ${T.bar}`}>
-          <motion.div initial={{ width: 0 }} animate={{ width: `${barW * 100}%` }} transition={{ duration: 0.5, delay: i * 0.04 }}
-            className={`h-full rounded-full ${isGainers ? T.barFill : T.barFillNeg}`} />
-        </div>
-      </motion.div>
-    );
-  };
+  const medals = ["🥇","🥈","🥉"];
 
   return (
     <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
@@ -106,7 +70,7 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
       </div>
 
       {loading ? (
-        <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className={`rounded-2xl border h-[64px] animate-pulse ${T.card}`} />)}</div>
+        <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className={`rounded-2xl border h-[80px] animate-pulse ${T.card}`} />)}</div>
       ) : error ? (
         <p className={`text-[13px] font-bold ${T.muted}`}>{error}</p>
       ) : rows.length === 0 ? (
@@ -116,8 +80,70 @@ export default function LeaderboardView({ dk, onViewProfile, paperMode = false }
           <p className={`text-[12px] font-bold ${T.muted}`}>Make some calls and get on the board.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {displayed.map((row, i) => renderRow(row, i, dir === "desc"))}
+        <div className="space-y-3">
+          {displayed.map((row, i) => {
+            const pnl     = parseFloat(row.pnl);
+            const winRate = row.total_bets > 0 ? Math.round((row.wins / row.total_bets) * 100) : 0;
+            const barW    = maxPnl > 0 ? Math.abs(pnl) / maxPnl : 0;
+            const isTop3  = i < 3;
+            const isGainer = dir === "desc";
+
+            return (
+              <motion.div key={row.username} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                onClick={() => onViewProfile?.(row.username)}
+                className={`rounded-2xl border p-4 cursor-pointer transition-all hover:scale-[1.01] ${isTop3 ? T.cardTop : T.card}`}>
+
+                {/* Top row: rank + avatar + name + bio + pnl */}
+                <div className="flex items-center gap-3">
+                  {/* Rank */}
+                  <span className="w-6 text-center shrink-0">
+                    {isTop3 ? <span className="text-[18px]">{medals[i]}</span> : <span className={`text-[13px] font-black tabular-nums ${T.muted}`}>{i + 1}</span>}
+                  </span>
+
+                  {/* Avatar */}
+                  {row.avatar_url ? (
+                    <img src={row.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <span className={`w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-black shrink-0 ${dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500"}`}>
+                      {row.username.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+
+                  {/* Name + stats */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[14px] font-black truncate ${T.strong}`}>{row.username}</span>
+                      {row.tier && row.tier !== "" && row.tier !== "basic" && (
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${
+                          row.tier === "elite" ? "bg-zinc-800 text-white" :
+                          row.tier === "top" ? "bg-yellow-500/20 text-yellow-400" :
+                          "bg-blue-500/20 text-blue-400"
+                        }`}>{row.tier.toUpperCase()}</span>
+                      )}
+                    </div>
+                    {row.bio && <p className={`text-[10px] font-bold ${T.muted} truncate`}>{row.bio}</p>}
+                    <p className={`text-[10px] font-bold ${T.muted}`}>{row.wins}W/{row.total_bets - row.wins}L · {winRate}%</p>
+                  </div>
+
+                  {/* PnL */}
+                  <div className="text-right shrink-0">
+                    <p className={`text-[18px] font-black tabular-nums leading-none ${pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {pnl >= 0 ? "+" : "-"}${Math.abs(pnl).toFixed(0)}
+                    </p>
+                    <p className={`text-[10px] font-bold mt-0.5 ${T.muted}`}>
+                      {row.wins}W/{row.total_bets - row.wins}L · {winRate}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bar */}
+                <div className={`h-1 rounded-full overflow-hidden mt-3 ${T.bar}`}>
+                  <motion.div initial={{ width: 0 }} animate={{ width: `${barW * 100}%` }} transition={{ duration: 0.6, delay: i * 0.04 }}
+                    className={`h-full rounded-full ${isGainer ? T.barFill : T.barFillNeg}`} />
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>

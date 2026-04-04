@@ -493,10 +493,15 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                           <span className={`text-[16px] ${t.side === "long" ? "text-emerald-400" : "text-red-400"}`}>
                             {t.side === "long" ? "▲" : "▼"}
                           </span>
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <p className={`text-[12px] font-black ${strong}`}>${t.symbol} {t.side.toUpperCase()} {t.timeframe}</p>
                             </div>
+                            {t.message && (
+                              <p className={`text-[11px] font-bold truncate max-w-[300px] ${t.side === "long" ? (dk ? "text-emerald-400/70" : "text-emerald-600/80") : (dk ? "text-red-400/70" : "text-red-600/80")}`}>
+                                &ldquo;{t.message}&rdquo;
+                              </p>
+                            )}
                             <p className={`text-[10px] ${muted}`}>{date}</p>
                           </div>
                         </div>
