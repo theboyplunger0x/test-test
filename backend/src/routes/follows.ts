@@ -75,6 +75,30 @@ export async function followRoutes(app: FastifyInstance) {
     return rows.map((r: any) => r.username);
   });
 
+  // GET /users/:username/followers — list of followers
+  app.get("/users/:username/followers", async (req, reply) => {
+    const { username } = req.params as any;
+    const { rows: [user] } = await db.query(`SELECT id FROM users WHERE username = $1`, [username]);
+    if (!user) return reply.status(404).send({ error: "User not found" });
+    const { rows } = await db.query(
+      `SELECT u.username, u.avatar_url, u.tier FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = $1 LIMIT 100`,
+      [user.id]
+    );
+    return rows;
+  });
+
+  // GET /users/:username/following — list of who they follow
+  app.get("/users/:username/following", async (req, reply) => {
+    const { username } = req.params as any;
+    const { rows: [user] } = await db.query(`SELECT id FROM users WHERE username = $1`, [username]);
+    if (!user) return reply.status(404).send({ error: "User not found" });
+    const { rows } = await db.query(
+      `SELECT u.username, u.avatar_url, u.tier FROM follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = $1 LIMIT 100`,
+      [user.id]
+    );
+    return rows;
+  });
+
   // GET /users/:username/follow-status — am I following this user?
   app.get("/users/:username/follow-status", auth, async (req, reply) => {
     const { username } = req.params as any;

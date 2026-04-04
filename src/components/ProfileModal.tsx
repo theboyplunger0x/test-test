@@ -51,6 +51,9 @@ export default function ProfileModal({
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
+  const [followListData, setFollowListData] = useState<{ username: string; avatar_url?: string | null; tier?: string }[]>([]);
+  const [followListLoading, setFollowListLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
@@ -147,15 +150,23 @@ export default function ProfileModal({
               {profile?.bio && (
                 <p className={`text-[12px] mt-0.5 max-w-[180px] ${muted}`}>{profile.bio}</p>
               )}
-              {/* Follower counts */}
+              {/* Follower counts — clickable */}
               {profile && (
                 <div className="flex items-center gap-2.5 mt-1">
-                  <span className={`text-[10px] font-bold ${muted}`}>
+                  <button onClick={() => {
+                    setFollowListType("followers");
+                    setFollowListLoading(true);
+                    api.getUserFollowers(username).then(setFollowListData).catch(() => setFollowListData([])).finally(() => setFollowListLoading(false));
+                  }} className={`text-[10px] font-bold ${muted} hover:opacity-70 transition-opacity`}>
                     <span className={`font-black ${strong}`}>{profile.follower_count ?? 0}</span> followers
-                  </span>
-                  <span className={`text-[10px] font-bold ${muted}`}>
+                  </button>
+                  <button onClick={() => {
+                    setFollowListType("following");
+                    setFollowListLoading(true);
+                    api.getUserFollowing(username).then(setFollowListData).catch(() => setFollowListData([])).finally(() => setFollowListLoading(false));
+                  }} className={`text-[10px] font-bold ${muted} hover:opacity-70 transition-opacity`}>
                     <span className={`font-black ${strong}`}>{profile.following_count ?? 0}</span> following
-                  </span>
+                  </button>
                 </div>
               )}
             </div>
@@ -258,6 +269,53 @@ export default function ProfileModal({
           </>
         )}
       </motion.div>
+
+      {/* Followers/Following popup */}
+      {followListType && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-10 flex items-center justify-center"
+          onClick={() => setFollowListType(null)}
+        >
+          <motion.div
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className={`w-full max-w-xs rounded-2xl border p-4 max-h-[50vh] overflow-y-auto ${dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200"}`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <button onClick={() => setFollowListType(null)} className={`text-[14px] font-bold ${muted} hover:opacity-60`}>←</button>
+              <p className={`text-[13px] font-black ${strong}`}>{followListType === "followers" ? "Followers" : "Following"}</p>
+              <div className="w-4" />
+            </div>
+            {followListLoading ? (
+              <p className={`text-[12px] text-center py-6 ${muted}`}>Loading…</p>
+            ) : followListData.length === 0 ? (
+              <p className={`text-[12px] text-center py-6 ${muted}`}>No {followListType} yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {followListData.map(u => (
+                  <button key={u.username}
+                    onClick={() => { setFollowListType(null); onViewProfile?.(); onClose(); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}
+                  >
+                    {u.avatar_url ? (
+                      <img src={u.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-black shrink-0 ${dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500"}`}>
+                        {u.username.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className={`text-[13px] font-black ${strong}`}>{u.username}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

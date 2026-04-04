@@ -91,6 +91,9 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
   const [followLoading, setFollowLoading] = useState(false);
   const [followHovered, setFollowHovered] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
+  const [followListData, setFollowListData] = useState<{ username: string; avatar_url?: string | null; tier?: string }[]>([]);
+  const [followListLoading, setFollowListLoading] = useState(false);
   const [editAvatar, setEditAvatar] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -354,16 +357,24 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                     <p className={`text-[18px] font-black text-red-400`}>{losses}</p>
                   </div>
                 </div>
-                {/* Followers / Following */}
+                {/* Followers / Following — clickable */}
                 <div className="flex gap-4 mt-2">
-                  <div>
+                  <button onClick={() => {
+                    setFollowListType("followers");
+                    setFollowListLoading(true);
+                    api.getUserFollowers(username).then(setFollowListData).catch(() => setFollowListData([])).finally(() => setFollowListLoading(false));
+                  }} className="hover:opacity-70 transition-opacity">
                     <span className={`text-[14px] font-black ${strong}`}>{profile.follower_count ?? 0}</span>
                     <span className={`text-[11px] font-bold ml-1 ${muted}`}>followers</span>
-                  </div>
-                  <div>
+                  </button>
+                  <button onClick={() => {
+                    setFollowListType("following");
+                    setFollowListLoading(true);
+                    api.getUserFollowing(username).then(setFollowListData).catch(() => setFollowListData([])).finally(() => setFollowListLoading(false));
+                  }} className="hover:opacity-70 transition-opacity">
                     <span className={`text-[14px] font-black ${strong}`}>{profile.following_count ?? 0}</span>
                     <span className={`text-[11px] font-bold ml-1 ${muted}`}>following</span>
-                  </div>
+                  </button>
                 </div>
                 {/* Best call */}
                 {(() => {
@@ -374,6 +385,7 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
                     <div className={`mt-3 rounded-xl px-3 py-2.5 flex items-center gap-2.5 ${dk ? "bg-emerald-500/10" : "bg-emerald-50"}`}>
                       <span className="text-[18px]">🏆</span>
                       <div className="flex-1 min-w-0">
+                        <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${dk ? "text-emerald-400/60" : "text-emerald-600/60"}`}>Best call</p>
                         <p className={`text-[12px] font-black ${strong}`}>
                           {best.side === "long" ? "▲" : "▼"} ${best.symbol} {best.timeframe}
                         </p>
@@ -546,6 +558,57 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
           </div>
         )}
       </div>
+
+      {/* Followers/Following popup */}
+      <AnimatePresence>
+        {followListType && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+            onClick={() => setFollowListType(null)}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className={`relative w-full max-w-xs rounded-2xl border p-4 max-h-[60vh] overflow-y-auto ${dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200"}`}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <button onClick={() => setFollowListType(null)} className={`text-[14px] font-bold ${muted} hover:opacity-60`}>←</button>
+                <p className={`text-[13px] font-black ${strong}`}>{followListType === "followers" ? "Followers" : "Following"}</p>
+                <div className="w-4" />
+              </div>
+              {followListLoading ? (
+                <p className={`text-[12px] text-center py-6 ${muted}`}>Loading…</p>
+              ) : followListData.length === 0 ? (
+                <p className={`text-[12px] text-center py-6 ${muted}`}>No {followListType} yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {followListData.map(u => (
+                    <button key={u.username}
+                      onClick={() => { setFollowListType(null); onClose(); setTimeout(() => onClose(), 50); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}
+                    >
+                      {u.avatar_url ? (
+                        <img src={u.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-black shrink-0 ${dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500"}`}>
+                          {u.username.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <span className={`text-[13px] font-black ${strong}`}>{u.username}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

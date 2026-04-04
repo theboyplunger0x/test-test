@@ -395,6 +395,12 @@ export const api = {
   getFollowingList: () =>
     req<string[]>("/users/following/list"),
 
+  getUserFollowers: (username: string) =>
+    req<{ username: string; avatar_url?: string | null; tier?: string }[]>(`/users/${encodeURIComponent(username)}/followers`),
+
+  getUserFollowing: (username: string) =>
+    req<{ username: string; avatar_url?: string | null; tier?: string }[]>(`/users/${encodeURIComponent(username)}/following`),
+
   getFollowStatus: (username: string) =>
     req<FollowStatus>(`/users/${encodeURIComponent(username)}/follow-status`),
 
