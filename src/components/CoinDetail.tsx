@@ -338,44 +338,44 @@ export default function CoinDetail({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
 
-      {/* ── Stats bar ────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-3 px-4 py-2.5 border-b shrink-0 ${dk ? "border-white/8 bg-[#0a0a0a]" : "border-gray-100 bg-white"}`}>
-        <button onClick={onViewToken} className={`text-[15px] font-black shrink-0 ${T.textPrimary} ${onViewToken ? "hover:opacity-60 cursor-pointer transition-opacity" : "cursor-default"}`}>
-          ${symbol}
-        </button>
-        <span className={`text-[18px] font-black tabular-nums shrink-0 ${T.textPrimary}`}>
-          {tokenInfo ? `$${formatPrice(livePrice ?? tokenInfo.price)}` : "—"}
-        </span>
-        {tokenInfo && (
-          <span className={`shrink-0 text-[11px] font-black px-1.5 py-0.5 rounded ${T.changePill(tokenInfo.change24h >= 0)}`}>
-            {tokenInfo.change24h >= 0 ? "+" : ""}{tokenInfo.change24h.toFixed(2)}%
-          </span>
-        )}
-        <div className={`flex items-center gap-3 flex-1 min-w-0 overflow-x-auto border-l pl-3 ${dk ? "border-white/8" : "border-gray-100"}`}>
-          {tokenInfo?.marketCap ? (
-            <div className="shrink-0">
-              <span className={`text-[9px] uppercase tracking-widest ${T.textMuted}`}>MCap </span>
-              <span className={`text-[11px] font-bold ${T.textPrimary}`}>{formatMcap(tokenInfo.marketCap)}</span>
-            </div>
-          ) : null}
-          <span className={`shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full ${T.chainPill(chain)}`}>{chain}</span>
-          {tokenInfo?.address && <CopyCA ca={tokenInfo.address} dk={dk} />}
-        </div>
-        <div className={`flex rounded-lg overflow-hidden text-[10px] font-black shrink-0 ${T.toggleBase}`}>
-          {(["price", "mcap"] as const).map((v) => (
-            <button key={v} onClick={() => setChartView(v)}
-              className={`px-2.5 py-1.5 transition-all ${chartView === v ? T.toggleActive : T.toggleInact}`}>
-              {v === "price" ? "P" : "M"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Main 3-column area ───────────────────────────────────────────────── */}
+      {/* ── Main 2-column area ───────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
 
-      {/* ── MAIN: Chart + Orders + Order Book (all scrollable) ──── */}
+      {/* ── LEFT: Stats + Chart + Orders + Order Book (all scrollable) ──── */}
       <div className={`flex-1 overflow-y-auto min-h-0 ${T.chartBg}`} style={{ minHeight: 0 }}>
+
+        {/* Stats bar — inside left column, not full width */}
+        <div className={`flex items-center gap-3 px-4 py-2.5 border-b shrink-0 ${dk ? "border-white/8 bg-[#0a0a0a]" : "border-gray-100 bg-white"}`}>
+          <button onClick={onViewToken} className={`text-[15px] font-black shrink-0 ${T.textPrimary} ${onViewToken ? "hover:opacity-60 cursor-pointer transition-opacity" : "cursor-default"}`}>
+            ${symbol}
+          </button>
+          <span className={`text-[18px] font-black tabular-nums shrink-0 ${T.textPrimary}`}>
+            {tokenInfo ? `$${formatPrice(livePrice ?? tokenInfo.price)}` : "—"}
+          </span>
+          {tokenInfo && (
+            <span className={`shrink-0 text-[11px] font-black px-1.5 py-0.5 rounded ${T.changePill(tokenInfo.change24h >= 0)}`}>
+              {tokenInfo.change24h >= 0 ? "+" : ""}{tokenInfo.change24h.toFixed(2)}%
+            </span>
+          )}
+          <div className={`flex items-center gap-3 flex-1 min-w-0 overflow-x-auto border-l pl-3 ${dk ? "border-white/8" : "border-gray-100"}`}>
+            {tokenInfo?.marketCap ? (
+              <div className="shrink-0">
+                <span className={`text-[9px] uppercase tracking-widest ${T.textMuted}`}>MCap </span>
+                <span className={`text-[11px] font-bold ${T.textPrimary}`}>{formatMcap(tokenInfo.marketCap)}</span>
+              </div>
+            ) : null}
+            <span className={`shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full ${T.chainPill(chain)}`}>{chain}</span>
+            {tokenInfo?.address && <CopyCA ca={tokenInfo.address} dk={dk} />}
+          </div>
+          <div className={`flex rounded-lg overflow-hidden text-[10px] font-black shrink-0 ${T.toggleBase}`}>
+            {(["price", "mcap"] as const).map((v) => (
+              <button key={v} onClick={() => setChartView(v)}
+                className={`px-2.5 py-1.5 transition-all ${chartView === v ? T.toggleActive : T.toggleInact}`}>
+                {v === "price" ? "P" : "M"}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Chart toolbar: TF selector + countdown */}
         <div className={`flex items-center gap-2 px-3 py-2 border-b shrink-0 ${dk ? "border-white/6" : "border-gray-100"}`}>
