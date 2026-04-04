@@ -341,7 +341,7 @@ export default function CoinDetail({
       {/* ── Main 2-column area ───────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
 
-      {/* ── LEFT: Stats + Chart + Orders + Order Book (all scrollable) ──── */}
+      {/* ── LEFT: Stats + Chart + Positions + Orders + Order Book (scrollable) */}
       <div className={`flex-1 overflow-y-auto min-h-0 ${T.chartBg}`} style={{ minHeight: 0 }}>
 
         {/* Stats bar — inside left column, not full width */}
@@ -1130,7 +1130,7 @@ export default function CoinDetail({
         })()}
       </div>
 
-      </div>{/* end 3-col */}
+      </div>{/* end 2-col */}
 
       {callerModal && (
         <CallerTokenModal
