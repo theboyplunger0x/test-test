@@ -86,38 +86,35 @@ function groupBySweep(orders: Order[]): { sweeps: SweepGroup[]; solo: Order[] } 
   }
 
   // Merge sweep groups that share symbol+direction+paper and were opened within 60s of each other
-  const merged = new Map<string, Order[]>();
+  const mergedGroups: Order[][] = [];
   for (const [, positions] of sweepMap) {
     const p = positions[0];
-    const key = `${p.symbol}|${p.direction}|${p.isPaper}`;
-    const existing = merged.get(key);
-    if (existing) {
-      // Check if opened within 60s of any position in the group
-      const anyClose = positions.some(pos =>
-        existing.some(ex => Math.abs(pos.openedAt - ex.openedAt) < 60_000)
-      );
-      if (anyClose) {
-        existing.push(...positions);
-        continue;
-      }
+    const merged = mergedGroups.find(g => {
+      const gp = g[0];
+      if (gp.symbol !== p.symbol || gp.direction !== p.direction || gp.isPaper !== p.isPaper) return false;
+      return positions.some(pos => g.some(ex => Math.abs(pos.openedAt - ex.openedAt) < 60_000));
+    });
+    if (merged) {
+      merged.push(...positions);
+    } else {
+      mergedGroups.push([...positions]);
     }
-    merged.set(key, [...positions]);
   }
 
   const sweeps: SweepGroup[] = [];
-  for (const [, positions] of merged) {
+  for (const positions of mergedGroups) {
     if (positions.length === 1) {
       noSweep.push(positions[0]);
       continue;
     }
-    const latestExpiry = Math.max(...positions.map(p => p.expiresAt));
-    const tfs = [...new Set(positions.map(p => p.timeframe))];
+    const latestExpiry = Math.max(...positions.map((p: Order) => p.expiresAt));
+    const tfs = [...new Set(positions.map((p: Order) => p.timeframe))];
     sweeps.push({
       sweepId:     positions[0].sweepId ?? positions[0].id,
       symbol:      positions[0].symbol,
       timeframe:   tfs.length > 1 ? "multi-tf" : tfs[0],
       direction:   positions[0].direction,
-      totalAmount: positions.reduce((s, p) => s + p.amount, 0),
+      totalAmount: positions.reduce((s: number, p: Order) => s + p.amount, 0),
       status:      positions[0].status,
       expiresAt:   latestExpiry,
       isPaper:     positions[0].isPaper,

@@ -12,10 +12,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
         <div style={{ padding: 40, color: "white", background: "#111", fontFamily: "monospace" }}>
           <h1 style={{ color: "red" }}>Crash caught:</h1>
           <pre style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{this.state.error.message}</pre>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, opacity: 0.6 }}>{this.state.error.stack}</pre>
           <button onClick={() => { localStorage.removeItem("fud_tab"); window.location.reload(); }}
             style={{ marginTop: 20, padding: "10px 20px", background: "blue", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
-            Reset &amp; Reload
+            Reset & Reload
           </button>
         </div>
       );
