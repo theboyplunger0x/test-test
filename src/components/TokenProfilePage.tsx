@@ -333,17 +333,19 @@ export default function TokenProfilePage({
       {/* ── TRADE VIEW ── */}
       {viewTab === "trade" && (
         <div className="px-5 py-4">
-          {/* Trade / Sweep toggle */}
-          <div className={`flex mb-3 border-b ${border}`}>
-            {(["trade", "sweep"] as const).map(m => (
-              <button key={m} onClick={() => setTradeMode(m)}
-                className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider transition-all relative ${
-                  tradeMode === m ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30" : "text-gray-400"
-                }`}>
-                {m === "trade" ? "Trade" : "Sweep"}
-                {tradeMode === m && <span className={`absolute bottom-0 left-0 right-0 h-[2px] ${dk ? "bg-white" : "bg-gray-900"}`} />}
-              </button>
-            ))}
+          {/* Order type: Market | Sweep | Advanced */}
+          <div className="flex items-center gap-3 mb-3">
+            <button onClick={() => setTradeMode("trade")}
+              className={`text-[11px] font-black transition-all ${tradeMode === "trade" ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>
+              Market
+            </button>
+            <button onClick={() => setTradeMode("sweep")}
+              className={`text-[11px] font-black transition-all ${tradeMode === "sweep" ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>
+              Sweep
+            </button>
+            <span className={`text-[11px] font-bold cursor-default ${dk ? "text-white/15" : "text-gray-300"}`}>
+              Advanced ▾
+            </span>
           </div>
 
           {/* Side */}
@@ -417,7 +419,7 @@ export default function TokenProfilePage({
                 ? tradeSide === "long" ? "bg-emerald-500 text-white hover:bg-emerald-400" : "bg-red-500 text-white hover:bg-red-400"
                 : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}>
-            {tradeLoading ? "Placing..." : tradeMode === "sweep" ? "Sweep" : activeTradeMarket ? "Trade" : "Open Market"}
+            {tradeLoading ? "Placing..." : tradeMode === "sweep" ? `Sweep ${tradeSide === "long" ? "▲" : tradeSide === "short" ? "▼" : ""} ${tradeFinalAmt ? `$${tradeFinalAmt}` : ""}`.trim() : activeTradeMarket ? "Trade" : "Open Market"}
           </motion.button>
         </div>
       )}
