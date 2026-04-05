@@ -1041,7 +1041,8 @@ export default function FeedPage() {
 
         {/* MARKETS TAB */}
         {!tokenProfileToken && mainTab === "markets" && (
-          <motion.div key="markets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
+          <motion.div key="markets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex">
+            <div className="flex-1 overflow-hidden flex flex-col">
             <MarketsView
               dk={dk}
               liveMarkets={markets
@@ -1072,6 +1073,18 @@ export default function FeedPage() {
               loggedIn={!!user}
               onAuthRequired={() => setAuthOpen(true)}
             />
+            </div>
+            <div className="hidden md:flex">
+              <TapeSidebar challenges={allChallenges} onViewCoin={handleCoinClick} onViewToken={(symbol) => {
+                const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+                if (rich) { handleCATradeResult(rich); return; }
+                const coin = liveCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase());
+                handleCATradeResult({ address: coin?.ca ?? symbol, symbol, name: coin?.name ?? symbol, price: coin?.price ?? 0, change24h: coin?.change24h ?? 0, marketCap: coin?.marketCap ?? 0, volume24h: coin?.volume24h ?? 0, liquidity: coin?.liquidity ?? 0, chainLabel: coin?.chain ?? "SOL", pairAddress: "", chainId: "" });
+              }} dk={dk}
+              tapeBorder={T.sidebarBorder} sidebarLabel={T.sidebarLabel} tapeColLabel={T.tapeColLabel}
+              open={tapeOpen} onToggle={() => setTapeOpen(o => !o)}
+              onViewProfile={(u) => setProfileUser(u)} paperMode={paperMode} />
+            </div>
           </motion.div>
         )}
 
@@ -2444,8 +2457,10 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
           {open ? "›" : "‹"}
         </button>
         {!open && (
-          <button onClick={onToggle} className={`mx-auto mt-2 ${dk ? "text-white/20 hover:text-white/40" : "text-gray-300 hover:text-gray-500"} transition-colors`}>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ writingMode: "vertical-rl" }}>Tape</span>
+          <button onClick={onToggle} className={`mx-auto mt-3 flex flex-col items-center gap-0.5 ${dk ? "text-white/20 hover:text-white/40" : "text-gray-300 hover:text-gray-500"} transition-colors`}>
+            {"TAPE".split("").map((c, i) => (
+              <span key={i} className="text-[8px] font-black leading-none">{c}</span>
+            ))}
           </button>
         )}
       </div>

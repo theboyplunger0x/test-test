@@ -81,15 +81,15 @@ export default function Chart({ candles, livePrice, entryPrice, direction, dk = 
     chartRef.current = chart;
 
     const series = chart.addSeries(AreaSeries, {
-      lineColor: "#f97316",
-      topColor: "rgba(249,115,22,0.18)",
-      bottomColor: "rgba(249,115,22,0)",
+      lineColor: "#10b981",
+      topColor: "rgba(16,185,129,0.18)",
+      bottomColor: "rgba(16,185,129,0)",
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
       crosshairMarkerVisible: true,
       crosshairMarkerRadius: 4,
-      crosshairMarkerBackgroundColor: "#f97316",
+      crosshairMarkerBackgroundColor: "#10b981",
     });
     seriesRef.current = series;
 
