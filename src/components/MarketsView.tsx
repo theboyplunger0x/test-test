@@ -1176,36 +1176,6 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
               </div>
             </div>
 
-            {/* Calls + Debates at top when "All" */}
-            {selectedFilter === "all" && debates.length > 0 && (
-              <div className="mb-4">
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${dk ? "text-white/25" : "text-gray-400"}`}>Hot Debates</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {debates.slice(0, 4).map((d, i) => (
-                    <DebateCard key={d.market.id} debate={d} dk={dk} index={i}
-                      onViewProfile={(u) => onViewProfile?.(u)}
-                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
-                      onFade={(marketId, side) => onFadeDebate?.(marketId, side)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            {selectedFilter === "all" && calls.length > 0 && (
-              <div className="mb-4">
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${dk ? "text-white/25" : "text-gray-400"}`}>Recent Calls</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {calls.slice(0, 6).map((c, i) => (
-                    <CallCard key={c.id} call={c} dk={dk} index={i}
-                      onViewProfile={(u) => onViewProfile?.(u)}
-                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
-                      onFade={onFadeCall}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
             {selectedFilter === "calls" ? (
               /* Calls — same design as Calls tab */
               calls.length > 0 ? (
@@ -1237,8 +1207,26 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                 <p className={`text-center py-8 text-[13px] ${dk ? "text-white/30" : "text-gray-400"}`}>No active debates</p>
               )
             ) : (
-              /* Markets grid — All, Hot, Sweep, P2P, Following */
+              /* Markets grid — All includes calls + debates interleaved */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {selectedFilter === "all" && debates.slice(0, 4).map((d, i) => (
+                  <motion.div key={`debate-${d.market.id}`} className="sm:col-span-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
+                    <DebateCard debate={d} dk={dk} index={i}
+                      onViewProfile={(u) => onViewProfile?.(u)}
+                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                      onFade={(marketId, side) => onFadeDebate?.(marketId, side)}
+                    />
+                  </motion.div>
+                ))}
+                {selectedFilter === "all" && calls.slice(0, 6).map((c, i) => (
+                  <motion.div key={`call-${c.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
+                    <CallCard call={c} dk={dk} index={i}
+                      onViewProfile={(u) => onViewProfile?.(u)}
+                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                      onFade={onFadeCall}
+                    />
+                  </motion.div>
+                ))}
                 {sortedMarkets.map((m, i) => (
                   <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
                     <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} onBet={onBet} shaking={shakingIds?.has(m.id)} isP2PView={selectedFilter === "p2p"} paperMode={paperMode} />
