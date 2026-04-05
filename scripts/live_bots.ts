@@ -191,7 +191,7 @@ async function botLoop(bot: { username: string; password: string }, endAt: numbe
     await req("/auth/paper-credit", { method: "POST", body: JSON.stringify({ amount: 2000 }) }, token).catch(() => {});
     // Set avatar + bio
     const avatarUrl = `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${bot.username}`;
-    await req("/auth/update-profile", { method: "POST", body: JSON.stringify({ avatar_url: avatarUrl, bio: bot.bio ?? "" }) }, token).catch(() => {});
+    await req("/auth/update-profile", { method: "POST", body: JSON.stringify({ avatar_url: avatarUrl, bio: (bot as any).bio ?? "" }) }, token).catch(() => {});
   } catch (e: any) {
     console.error(`[${bot.username}] login failed: ${e.message}`);
     return;

@@ -18,6 +18,7 @@ import ProfileModal from "./ProfileModal";
 import ProfilePage from "./ProfilePage";
 import NotificationsPanel from "./NotificationsPanel";
 import TokenProfilePage from "./TokenProfilePage";
+import ChartModal from "./ChartModal";
 import MarketsView from "./MarketsView";
 import SpotView from "./SpotView";
 import CallCard, { type Call } from "./CallCard";
@@ -129,7 +130,8 @@ export default function FeedPage() {
   const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
   const [mainTab, setMainTab]           = useState<MainTab>(() => {
     if (typeof window === "undefined") return "calls";
-    return (localStorage.getItem("fud_tab") as MainTab) || "markets";
+    const saved = localStorage.getItem("fud_tab") as MainTab;
+    return saved === "chart" ? "markets" : saved || "markets";
   });
   useEffect(() => { localStorage.setItem("fud_tab", mainTab); }, [mainTab]);
   const [calls, setCalls]               = useState<Call[]>([]);
@@ -172,6 +174,8 @@ export default function FeedPage() {
   const [paperCreditLoading, setPaperCreditLoading] = useState(false);
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
+  const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
+  const [chartModalInfo, setChartModalInfo]         = useState<TokenInfo | null>(null);
   const [profilePageUser, setProfilePageUser]       = useState<string | null>(null);
   const [notifPanelOpen, setNotifPanelOpen]         = useState(false);
   const [unreadCount, setUnreadCount]               = useState(0);
@@ -264,7 +268,7 @@ export default function FeedPage() {
   useEffect(() => {
     async function fetchMarketsAndBalance() {
       try {
-        const fresh = await api.getMarkets();
+        const fresh = (await api.getMarkets()).filter(m => m && m.symbol && m.chain);
         // Detect which markets got a new bet since last fetch
         const newShaking = new Set<string>();
         for (const m of fresh) {
@@ -466,11 +470,10 @@ export default function FeedPage() {
   if (poolSortDir === "desc") filtered = [...filtered].sort((a, b) => (b.shortPool + b.longPool) - (a.shortPool + a.longPool));
   const trending = [...allChallenges].sort((a, b) => (b.longPool + b.shortPool) - (a.longPool + a.shortPool));
 
-  const handleCoinClick = (symbol: string, chain?: string) => {
-    // Social-first: go to Token Profile, not Chart
+  const buildTokenInfo = (symbol: string, chain?: string): TokenInfo => {
     const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
     const coin = liveCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase());
-    handleCATradeResult(rich ?? {
+    return rich ?? {
       symbol: symbol.toUpperCase(),
       name: coin?.name ?? symbol,
       address: coin?.ca ?? "",
@@ -482,13 +485,18 @@ export default function FeedPage() {
       volume24h: coin?.volume24h ?? 0,
       marketCap: coin?.marketCap ?? 0,
       pairAddress: "",
-    });
+    };
+  };
+
+  const handleCoinClick = (symbol: string, chain?: string) => {
+    // Open token modal popup instead of navigating away
+    setTokenModalInfo(buildTokenInfo(symbol, chain));
   };
 
   function handleCATradeResult(token: TokenInfo) {
     setSelectedTokenInfo(token);
-    setTokenProfileToken(token);
-    setSelectedCoin(null); // don't go to chart view — go to token profile
+    setTokenModalInfo(token);
+    setSelectedCoin(null);
   }
 
   async function handleCAQuickTrade(token: TokenInfo, side: "long" | "short", timeframe: string, amount: number, message?: string): Promise<string | null> {
@@ -575,10 +583,10 @@ export default function FeedPage() {
   ): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
     if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
-    const sym = selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol;
+    const sym = selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol ?? chartModalInfo?.symbol ?? tokenModalInfo?.symbol;
     if (!sym) return "No coin selected.";
 
-    const ch = selectedTokenInfo?.chainLabel ??
+    const ch = selectedTokenInfo?.chainLabel ?? chartModalInfo?.chainLabel ?? tokenModalInfo?.chainLabel ??
       markets.find(m => m.symbol.toUpperCase() === sym.toUpperCase())?.chain?.toUpperCase() ??
       liveCoins.find(c => c.symbol.toUpperCase() === sym.toUpperCase())?.chain ??
       "SOL";
@@ -586,7 +594,7 @@ export default function FeedPage() {
     const autoTagline = taglineInput || `Will $${sym} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
 
     async function createFreshMarket() {
-      const ca = selectedTokenInfo?.address;
+      const ca = selectedTokenInfo?.address ?? chartModalInfo?.address ?? tokenModalInfo?.address;
       const created = await api.createMarket(sym!, ch, timeframe, autoTagline, paperMode, ca);
       if (!created) throw new Error("Failed to create market");
       setMarkets(prev => [created, ...prev]);
@@ -687,7 +695,6 @@ export default function FeedPage() {
   const MAIN_TABS: { key: MainTab; label: string }[] = [
     { key: "markets",  label: "Feed" },
     { key: "calls",    label: "Calls" },
-    { key: "chart",    label: "Chart" },
     { key: "feed",     label: "P2P" },
     { key: "trending", label: "Discover" },
     { key: "following", label: "Following" },
@@ -854,8 +861,7 @@ export default function FeedPage() {
               dk={dk}
               onClose={() => setTokenProfileToken(null)}
               onViewChart={() => {
-                setChartSymbol(tokenProfileToken.symbol);
-                setMainTab("chart");
+                setChartModalInfo(tokenProfileToken);
                 setTokenProfileToken(null);
               }}
               onBet={handleAdd}
@@ -1050,6 +1056,8 @@ export default function FeedPage() {
                 handleAdd(marketId, side, 25);
               }}
               onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+              loggedIn={!!user}
+              onAuthRequired={() => setAuthOpen(true)}
             />
           </motion.div>
         )}
@@ -1273,6 +1281,133 @@ export default function FeedPage() {
           </motion.div>
         )}
 
+      </AnimatePresence>
+
+      {/* Token Modal — popup over feed */}
+      <AnimatePresence>
+        {tokenModalInfo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setTokenModalInfo(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", damping: 28, stiffness: 340 }}
+              className={`relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border ${dk ? "bg-[#0a0a0a] border-white/10" : "bg-white border-gray-200"} shadow-2xl mx-4`}
+              onClick={e => e.stopPropagation()}
+            >
+              <button onClick={() => setTokenModalInfo(null)}
+                className={`absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center text-[14px] font-bold transition-colors ${dk ? "bg-white/10 text-white/50 hover:bg-white/20" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}>
+                ✕
+              </button>
+              <TokenProfilePage
+                token={tokenModalInfo}
+                dk={dk}
+                onClose={() => setTokenModalInfo(null)}
+                onViewChart={() => {
+                  setChartModalInfo(tokenModalInfo);
+                  setTokenModalInfo(null);
+                }}
+                onBet={async (marketId, side, amount, message) => {
+                  if (!user) { setAuthOpen(true); return "Sign in to trade"; }
+                  return handleAdd(marketId, side, amount, message);
+                }}
+                onOpenMarket={() => {
+                  if (!user) { setAuthOpen(true); return; }
+                  const coin = liveCoins.find(c => c.symbol === tokenModalInfo.symbol);
+                  if (coin) {
+                    handleOpenMarket(coin);
+                  } else {
+                    handleOpenMarket({
+                      id:        tokenModalInfo.address,
+                      symbol:    tokenModalInfo.symbol,
+                      name:      tokenModalInfo.name,
+                      price:     tokenModalInfo.price,
+                      change24h: tokenModalInfo.change24h,
+                      marketCap: tokenModalInfo.marketCap,
+                      volume24h: tokenModalInfo.volume24h,
+                      liquidity: tokenModalInfo.liquidity,
+                      age:       "—",
+                      migrated:  true,
+                      chain:     tokenModalInfo.chainLabel as Coin["chain"],
+                      ca:        tokenModalInfo.address,
+                    });
+                  }
+                }}
+                onSweep={async (side, amount, timeframe, symbol, chain) => {
+                  if (!user) { setAuthOpen(true); return "Sign in to trade"; }
+                  return handleSweep(side, amount, timeframe, symbol, chain);
+                }}
+                onPlaceOrder={async (side, amount, timeframe, autoReopen, symbol, chain, ca) => {
+                  if (!user) { setAuthOpen(true); return "Sign in to trade"; }
+                  return handlePlaceOrder(side, amount, timeframe, autoReopen, symbol, chain, ca);
+                }}
+                loggedIn={!!user}
+                onAuthRequired={() => setAuthOpen(true)}
+                paperMode={paperMode}
+                presets={tradePresets}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Chart Modal */}
+      <AnimatePresence>
+        {chartModalInfo && (
+          <ChartModal
+            token={chartModalInfo}
+            dk={dk}
+            onClose={() => setChartModalInfo(null)}
+            onBet={async (marketId, side, amount, message) => {
+              if (!user) { setAuthOpen(true); return "Sign in to trade"; }
+              return handleAdd(marketId, side, amount, message);
+            }}
+            onAutoTrade={async (side, amount, timeframe, tagline) => {
+              if (!user) { setAuthOpen(true); return "Sign in to trade"; }
+              return handleAutoTrade(side, amount, timeframe, tagline);
+            }}
+            onSweep={async (side, amount, timeframe, symbol, chain) => {
+              if (!user) { setAuthOpen(true); return "Sign in to trade"; }
+              return handleSweep(side, amount, timeframe, symbol, chain);
+            }}
+            onOpenMarket={() => {
+              if (!user) { setAuthOpen(true); return; }
+              const coin = liveCoins.find(c => c.symbol === chartModalInfo.symbol);
+              if (coin) {
+                handleOpenMarket(coin);
+              } else {
+                handleOpenMarket({
+                  id:        chartModalInfo.address,
+                  symbol:    chartModalInfo.symbol,
+                  name:      chartModalInfo.name,
+                  price:     chartModalInfo.price,
+                  change24h: chartModalInfo.change24h,
+                  marketCap: chartModalInfo.marketCap,
+                  volume24h: chartModalInfo.volume24h,
+                  liquidity: chartModalInfo.liquidity,
+                  age:       "—",
+                  migrated:  true,
+                  chain:     chartModalInfo.chainLabel as Coin["chain"],
+                  ca:        chartModalInfo.address,
+                });
+              }
+            }}
+            loggedIn={!!user}
+            onAuthRequired={() => setAuthOpen(true)}
+            paperMode={paperMode}
+            presets={tradePresets}
+            onViewProfile={() => {
+              const t = chartModalInfo;
+              setChartModalInfo(null);
+              setTokenModalInfo(t);
+            }}
+            onViewFullChart={() => {
+              setChartModalInfo(null);
+              setChartSymbol(chartModalInfo!.symbol);
+              setMainTab("chart" as MainTab);
+            }}
+          />
+        )}
       </AnimatePresence>
 
       {/* Modals */}

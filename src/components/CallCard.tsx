@@ -108,86 +108,83 @@ export default function CallCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.02 }}
-      className={`rounded-2xl border-2 p-4 transition-all ${cardBg}`}
+      className={`rounded-2xl border-2 p-4 transition-all h-full flex flex-col ${cardBg}`}
     >
-      {/* Header: avatar + username + side badge + token + time */}
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
+      {/* Header: avatar + username + opener + time */}
+      <div className="flex items-center gap-2">
         <button
           onClick={() => onViewProfile?.(call.username)}
           className="shrink-0"
         >
           {call.avatar_url ? (
-            <img src={call.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+            <img src={call.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
           ) : (
-            <span className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black ${dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500"}`}>
+            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black ${dk ? "bg-white/10 text-white/50" : "bg-gray-200 text-gray-500"}`}>
               {call.username.charAt(0).toUpperCase()}
             </span>
           )}
         </button>
-
-        <div className="flex-1 min-w-0">
-          {/* Name + side */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onViewProfile?.(call.username)}
-              className={`text-[13px] font-black truncate ${dk ? "text-white hover:text-white/70" : "text-gray-900 hover:text-gray-600"} transition-colors`}
-            >
-              {call.username}
-            </button>
-            <span className={`text-[10px] font-black uppercase ${sideColor}`}>
-              {call.side === "long" ? "▲ LONG" : "▼ SHORT"}
-            </span>
-            {call.is_opener && (
-              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"}`}>
-                OPENER
-              </span>
-            )}
-            {isResolved && won && (
-              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-100 text-emerald-700"}`}>
-                WON
-              </span>
-            )}
-            {isResolved && lost && (
-              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700"}`}>
-                LOST
-              </span>
-            )}
-          </div>
-
-          {/* Token + chain + timeframe + time */}
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <button
-              onClick={() => onViewToken?.(call.symbol, call.chain)}
-              className={`text-[12px] font-black ${dk ? "text-white/70 hover:text-white" : "text-gray-700 hover:text-gray-900"} transition-colors`}
-            >
-              ${call.symbol}
-            </button>
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${chainPill(call.chain)}`}>{call.chain.toUpperCase()}</span>
-            <span className={`text-[10px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>{call.timeframe}</span>
-            <span className={`text-[9px] ${dk ? "text-white/20" : "text-gray-300"}`}>·</span>
-            <span className={`text-[10px] ${dk ? "text-white/25" : "text-gray-400"}`}>{timeAgo(call.placed_at)}</span>
-          </div>
-        </div>
-
-        {/* Amount */}
-        <div className="shrink-0 text-right">
-          <span className={`text-[15px] font-black tabular-nums ${dk ? "text-white" : "text-gray-900"}`}>
-            ${amt >= 1000 ? `${(amt / 1000).toFixed(1)}k` : amt.toFixed(0)}
+        <button
+          onClick={() => onViewProfile?.(call.username)}
+          className={`text-[13px] font-black ${dk ? "text-white hover:text-white/70" : "text-gray-900 hover:text-gray-600"} transition-colors`}
+        >
+          {call.username}
+        </button>
+        {call.is_opener && (
+          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-600"}`}>
+            OPENER
           </span>
-          {call.is_paper && (
-            <p className="text-[8px] font-black text-yellow-500">PAPER</p>
-          )}
-        </div>
+        )}
+        {isResolved && won && (
+          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-emerald-500/20 text-emerald-400" : "bg-emerald-100 text-emerald-700"}`}>
+            WON
+          </span>
+        )}
+        {isResolved && lost && (
+          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${dk ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700"}`}>
+            LOST
+          </span>
+        )}
+        <span className={`text-[10px] ${dk ? "text-white/25" : "text-gray-400"} ml-auto`}>{timeAgo(call.placed_at)}</span>
       </div>
 
-      {/* Message — the protagonist */}
-      {call.message && (
-        <p className={`mt-3 text-[14px] font-bold leading-snug ${dk ? "text-white/80" : "text-gray-800"}`}>
-          &ldquo;{call.message}&rdquo;
-        </p>
+      {/* Message + side badge */}
+      {call.message ? (
+        <div className="flex items-start gap-2 mt-2.5">
+          <p className={`flex-1 text-[15px] font-bold leading-relaxed ${dk ? "text-white/90" : "text-gray-900"}`}>
+            &ldquo;{call.message}&rdquo;
+          </p>
+          <span className={`text-[11px] font-black uppercase shrink-0 mt-1 ${sideColor}`}>
+            {call.side === "long" ? "▲ LONG" : "▼ SHORT"}
+          </span>
+        </div>
+      ) : (
+        <div className="mt-2">
+          <span className={`text-[11px] font-black uppercase ${sideColor}`}>
+            {call.side === "long" ? "▲ LONG" : "▼ SHORT"}
+          </span>
+        </div>
       )}
 
+      {/* Token + chain + timeframe + amount */}
+      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+        <button
+          onClick={() => onViewToken?.(call.symbol, call.chain)}
+          className={`text-[12px] font-black ${dk ? "text-white/70 hover:text-white" : "text-gray-700 hover:text-gray-900"} transition-colors`}
+        >
+          ${call.symbol}
+        </button>
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${chainPill(call.chain)}`}>{call.chain.toUpperCase()}</span>
+        <span className={`text-[10px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>{call.timeframe}</span>
+        <span className={`text-[13px] font-black tabular-nums ml-auto ${dk ? "text-white" : "text-gray-900"}`}>
+          ${amt >= 1000 ? `${(amt / 1000).toFixed(1)}k` : amt.toFixed(0)}
+        </span>
+        {call.is_paper && (
+          <span className="text-[8px] font-black text-yellow-500">PAPER</span>
+        )}
+      </div>
+
+      <div className="flex-1" />
       {/* Fade CTA */}
       {!isResolved && onFade && (
         <AnimatePresence mode="wait">

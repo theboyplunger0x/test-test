@@ -72,32 +72,59 @@ function positionToOrder(p: Position): Order {
 }
 
 function groupBySweep(orders: Order[]): { sweeps: SweepGroup[]; solo: Order[] } {
+  // Group by sweep_id first, then by proximity (symbol+direction+paper within 60s) for multi-tf sweeps
   const sweepMap = new Map<string, Order[]>();
-  const solo: Order[] = [];
+  const noSweep: Order[] = [];
   for (const o of orders) {
     if (o.sweepId) {
       const arr = sweepMap.get(o.sweepId) ?? [];
       arr.push(o);
       sweepMap.set(o.sweepId, arr);
     } else {
-      solo.push(o);
+      noSweep.push(o);
     }
   }
+
+  // Merge sweep groups that share symbol+direction+paper and were opened within 60s of each other
+  const merged = new Map<string, Order[]>();
+  for (const [, positions] of sweepMap) {
+    const p = positions[0];
+    const key = `${p.symbol}|${p.direction}|${p.isPaper}`;
+    const existing = merged.get(key);
+    if (existing) {
+      // Check if opened within 60s of any position in the group
+      const anyClose = positions.some(pos =>
+        existing.some(ex => Math.abs(pos.openedAt - ex.openedAt) < 60_000)
+      );
+      if (anyClose) {
+        existing.push(...positions);
+        continue;
+      }
+    }
+    merged.set(key, [...positions]);
+  }
+
   const sweeps: SweepGroup[] = [];
-  for (const [sweepId, positions] of sweepMap) {
+  for (const [, positions] of merged) {
+    if (positions.length === 1) {
+      noSweep.push(positions[0]);
+      continue;
+    }
+    const latestExpiry = Math.max(...positions.map(p => p.expiresAt));
+    const tfs = [...new Set(positions.map(p => p.timeframe))];
     sweeps.push({
-      sweepId,
+      sweepId:     positions[0].sweepId ?? positions[0].id,
       symbol:      positions[0].symbol,
-      timeframe:   positions[0].timeframe,
+      timeframe:   tfs.length > 1 ? "multi-tf" : tfs[0],
       direction:   positions[0].direction,
       totalAmount: positions.reduce((s, p) => s + p.amount, 0),
       status:      positions[0].status,
-      expiresAt:   positions[0].expiresAt,
+      expiresAt:   latestExpiry,
       isPaper:     positions[0].isPaper,
       positions,
     });
   }
-  return { sweeps, solo };
+  return { sweeps, solo: noSweep };
 }
 
 function formatCountdown(ms: number): string {
@@ -865,7 +892,14 @@ function SweepGroupRow({ group: g, tick, dk, T }: {
   const [expanded, setExpanded] = useState(false);
   const isShort  = g.direction === "short";
   const timeLeft = g.expiresAt - Date.now();
-  const isSettled = g.status === "won" || g.status === "lost";
+  const allSettled = g.positions.every(p => p.status === "won" || p.status === "lost");
+  const someSettled = g.positions.some(p => p.status === "won" || p.status === "lost");
+
+  // PnL from resolved fills only
+  const resolvedPnl = g.positions
+    .filter(p => p.status === "won" || p.status === "lost")
+    .reduce((sum, p) => sum + (p.status === "won" ? calcPayout(p) - p.amount : -p.amount), 0);
+  const openCount = g.positions.filter(p => p.status !== "won" && p.status !== "lost").length;
 
   const cardCls =
     g.status === "won"  ? T.cardWon  :
@@ -879,35 +913,29 @@ function SweepGroupRow({ group: g, tick, dk, T }: {
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between px-4 py-3 text-left"
       >
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className={`text-[11px] font-black ${isShort ? "text-red-400" : "text-emerald-400"}`}>
             {isShort ? "▼ SHORT" : "▲ LONG"}
           </span>
-          <span className={`text-[14px] font-black ${T.strong}`}>${g.symbol}</span>
-          <span className={`text-[10px] font-bold ${T.muted}`}>{g.timeframe}</span>
+          <span className={`text-[13px] font-black ${T.strong}`}>${g.symbol}</span>
+          <span className={`text-[9px] font-bold ${T.muted}`}>{g.timeframe}</span>
           {g.isPaper && (
-            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 uppercase tracking-widest">
-              paper
+            <span className="text-[8px] font-black px-1 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
+              PAPER
             </span>
           )}
-          <span className={`text-[10px] px-1.5 py-0.5 rounded ${dk ? "bg-white/8 text-white/40" : "bg-gray-100 text-gray-500"}`}>
-            {g.positions.length} fills
-          </span>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {isSettled ? (
-            <span className={`text-[12px] font-black ${g.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
-              {g.status === "won" ? "WON" : "LOST"}
+        <div className="flex items-center gap-2 shrink-0">
+          {allSettled ? (
+            <span className={`text-[12px] font-black ${resolvedPnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {resolvedPnl >= 0 ? "+" : ""}{resolvedPnl.toFixed(2)}
             </span>
           ) : (
-            <span className={`text-[11px] font-black tabular-nums ${timeLeft < 60000 ? "text-red-400" : T.muted}`}>
-              {formatCountdown(timeLeft)}
+            <span className={`text-[10px] font-black tabular-nums ${timeLeft < 60000 ? "text-red-400" : T.muted}`}>
+              {someSettled ? `${openCount}/${g.positions.length} open · ` : ""}{formatCountdown(timeLeft)}
             </span>
           )}
-          <div className="text-right">
-            <p className={`text-[13px] font-black ${T.strong}`}>${g.totalAmount.toFixed(0)}</p>
-            <p className={`text-[9px] font-bold ${T.muted}`}>{g.positions.length} fills</p>
-          </div>
+          <span className={`text-[13px] font-black ${T.strong}`}>${g.totalAmount.toFixed(0)}</span>
           <span className={`text-[10px] font-bold ${T.muted}`}>{expanded ? "▲" : "▼"}</span>
         </div>
       </button>
@@ -921,24 +949,27 @@ function SweepGroupRow({ group: g, tick, dk, T }: {
             exit={{ height: 0, opacity: 0 }}
             className={`border-t ${dk ? "border-white/6" : "border-gray-100"} divide-y ${dk ? "divide-white/6" : "divide-gray-100"}`}
           >
-            {g.positions.map((o, i) => (
-              <div key={o.id} className="px-4 py-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-bold ${T.muted}`}>fill {i + 1}</span>
-                  <span className={`text-[11px] font-black ${T.normal}`}>${o.amount.toFixed(2)}</span>
+            {g.positions.map((o) => {
+              const oMs = Math.max(0, o.expiresAt - Date.now());
+              const oCountdown = oMs <= 0 ? "settling" : formatCountdown(oMs);
+              return (
+                <div key={o.id} className="px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-black ${T.muted}`}>{o.timeframe}</span>
+                    <span className={`text-[11px] font-black ${T.normal}`}>${o.amount.toFixed(0)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(o.status === "won" || o.status === "lost") ? (
+                      <span className={`text-[11px] font-black ${o.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
+                        {o.status === "won" ? `+$${(calcPayout(o) - o.amount).toFixed(2)}` : `-$${o.amount.toFixed(2)}`}
+                      </span>
+                    ) : (
+                      <span className={`text-[10px] font-black tabular-nums ${oMs < 60000 ? "text-red-400" : T.muted}`}>{oCountdown}</span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-mono ${T.muted}`}>
-                    entry ${o.entryPrice.toFixed(6)}
-                  </span>
-                  {isSettled && (
-                    <span className={`text-[11px] font-black ${o.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
-                      {o.status === "won" ? `+$${(calcPayout(o) - o.amount).toFixed(2)}` : `-$${o.amount.toFixed(2)}`}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -969,74 +1000,70 @@ function PositionRow({ order: o, tick, dk, T, onViewToken }: {
     o.status === "lost" ? T.cardLost :
     T.cardBase;
 
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border p-4 space-y-3 ${cardCls}`}
-    >
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={() => onViewToken?.(o.symbol)} className={`text-[15px] font-black transition-opacity hover:opacity-60 ${T.strong} ${onViewToken ? "cursor-pointer" : "cursor-default"}`}>${o.symbol}</button>
+    <div className={`rounded-2xl border overflow-hidden ${cardCls}`}>
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className={`text-[11px] font-black ${isShort ? "text-red-400" : "text-emerald-400"}`}>
             {isShort ? "▼ SHORT" : "▲ LONG"}
           </span>
-          <span className={`text-[10px] font-bold ${T.muted}`}>{o.timeframe}</span>
+          <button onClick={(e) => { e.stopPropagation(); onViewToken?.(o.symbol); }} className={`text-[13px] font-black ${T.strong} hover:opacity-60 transition-opacity`}>${o.symbol}</button>
+          <span className={`text-[9px] font-bold ${T.muted}`}>{o.timeframe}</span>
           {o.isPaper && (
-            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 uppercase tracking-widest">
-              paper
+            <span className="text-[8px] font-black px-1 py-0.5 rounded-full bg-purple-500/20 text-purple-400">PAPER</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isSettled ? (
+            <span className={`text-[12px] font-black ${o.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
+              {o.status === "won" ? `+$${profit.toFixed(2)}` : `-$${o.amount.toFixed(0)}`}
+            </span>
+          ) : (
+            <span className={`text-[10px] font-black tabular-nums ${timeLeft < 60000 ? "text-red-400" : T.muted}`}>
+              {o.status === "open" && o.otherPool === 0 ? "waiting…" : formatCountdown(timeLeft)}
             </span>
           )}
+          <span className={`text-[13px] font-black ${T.strong}`}>${o.amount.toFixed(0)}</span>
+          <span className={`text-[10px] font-bold ${T.muted}`}>{expanded ? "▲" : "▼"}</span>
         </div>
+      </button>
 
-        {/* Status / countdown */}
-        {isSettled ? (
-          <span className={`text-[11px] font-black ${o.status === "won" ? "text-emerald-400" : "text-red-400"}`}>
-            {o.status === "won" ? `+$${profit.toFixed(2)}` : `-$${o.amount}`}
-          </span>
-        ) : (
-          <span className={`text-[11px] font-black tabular-nums ${timeLeft < 60000 ? "text-red-400" : T.muted}`}>
-            {o.status === "open" && o.otherPool === 0 ? "waiting…" : formatCountdown(timeLeft)}
-          </span>
-        )}
-      </div>
-
-      {/* Pool bar — only for active */}
-      {!isSettled && (
-        <div className={`flex h-1.5 rounded-full overflow-hidden ${T.poolTrack}`}>
+      <AnimatePresence>
+        {expanded && (
           <motion.div
-            animate={{ width: `${myPct}%` }}
-            className={`h-full rounded-full ${isShort ? "bg-red-500/60" : "bg-emerald-500/60"}`}
-          />
-        </div>
-      )}
-
-      {/* Stake / potential or result */}
-      <div className="flex justify-between items-end">
-        <div>
-          <p className={`text-[10px] font-bold mb-0.5 ${T.muted}`}>Stake</p>
-          <p className={`text-[14px] font-black ${T.strong}`}>${o.amount}</p>
-        </div>
-        {!isSettled && mult && (
-          <div className="text-center">
-            <p className={`text-[10px] font-bold mb-0.5 ${T.muted}`}>Mult</p>
-            <p className={`text-[14px] font-black text-amber-400`}>{mult}x</p>
-          </div>
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className={`border-t ${dk ? "border-white/6" : "border-gray-100"} px-4 py-3`}
+          >
+            <div className="flex justify-between items-end">
+              <div>
+                <p className={`text-[9px] font-bold mb-0.5 ${T.muted}`}>Stake</p>
+                <p className={`text-[13px] font-black ${T.strong}`}>${o.amount.toFixed(0)}</p>
+              </div>
+              {mult && (
+                <div className="text-center">
+                  <p className={`text-[9px] font-bold mb-0.5 ${T.muted}`}>Mult</p>
+                  <p className="text-[13px] font-black text-amber-400">{mult}x</p>
+                </div>
+              )}
+              <div className="text-right">
+                <p className={`text-[9px] font-bold mb-0.5 ${T.muted}`}>{isSettled ? "Payout" : "To win"}</p>
+                <p className={`text-[13px] font-black ${isSettled ? (o.status === "won" ? "text-emerald-400" : T.muted) : "text-emerald-400"}`}>
+                  {isSettled
+                    ? o.status === "won" ? `$${payout.toFixed(2)}` : "—"
+                    : mult ? `$${payout.toFixed(2)}` : "—"}
+                </p>
+              </div>
+            </div>
+          </motion.div>
         )}
-        <div className="text-right">
-          <p className={`text-[10px] font-bold mb-0.5 ${T.muted}`}>{isSettled ? "Payout" : "To win"}</p>
-          <p className={`text-[14px] font-black ${isSettled ? (o.status === "won" ? "text-emerald-400" : T.muted) : "text-emerald-400"}`}>
-            {isSettled
-              ? o.status === "won" ? `$${payout.toFixed(2)}` : "—"
-              : mult ? `$${payout.toFixed(2)}` : "no pool yet"}
-          </p>
-          {!isSettled && mult && profit > 0 && (
-            <p className={`text-[9px] font-bold ${T.muted}`}>+${profit.toFixed(2)} profit</p>
-          )}
-        </div>
-      </div>
-
-    </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }

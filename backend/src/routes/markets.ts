@@ -308,8 +308,8 @@ export async function marketRoutes(app: FastifyInstance) {
   app.get("/tokens/:symbol/feed", async (req, reply) => {
     const { symbol } = req.params as any;
     const { rows: markets } = await db.query(
-      `SELECT m.id, m.timeframe, m.entry_price, m.exit_price, m.status, m.opens_at, m.closes_at,
-              m.long_pool, m.short_pool, m.winner_side, m.is_paper, m.tagline,
+      `SELECT m.id, m.symbol, m.chain, m.timeframe, m.entry_price, m.exit_price, m.status, m.opens_at, m.closes_at,
+              m.long_pool, m.short_pool, m.winner_side, m.is_paper, m.tagline, m.created_at, m.sweep_id,
               m.opener_id, u.username AS opener_username, u.avatar_url AS opener_avatar, u.tier AS opener_tier
        FROM markets m JOIN users u ON m.opener_id = u.id
        WHERE UPPER(m.symbol) = UPPER($1)

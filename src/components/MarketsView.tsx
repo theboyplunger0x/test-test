@@ -21,6 +21,8 @@ interface Props {
   onFadeCall?:    (call: Call, side: "long" | "short", amount: number) => Promise<string | null>;
   onFadeDebate?:  (marketId: string, side: "long" | "short") => void;
   onViewToken?:   (symbol: string, chain: string) => void;
+  loggedIn?:      boolean;
+  onAuthRequired?: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -505,7 +507,7 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
 // ── Live Market Card ──────────────────────────────────────────────────────────
 const P2P_AMOUNTS = [10, 25, 50, 100];
 
-function MarketCard({ market, dk, onClick, onTrade, onBet, shaking, isP2PView, paperMode }: { market: Market; dk: boolean; onClick: () => void; onTrade: () => void; onBet?: (id: string, side: "long" | "short", amount: number) => Promise<string | null>; shaking?: boolean; isP2PView?: boolean; paperMode?: boolean }) {
+function MarketCard({ market, dk, onClick, onTrade, onBet, shaking, isP2PView, paperMode, onAuthRequired }: { market: Market; dk: boolean; onClick: () => void; onTrade: () => void; onBet?: (id: string, side: "long" | "short", amount: number) => Promise<string | null>; shaking?: boolean; isP2PView?: boolean; paperMode?: boolean; onAuthRequired?: () => void }) {
   const longPool  = parseFloat(market.long_pool);
   const shortPool = parseFloat(market.short_pool);
   const total     = longPool + shortPool;
@@ -603,10 +605,11 @@ function MarketCard({ market, dk, onClick, onTrade, onBet, shaking, isP2PView, p
   return (
     <motion.div
       layout
+      className="h-full"
       animate={shaking ? { x: [0, -6, 6, -4, 4, -2, 2, 0] } : {}}
       transition={shaking ? { duration: 0.5, ease: "easeOut" } : {}}
     >
-    <button onClick={onClick} className={`w-full text-left rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-3 transition-all ${isHot ? "" : "hover:border-white/20"}`}>
+    <button onClick={onClick} className={`w-full h-full text-left rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-3 transition-all ${isHot ? "" : "hover:border-white/20"}`}>
 
       {isHot ? (
         /* ── HOT CARD: contrarian opportunity hero layout ── */
@@ -653,7 +656,7 @@ function MarketCard({ market, dk, onClick, onTrade, onBet, shaking, isP2PView, p
 
           {/* Trade CTA — amber for hot */}
           <button
-            onClick={e => { e.stopPropagation(); onTrade(); }}
+            onClick={e => { e.stopPropagation(); if (onAuthRequired) { onAuthRequired(); return; } onTrade(); }}
             className="w-full py-2.5 rounded-xl font-black text-[13px] tracking-wide bg-amber-400 text-black hover:bg-amber-300 active:scale-95 transition-all">
             Sweep {fmtMult(bestMult)} · {contrarian}
           </button>
@@ -784,11 +787,11 @@ function MarketCard({ market, dk, onClick, onTrade, onBet, shaking, isP2PView, p
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <motion.button whileTap={{ scale: 0.94 }} onClick={e => { e.stopPropagation(); setP2pSide("short"); setP2pError(""); }}
+                    <motion.button whileTap={{ scale: 0.94 }} onClick={e => { e.stopPropagation(); if (onAuthRequired) { onAuthRequired(); return; } setP2pSide("short"); setP2pError(""); }}
                       className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all border ${dk ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 border-red-500/20" : "bg-red-50 text-red-600 hover:bg-red-100 border-red-200"}`}>
                       ▼ Short
                     </motion.button>
-                    <motion.button whileTap={{ scale: 0.94 }} onClick={e => { e.stopPropagation(); setP2pSide("long"); setP2pError(""); }}
+                    <motion.button whileTap={{ scale: 0.94 }} onClick={e => { e.stopPropagation(); if (onAuthRequired) { onAuthRequired(); return; } setP2pSide("long"); setP2pError(""); }}
                       className={`flex-1 py-2.5 rounded-xl text-[12px] font-black transition-all border ${dk ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border-emerald-500/20" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"}`}>
                       Long ▲
                     </motion.button>
@@ -1097,7 +1100,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile, paperMode }: { dk: bool
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken }: Props) {
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken, loggedIn, onAuthRequired }: Props) {
   const [selectedFilter, setSelectedFilter] = useState<MarketFilter>("all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 
@@ -1147,7 +1150,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
         {/* Hero row */}
         {hero ? (
           <div className="flex gap-4 items-start">
-            <HeroCard market={hero} dk={dk} onTrade={() => setTradeMarket(hero)} />
+            <HeroCard market={hero} dk={dk} onTrade={() => { if (!loggedIn && onAuthRequired) { onAuthRequired(); return; } setTradeMarket(hero); }} />
             <div className="hidden lg:block">
               <RightPanel dk={dk} paperMode={paperMode} onSelectToken={onSelectToken} onViewProfile={onViewProfile} />
             </div>
@@ -1231,7 +1234,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                   return items.map((item, i) => {
                     if (item.type === "debate") {
                       return (
-                        <motion.div key={`debate-${item.data.market.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                        <motion.div key={`debate-${item.data.market.id}`} className="sm:col-span-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
                           <DebateCard debate={item.data} dk={dk} index={i}
                             onViewProfile={(u) => onViewProfile?.(u)}
                             onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
@@ -1242,7 +1245,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                     }
                     if (item.type === "call") {
                       return (
-                        <motion.div key={`call-${item.data.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                        <motion.div key={`call-${item.data.id}`} className="h-full" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
                           <CallCard call={item.data} dk={dk} index={i}
                             onViewProfile={(u) => onViewProfile?.(u)}
                             onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
@@ -1252,14 +1255,14 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                       );
                     }
                     return (
-                      <motion.div key={item.data.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
-                        <MarketCard market={item.data} dk={dk} onClick={() => onSelectToken?.(item.data.symbol, item.data.chain)} onTrade={() => setTradeMarket(item.data)} onBet={onBet} shaking={shakingIds?.has(item.data.id)} isP2PView={false} paperMode={paperMode} />
+                      <motion.div key={item.data.id} className="h-full" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                        <MarketCard market={item.data} dk={dk} onClick={() => onSelectToken?.(item.data.symbol, item.data.chain)} onTrade={() => setTradeMarket(item.data)} onBet={onBet} shaking={shakingIds?.has(item.data.id)} isP2PView={false} paperMode={paperMode} onAuthRequired={!loggedIn ? onAuthRequired : undefined} />
                       </motion.div>
                     );
                   });
                 })() : sortedMarkets.map((m, i) => (
                   <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
-                    <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} onBet={onBet} shaking={shakingIds?.has(m.id)} isP2PView={selectedFilter === "p2p"} paperMode={paperMode} />
+                    <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} onBet={onBet} shaking={shakingIds?.has(m.id)} isP2PView={selectedFilter === "p2p"} paperMode={paperMode} onAuthRequired={!loggedIn ? onAuthRequired : undefined} />
                   </motion.div>
                 ))
               }

@@ -245,7 +245,7 @@ export default function CoinDetail({
   const [sweepLoading, setSweepLoading] = useState(false);
 
   // ── Trade panel tab ─────────────────────────────────────────────────────────
-  const [tradeTab, setTradeTab]         = useState<"market" | "sweep" | "limit">("market");
+  const [tradeTab, setTradeTab]         = useState<"market" | "sweep">("market");
   const [bidTab, setBidTab]             = useState<"open" | "closed">("open");
   const [makerSide, setMakerSide]       = useState<"long" | "short" | null>(null);
   const [makerAmt, setMakerAmt]         = useState("");
@@ -521,16 +521,16 @@ export default function CoinDetail({
         {/* ── RIGHT: Trade Panel (~260px) ───────────────────────── */}
         <div className={`w-full md:w-[260px] shrink-0 flex flex-col border-t md:border-t-0 md:border-l overflow-y-auto ${dk ? "border-white/8 bg-[#0e0e0e]" : "border-gray-100 bg-white"}`}>
 
-          {/* Trade / Challenge tabs */}
+          {/* Trade / Sweep tabs */}
           <div className={`flex shrink-0 border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
-            {(["market", "sweep", "limit"] as const).map(tab => (
+            {(["market", "sweep"] as const).map(tab => (
               <button key={tab} onClick={() => setTradeTab(tab)}
                 className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider transition-all relative ${
                   tradeTab === tab
                     ? dk ? "text-white" : "text-gray-900"
                     : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"
                 }`}>
-                {tab === "market" ? "Open Market" : tab === "sweep" ? "Sweep" : "Challenge"}
+                {tab === "market" ? "Trade" : "Sweep"}
                 {tradeTab === tab && <span className={`absolute bottom-0 left-0 right-0 h-[2px] ${dk ? "bg-white" : "bg-gray-900"}`} />}
               </button>
             ))}
@@ -719,18 +719,8 @@ export default function CoinDetail({
                 </motion.button>
               </div>
 
-              {/* Duration */}
-              <div>
-                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${T.sectionLbl}`}>Duration</p>
-                <div className="flex flex-wrap gap-1">
-                  {TIMEFRAMES.map((tf) => (
-                    <button key={tf} onClick={() => setTimeframe(tf)}
-                      className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${timeframe === tf ? T.durActive : T.durIdle}`}>
-                      {tf}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* No timeframe for sweep — takes all */}
+              <p className={`text-[8px] font-black uppercase tracking-widest ${T.sectionLbl} opacity-50`}>Sweeps all open timeframes</p>
 
               {/* Amount */}
               <div>
@@ -807,8 +797,8 @@ export default function CoinDetail({
             );
           })()}
 
-          {/* ── LIMIT tab ───────────────────────────────────────────── */}
-          {tradeTab === "limit" && (() => {
+          {/* ── LIMIT tab (hidden — merged into Trade) ──────────────── */}
+          {false && (() => {
             const toggleTf = (tf: string) => setMakerTfs(prev => {
               const next = new Set(prev);
               next.has(tf) ? next.delete(tf) : next.add(tf);
@@ -983,12 +973,11 @@ export default function CoinDetail({
         }
 
         const totalAmount = myPositions.reduce((s, p) => s + parseFloat(p.amount), 0);
-        const entryAvg = myPositions.reduce((s, p) => s + parseFloat(p.entry_price) * parseFloat(p.amount), 0) / totalAmount;
-        const pnlPct = livePrice && entryAvg > 0
-          ? ((livePrice - entryAvg) / entryAvg) * 100 * (myPositions[0]?.side === "long" ? 1 : -1)
-          : null;
-        const pnlUsd = pnlPct !== null ? (totalAmount * pnlPct / 100) : null;
         const isLong = myPositions[0]?.side === "long";
+        // Earliest expiry for countdown
+        const earliestClose = Math.min(...myPositions.map(p => new Date(p.closes_at).getTime()));
+        const msLeft = Math.max(0, earliestClose - Date.now());
+        const countdown = msLeft <= 0 ? "settling" : msLeft < 60000 ? `${Math.floor(msLeft/1000)}s` : msLeft < 3600000 ? `${Math.floor(msLeft/60000)}m` : `${Math.floor(msLeft/3600000)}h`;
 
         return (
           <div className="px-4 pt-4 pb-2">
@@ -1010,11 +999,9 @@ export default function CoinDetail({
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {pnlUsd !== null && (
-                  <span className={`text-[13px] font-black tabular-nums ${pnlUsd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {pnlUsd >= 0 ? "+" : ""}{pnlUsd.toFixed(2)} ({pnlPct!.toFixed(1)}%)
-                  </span>
-                )}
+                <span className={`text-[11px] font-black tabular-nums ${msLeft < 60000 ? "text-red-400" : dk ? "text-white/40" : "text-gray-400"}`}>
+                  {countdown}
+                </span>
                 <span className={`text-[10px] transition-transform ${myPosExpanded ? "rotate-180" : ""} ${dk ? "text-white/30" : "text-gray-400"}`}>▾</span>
               </div>
             </button>
@@ -1023,12 +1010,8 @@ export default function CoinDetail({
               <div className={`border-t ${dk ? "border-white/6" : "border-gray-200"}`}>
                 {myPositions.map((p, i) => {
                   const amt = parseFloat(p.amount);
-                  const entry = parseFloat(p.entry_price);
-                  const posPnl = livePrice && entry > 0
-                    ? amt * ((livePrice - entry) / entry) * (p.side === "long" ? 1 : -1)
-                    : null;
-                  const msLeft = Math.max(0, new Date(p.closes_at).getTime() - Date.now());
-                  const timeLeft = msLeft <= 0 ? "settling" : msLeft < 60000 ? `${Math.floor(msLeft/1000)}s` : msLeft < 3600000 ? `${Math.floor(msLeft/60000)}m` : `${Math.floor(msLeft/3600000)}h`;
+                  const pMsLeft = Math.max(0, new Date(p.closes_at).getTime() - Date.now());
+                  const timeLeft = pMsLeft <= 0 ? "settling" : pMsLeft < 60000 ? `${Math.floor(pMsLeft/1000)}s` : pMsLeft < 3600000 ? `${Math.floor(pMsLeft/60000)}m` : `${Math.floor(pMsLeft/3600000)}h`;
 
                   return (
                     <div key={p.id} className={`flex items-center justify-between px-4 py-2.5 ${i < myPositions.length - 1 ? `border-b ${dk ? "border-white/4" : "border-gray-100"}` : ""}`}>
@@ -1037,14 +1020,7 @@ export default function CoinDetail({
                         <span className={`text-[11px] font-black ${dk ? "text-white" : "text-gray-900"}`}>${amt.toFixed(0)}</span>
                         {p.message && <span className={`text-[10px] truncate max-w-[120px] ${dk ? "text-white/25" : "text-gray-400"}`}>&ldquo;{p.message}&rdquo;</span>}
                       </div>
-                      <div className="flex items-center gap-2">
-                        {posPnl !== null && (
-                          <span className={`text-[11px] font-black tabular-nums ${posPnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                            {posPnl >= 0 ? "+" : ""}{posPnl.toFixed(2)}
-                          </span>
-                        )}
-                        <span className={`text-[9px] font-bold ${dk ? "text-white/20" : "text-gray-300"}`}>{timeLeft}</span>
-                      </div>
+                      <span className={`text-[10px] font-black tabular-nums ${pMsLeft < 60000 ? "text-red-400" : dk ? "text-white/30" : "text-gray-400"}`}>{timeLeft}</span>
                     </div>
                   );
                 })}

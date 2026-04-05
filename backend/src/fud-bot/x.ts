@@ -382,36 +382,37 @@ export function getXPending(callbackId: string) {
 
 // ─── AI System prompt ─────────────────────────────────────────────────────────
 
-const SYSTEM = `You are FUD — the AI agent of FUD.markets, a prediction markets platform where users bet LONG or SHORT on crypto prices.
+const FRONTEND = process.env.FRONTEND_URL || "https://fud-markets.vercel.app";
 
-You're operating on X (Twitter). Users mention @FUDmarkets to interact with you.
+const SYSTEM = `You are the FUD.markets bot on X (Twitter). You execute trades and reply with confirmations.
 
-Personality:
-- Professional and direct. No slang, no "bro", no forced casual tone.
-- Confident and informative — like a sharp trading desk, not a hype account.
-- Short responses — max 2-3 sentences + relevant data.
-- Always reply in the same language the user wrote in. If they write in Spanish, reply in Spanish. If English, reply in English. Never mix languages.
-
-What you can do:
-- Search tokens and show live price/mcap
-- Show open prediction markets
-- Check the user's FUD balance (only if they have a linked account)
-- Create a new prediction market for a token (requires linked account)
-- Place a long or short bet (requires linked account)
+Rules:
+- Replies must be under 270 characters.
+- Be concise and functional. No slang, no hype, no filler.
+- Vary your confirmations slightly so they don't all sound identical. Examples:
+  "Hey @user, long opened! $PEPE 1h $25 — {link}"
+  "@user long is live! $PEPE 1h $25 — {link}"
+  "@user done! Longing $PEPE 1h for $25 — {link}"
+  "@user your short is in. $DOGE 4h $50 — {link}"
+- Always include the trade link: ${FRONTEND}
+- Reply in the same language the user wrote in.
 
 When a user wants to trade (e.g. "long $PEPE 1h $25"):
-1. Search the token to get live price and chain
-2. Create the market if none exists for that symbol/timeframe — include a punchy, sensationalist tagline derived from the user's tweet (e.g. "PEPE about to rip or get rekt?"). Keep it under 60 chars, provocative but not profane.
-3. Place the bet on that market — include the user's tweet as the trader message (stripped of @mentions and trimmed to 80 chars)
-4. Confirm the result — include token, side, amount, timeframe, and entry price
+1. Search the token to get price and chain.
+2. Create the market if none exists for that symbol/timeframe. Use a short tagline derived from the user's tweet (max 60 chars).
+3. Place the bet. Use the user's tweet (stripped of @mentions, max 80 chars) as the trader message.
+4. Reply with: side, token, timeframe, amount, and the link.
 
-Timeframe rules:
-- If the user specifies a timeframe, use it.
-- If no timeframe is mentioned, default to 5m and briefly note it in the reply (e.g. "Defaulted to 5m — specify a timeframe next time for more control.").
+If the user is missing required info (side, token, amount, or timeframe), reply asking them to include it. Be helpful:
+  "@user need a timeframe to open this — try: long $PEPE 1h $25"
+  "@user what amount? Example: short $DOGE 4h $50"
 
-If the user has no linked FUD account, tell them to go to fud.markets and connect their X handle in settings. Keep it brief.
+If no linked FUD account: "@user link your X on fud.markets to start trading."
 
-Keep responses under 270 characters — tweet length.`;
+Market context (use if relevant):
+- You have access to open markets and recent activity via tools.
+- If a user asks what's hot or trending, use get_open_markets.`;
+
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
@@ -493,7 +494,7 @@ async function runTool(name: string, input: any, fudUser: any, token: string | n
       method: "POST",
       body: JSON.stringify({ symbol: input.symbol, chain: input.chain, timeframe: input.timeframe, tagline: input.tagline ?? "", paper: input.paper ?? false }),
     });
-    return `Market created — ID: ${market.id} | ${market.symbol} ${market.timeframe} | entry: $${market.entry_price}`;
+    return `Market created — ID: ${market.id} | ${market.symbol} ${market.timeframe} | entry: $${market.entry_price} | link: ${FRONTEND}`;
   }
   if (name === "place_bet") {
     if (!token || !fudUser) return "Cannot place bet: no linked FUD account";
@@ -501,7 +502,7 @@ async function runTool(name: string, input: any, fudUser: any, token: string | n
       method: "POST",
       body: JSON.stringify({ side: input.side, amount: input.amount, message: input.message ?? undefined, paper: input.paper ?? false }),
     });
-    return `Bet placed — ${input.side.toUpperCase()} $${input.amount} | new balance: $${bet.new_balance}`;
+    return `Bet placed — ${input.side.toUpperCase()} $${input.amount} | new balance: $${bet.new_balance} | link: ${FRONTEND}`;
   }
   return "Unknown tool";
 }
@@ -528,11 +529,21 @@ async function processMention(tweet: any) {
   const token   = fudUser ? mintToken(fudUser.id, fudUser.username) : null;
 
   const userContext = fudUser
-    ? `\n\nLinked FUD account: "${fudUser.username}" (real: $${fudUser.balance_usd}, paper: $${fudUser.paper_balance_usd})`
-    : `\n\nNo linked FUD account.`;
+    ? `\nLinked FUD account: "${fudUser.username}" (real: $${fudUser.balance_usd}, paper: $${fudUser.paper_balance_usd})`
+    : `\nNo linked FUD account.`;
+
+  // Fetch market context (top 5 open markets for context)
+  let marketContext = "";
+  try {
+    const markets = await fetch(`${API}/markets`).then(r => r.json()) as any[];
+    if (markets.length > 0) {
+      const top = markets.slice(0, 5).map((m: any) => `${m.symbol} ${m.timeframe} L:$${m.long_pool} S:$${m.short_pool}`).join(", ");
+      marketContext = `\nActive markets: ${top}`;
+    }
+  } catch {}
 
   const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: `Tweet from @${xUsername}: "${text}"${userContext}` },
+    { role: "user", content: `Tweet from @${xUsername}: "${text}"${userContext}${marketContext}` },
   ];
 
   let response = await anthropic.messages.create({
@@ -558,38 +569,18 @@ async function processMention(tweet: any) {
     });
   }
 
-  const baseReply = response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
-  console.log(`  → Base reply: ${baseReply}`);
-
-  // ── Generate 3 variants ──
-  let replies: string[] = [];
-  try {
-    const varRes = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001", max_tokens: 700,
-      system: SYSTEM,
-      messages: [
-        ...messages,
-        { role: "assistant", content: response.content },
-        { role: "user", content: "Write 3 distinct tweet reply variants (max 270 chars each). Vary the tone: [1] casual/funny, [2] data-focused/sharp, [3] hype/punchy. Format exactly:\n[1] <reply>\n[2] <reply>\n[3] <reply>" },
-      ],
-    });
-    const varText = varRes.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
-    replies = varText.split(/\[\d\]\s+/).map(s => s.trim()).filter(Boolean).slice(0, 3);
-    if (replies.length === 0) replies = [baseReply];
-  } catch {
-    replies = [baseReply];
-  }
-  console.log(`  → ${replies.length} variants generated`);
+  const reply = response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
+  console.log(`  → Reply: ${reply}`);
 
   // ── Send to admin Telegram for approval ──
   const callbackId = `x_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const replies = [reply];
 
-  const optLines = replies.map((r, i) => `*[${i + 1}]* ${r}`).join("\n\n");
-  const notif = `*X mention from @${xUsername}*\n\n_"${text}"_\n\n${optLines}\n\n[View tweet](${tweetUrl})`;
+  const notif = `*X mention from @${xUsername}*\n\n_"${text}"_\n\n${reply}\n\n[View tweet](${tweetUrl})`;
 
   const keyboard = [
-    replies.map((_, i) => ({ text: `✅ ${i + 1}`, callback_data: `xpost_${callbackId}_${i}` })),
     [
+      { text: "✅ Post",    callback_data: `xpost_${callbackId}_0` },
       { text: "✏️ Edit",   callback_data: `xedit_${callbackId}` },
       { text: "❌ Reject", callback_data: `xreject_${callbackId}` },
     ],
