@@ -177,10 +177,16 @@ function RightPanel({ dk, paperMode, onSelectToken, onViewProfile }: { dk: boole
   useEffect(() => {
     api.getMarkets().then(ms => {
       const open = ms.filter(m => m.status === "open" && !!m.is_paper === paperMode);
-      // Sort by total pool descending
-      const sorted = open.sort((a, b) =>
-        (parseFloat(b.long_pool) + parseFloat(b.short_pool)) - (parseFloat(a.long_pool) + parseFloat(a.short_pool))
-      );
+      // Sort by best multiplier descending
+      const withMult = open.map(m => {
+        const lp = parseFloat(m.long_pool), sp = parseFloat(m.short_pool);
+        const bestMult = Math.max(
+          sp > 0 ? 1 + (sp * 0.95) / Math.max(lp, 5) : 0,
+          lp > 0 ? 1 + (lp * 0.95) / Math.max(sp, 5) : 0,
+        );
+        return { ...m, bestMult };
+      });
+      const sorted = withMult.sort((a, b) => b.bestMult - a.bestMult);
       setTopMarkets(sorted.slice(0, 4));
     }).catch(() => {});
     api.leaderboard("week", paperMode).then(r => setLeaders(r.slice(0, 3))).catch(() => {});
@@ -1207,31 +1213,56 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                 <p className={`text-center py-8 text-[13px] ${dk ? "text-white/30" : "text-gray-400"}`}>No active debates</p>
               )
             ) : (
-              /* Markets grid — All includes calls + debates interleaved */
+              /* Markets grid — All: everything mixed by timestamp */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {selectedFilter === "all" && debates.slice(0, 4).map((d, i) => (
-                  <motion.div key={`debate-${d.market.id}`} className="sm:col-span-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
-                    <DebateCard debate={d} dk={dk} index={i}
-                      onViewProfile={(u) => onViewProfile?.(u)}
-                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
-                      onFade={(marketId, side) => onFadeDebate?.(marketId, side)}
-                    />
-                  </motion.div>
-                ))}
-                {selectedFilter === "all" && calls.slice(0, 6).map((c, i) => (
-                  <motion.div key={`call-${c.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
-                    <CallCard call={c} dk={dk} index={i}
-                      onViewProfile={(u) => onViewProfile?.(u)}
-                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
-                      onFade={onFadeCall}
-                    />
-                  </motion.div>
-                ))}
-                {sortedMarkets.map((m, i) => (
+                {selectedFilter === "all" ? (() => {
+                  // Build unified feed sorted by timestamp
+                  type FeedItem = { type: "market"; data: typeof sortedMarkets[0]; ts: number }
+                    | { type: "call"; data: Call; ts: number }
+                    | { type: "debate"; data: Debate; ts: number };
+
+                  const items: FeedItem[] = [
+                    ...sortedMarkets.map(m => ({ type: "market" as const, data: m, ts: new Date(m.last_bet_at ?? m.created_at).getTime() })),
+                    ...calls.map(c => ({ type: "call" as const, data: c, ts: new Date(c.placed_at).getTime() })),
+                    ...debates.map(d => ({ type: "debate" as const, data: d, ts: new Date(d.market.created_at).getTime() })),
+                  ];
+                  items.sort((a, b) => b.ts - a.ts);
+
+                  return items.map((item, i) => {
+                    if (item.type === "debate") {
+                      return (
+                        <motion.div key={`debate-${item.data.market.id}`} className="sm:col-span-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                          <DebateCard debate={item.data} dk={dk} index={i}
+                            onViewProfile={(u) => onViewProfile?.(u)}
+                            onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                            onFade={(marketId, side) => onFadeDebate?.(marketId, side)}
+                          />
+                        </motion.div>
+                      );
+                    }
+                    if (item.type === "call") {
+                      return (
+                        <motion.div key={`call-${item.data.id}`} className="sm:col-span-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                          <CallCard call={item.data} dk={dk} index={i}
+                            onViewProfile={(u) => onViewProfile?.(u)}
+                            onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                            onFade={onFadeCall}
+                          />
+                        </motion.div>
+                      );
+                    }
+                    return (
+                      <motion.div key={item.data.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                        <MarketCard market={item.data} dk={dk} onClick={() => onSelectToken?.(item.data.symbol, item.data.chain)} onTrade={() => setTradeMarket(item.data)} onBet={onBet} shaking={shakingIds?.has(item.data.id)} isP2PView={false} paperMode={paperMode} />
+                      </motion.div>
+                    );
+                  });
+                })() : sortedMarkets.map((m, i) => (
                   <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
                     <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} onBet={onBet} shaking={shakingIds?.has(m.id)} isP2PView={selectedFilter === "p2p"} paperMode={paperMode} />
                   </motion.div>
-                ))}
+                ))
+              }
               </div>
             )}
           </>

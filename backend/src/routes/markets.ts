@@ -17,7 +17,7 @@ export async function marketRoutes(app: FastifyInstance) {
       FROM markets m
       JOIN users u ON m.opener_id = u.id
       LEFT JOIN positions p ON p.market_id = m.id
-      WHERE (m.status = 'open' OR (m.status IN ('resolved','cancelled') AND m.closes_at > NOW() - INTERVAL '5 minutes'))`;
+      WHERE (m.status = 'open' OR (m.status IN ('resolved','cancelled') AND m.closes_at > NOW() - INTERVAL '24 hours'))`;
     const groupBy = `GROUP BY m.id, u.username, u.avatar_url, u.tier`;
     const order   = `ORDER BY last_bet_at DESC`;
     const query   = timeframe
@@ -313,7 +313,7 @@ export async function marketRoutes(app: FastifyInstance) {
               m.opener_id, u.username AS opener_username, u.avatar_url AS opener_avatar, u.tier AS opener_tier
        FROM markets m JOIN users u ON m.opener_id = u.id
        WHERE UPPER(m.symbol) = UPPER($1)
-         AND (m.status = 'open' OR (m.status = 'resolved' AND m.closes_at > NOW() - INTERVAL '5 minutes'))
+         AND (m.status = 'open' OR (m.status = 'resolved' AND m.closes_at > NOW() - INTERVAL '24 hours'))
        ORDER BY m.created_at DESC
        LIMIT 20`,
       [symbol]
@@ -391,7 +391,7 @@ export async function marketRoutes(app: FastifyInstance) {
        FROM positions p
        JOIN users u ON p.user_id = u.id
        JOIN markets m ON p.market_id = m.id
-       WHERE p.placed_at > NOW() - INTERVAL '5 minutes'
+       WHERE p.placed_at > NOW() - INTERVAL '24 hours'
          AND p.message IS NOT NULL AND p.message != ''
          AND p.is_paper = $1
        ORDER BY p.placed_at DESC
