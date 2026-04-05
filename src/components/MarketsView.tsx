@@ -1273,7 +1273,6 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
 
       </div>
       </div>
-      <MarketsTape dk={dk} onSelectToken={onSelectToken} onViewProfile={onViewProfile} paperMode={paperMode} />
     </div>
 
     <AnimatePresence>

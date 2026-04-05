@@ -2456,14 +2456,14 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
           className={`${open ? "ml-auto" : "mx-auto"} flex items-center justify-center w-6 h-6 rounded-lg text-[12px] font-black transition-all ${dk ? "bg-white/6 hover:bg-white/12 text-white/40 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700"}`}>
           {open ? "›" : "‹"}
         </button>
-        {!open && (
-          <button onClick={onToggle} className={`mx-auto mt-3 flex flex-col items-center gap-0.5 ${dk ? "text-white/20 hover:text-white/40" : "text-gray-300 hover:text-gray-500"} transition-colors`}>
-            {"TAPE".split("").map((c, i) => (
-              <span key={i} className="text-[8px] font-black leading-none">{c}</span>
-            ))}
-          </button>
-        )}
       </div>
+      {!open && (
+        <button onClick={onToggle} className={`mx-auto mt-4 flex flex-col items-center gap-1 ${dk ? "text-white/20 hover:text-white/40" : "text-gray-300 hover:text-gray-500"} transition-colors`}>
+          {"TAPE".split("").map((c, i) => (
+            <span key={i} className="text-[8px] font-black leading-none">{c}</span>
+          ))}
+        </button>
+      )}
 
       {open && (
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
