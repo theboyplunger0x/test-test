@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, Market } from "@/lib/api";
 import { Coin, formatPrice } from "@/lib/mockData";
@@ -23,6 +23,7 @@ export default function OpenMarketModal({
   onViewToken?: () => void;
   paperMode?: boolean;
 }) {
+  const [mode, setMode] = useState<"call" | "market" | "sweep">("call");
   const [tf, setTf] = useState("1h");
   const [tagline, setTagline] = useState("");
   const [side, setSide] = useState<"long" | "short" | null>(null);
@@ -30,6 +31,12 @@ export default function OpenMarketModal({
   const [amount, setAmount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [markets, setMarkets] = useState<Market[]>([]);
+
+  // Fetch open markets for Market mode
+  useEffect(() => {
+    api.getMarkets().then(ms => setMarkets(ms.filter(m => m && m.symbol?.toUpperCase() === coin.symbol.toUpperCase() && m.status === "open" && !!m.is_paper === paperMode))).catch(() => {});
+  }, [coin.symbol, paperMode]);
 
   const bg        = dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200";
   const labelCls  = dk ? "text-white/40" : "text-gray-500";
@@ -48,18 +55,28 @@ export default function OpenMarketModal({
     ? dk ? "text-yellow-300 bg-yellow-500/20" : "text-yellow-700 bg-yellow-100"
     : dk ? "text-orange-300 bg-orange-500/20" : "text-orange-700 bg-orange-100";
 
-  const canSubmit = side !== null && amount !== null && amount > 0 && !loading;
+  const openTfs = [...new Set(markets.map(m => m.timeframe))];
+  const activeMarket = mode === "market" ? markets.find(m => m.timeframe === tf) ?? null : null;
+  const canSubmit = side !== null && amount !== null && amount > 0 && !loading && (mode !== "market" || activeMarket !== null);
 
   async function handleSubmit() {
     if (!canSubmit || !side || !amount) return;
     setLoading(true);
     setError("");
     try {
-      const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode, coin.ca);
-      await api.placeBet(market.id, side, amount);
-      onSuccess(market);
+      if (mode === "call") {
+        const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode, coin.ca);
+        await api.placeBet(market.id, side, amount);
+        onSuccess(market);
+      } else if (mode === "market" && activeMarket) {
+        await api.placeBet(activeMarket.id, side, amount);
+        onSuccess(activeMarket);
+      } else if (mode === "sweep") {
+        await api.sweep({ symbol: coin.symbol, chain: coin.chain, timeframe: "5m", side, amount, is_paper: paperMode });
+        onClose();
+      }
     } catch (err: any) {
-      setError(err.message ?? "Failed to open market");
+      setError(err.message ?? "Failed");
     } finally {
       setLoading(false);
     }
@@ -92,34 +109,71 @@ export default function OpenMarketModal({
           </div>
         </div>
 
-        {/* Timeframe */}
-        <div>
-          <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${labelCls}`}>Timeframe</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {TIMEFRAMES.map((t) => (
-              <button key={t} onClick={() => setTf(t)}
-                className={`px-3 py-1.5 rounded-xl text-[12px] font-black transition-all ${tf === t ? tfActive : tfInactive}`}>
-                {t}
-              </button>
-            ))}
-          </div>
+        {/* Mode selector */}
+        <div className="flex items-center gap-3">
+          {(["call", "market", "sweep"] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`text-[11px] font-black transition-all ${mode === m ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>
+              {m === "call" ? "Call" : m === "market" ? "Market" : "Sweep"}
+            </button>
+          ))}
+          <span className={`text-[11px] font-bold cursor-default ${dk ? "text-white/15" : "text-gray-300"}`}>
+            Advanced ▾
+          </span>
         </div>
 
-        {/* Tagline */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <p className={`text-[10px] font-black uppercase tracking-widest ${labelCls}`}>Your thesis</p>
-            <span className={`text-[9px] font-bold tabular-nums ${tagline.length > 50 ? "text-amber-400" : labelCls}`}>{tagline.length}/60</span>
+        {/* Timeframe — Call: all, Market: only open, Sweep: none */}
+        {mode === "call" && (
+          <div>
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${labelCls}`}>Timeframe</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {TIMEFRAMES.map((t) => (
+                <button key={t} onClick={() => setTf(t)}
+                  className={`px-3 py-1.5 rounded-xl text-[12px] font-black transition-all ${tf === t ? tfActive : tfInactive}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
-          <input
-            type="text"
-            placeholder='"this thing is cooked"'
-            maxLength={60}
-            value={tagline}
-            onChange={(e) => setTagline(e.target.value)}
-            className={`w-full px-3 py-2.5 rounded-xl text-[13px] outline-none transition-all italic ${inputCls}`}
-          />
-        </div>
+        )}
+        {mode === "market" && (
+          <div>
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${labelCls}`}>Open Markets</p>
+            {openTfs.length === 0 ? (
+              <p className={`text-[11px] ${labelCls}`}>No open markets. Try making a Call.</p>
+            ) : (
+              <div className="flex gap-1.5 flex-wrap">
+                {openTfs.map((t) => (
+                  <button key={t} onClick={() => setTf(t)}
+                    className={`px-3 py-1.5 rounded-xl text-[12px] font-black transition-all ${tf === t ? tfActive : tfInactive}`}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {mode === "sweep" && (
+          <p className={`text-[10px] font-black uppercase tracking-widest ${labelCls} opacity-50`}>Sweeps all open timeframes</p>
+        )}
+
+        {/* Tagline — Call only */}
+        {mode === "call" && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className={`text-[10px] font-black uppercase tracking-widest ${labelCls}`}>Your thesis</p>
+              <span className={`text-[9px] font-bold tabular-nums ${tagline.length > 50 ? "text-amber-400" : labelCls}`}>{tagline.length}/60</span>
+            </div>
+            <input
+              type="text"
+              placeholder='"this thing is cooked"'
+              maxLength={60}
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              className={`w-full px-3 py-2.5 rounded-xl text-[13px] outline-none transition-all italic ${inputCls}`}
+            />
+          </div>
+        )}
 
         {/* Side + first bet */}
         <div>
@@ -173,7 +227,10 @@ export default function OpenMarketModal({
           className={`w-full py-3 rounded-xl text-[13px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
             paperMode ? "bg-yellow-400 text-black hover:bg-yellow-300" : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-black"
           }`}>
-          {loading ? "Posting call…" : paperMode ? `Make ${tf} call (paper)` : `Make ${tf} call`}
+          {loading ? "Placing…"
+            : mode === "call" ? (paperMode ? `Make ${tf} call (paper)` : `Make ${tf} call`)
+            : mode === "market" ? "Trade"
+            : "Sweep"}
         </button>
       </motion.div>
     </div>
