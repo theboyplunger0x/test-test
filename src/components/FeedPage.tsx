@@ -143,7 +143,7 @@ export default function FeedPage() {
   const [chartSymbol, setChartSymbol]   = useState<string | null>(null);
   const [selectedTf, setSelectedTf]     = useState<string>("1h");
   const [theme, setTheme]               = useState<Theme>("dark");
-  const [tapeOpen, setTapeOpen]         = useState(true);
+  const [tapeOpen, setTapeOpen]         = useState(false);
   const [user, setUser]                 = useState<User | null>(null);
   const [authOpen, setAuthOpen]         = useState(false);
   const [depositOpen, setDepositOpen]   = useState(false);
@@ -2443,6 +2443,11 @@ function TapeSidebar({ challenges, onViewCoin, onViewToken, dk, tapeBorder, side
           className={`${open ? "ml-auto" : "mx-auto"} flex items-center justify-center w-6 h-6 rounded-lg text-[12px] font-black transition-all ${dk ? "bg-white/6 hover:bg-white/12 text-white/40 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700"}`}>
           {open ? "›" : "‹"}
         </button>
+        {!open && (
+          <button onClick={onToggle} className={`mx-auto mt-2 ${dk ? "text-white/20 hover:text-white/40" : "text-gray-300 hover:text-gray-500"} transition-colors`}>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ writingMode: "vertical-rl" }}>Tape</span>
+          </button>
+        )}
       </div>
 
       {open && (
