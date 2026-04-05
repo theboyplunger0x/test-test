@@ -294,9 +294,13 @@ export default function TokenProfilePage({
           </div>
         </div>
 
-        {/* Mini chart */}
-        <div className="mb-3 h-16">
-          <Sparkline candles={candles} dk={dk} />
+        {/* Chart — sparkline in Calls mode, full chart in Trade mode */}
+        <div className={`mb-3 rounded-xl overflow-hidden transition-all ${viewTab === "trade" ? "h-[180px]" : "h-16"} ${viewTab === "trade" ? dk ? "bg-[#0e0e0e]" : "bg-gray-50" : ""}`}>
+          {viewTab === "trade" && bigCandles.length > 0 ? (
+            <Chart candles={bigCandles} livePrice={livePrice ?? undefined} dk={dk} />
+          ) : (
+            <Sparkline candles={candles} dk={dk} />
+          )}
         </div>
 
         {/* Chart TF selector */}
@@ -329,12 +333,6 @@ export default function TokenProfilePage({
       {/* ── TRADE VIEW ── */}
       {viewTab === "trade" && (
         <div className="px-5 py-4">
-          {/* Bigger chart */}
-          <div className={`relative w-full h-[180px] rounded-xl overflow-hidden mb-3 ${dk ? "bg-[#0e0e0e]" : "bg-gray-50"}`}>
-            {bigCandles.length > 0 && <Chart candles={bigCandles} livePrice={livePrice ?? undefined} dk={dk} />}
-            {bigChartLoading && bigCandles.length === 0 && <div className={`absolute inset-0 flex items-center justify-center ${muted} text-[12px]`}>Loading...</div>}
-          </div>
-
           {/* Trade / Sweep toggle */}
           <div className={`flex mb-3 border-b ${border}`}>
             {(["trade", "sweep"] as const).map(m => (
