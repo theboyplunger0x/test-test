@@ -32,7 +32,7 @@ async function loadCookies(): Promise<string | null> {
   try {
     const { rows } = await db.query(`SELECT value FROM bot_kv WHERE key = 'x_login_cookies'`);
     if (rows[0]) { cachedCookies = rows[0].value; return cachedCookies; }
-  } catch {}
+  } catch (e: any) { console.error("[x-agent]", e.message ?? e); }
   return null;
 }
 
@@ -190,7 +190,7 @@ async function loadLastPollTime() {
   try {
     const { rows } = await db.query(`SELECT value FROM bot_kv WHERE key = 'x_last_poll_time'`);
     if (rows[0]) { lastPollTime = parseInt(rows[0].value); console.log(`[x-agent] Loaded lastPollTime=${lastPollTime}`); }
-  } catch {}
+  } catch (e: any) { console.error("[x-agent]", e.message ?? e); }
 }
 
 async function saveLastPollTime(t: number) {
@@ -200,7 +200,7 @@ async function saveLastPollTime(t: number) {
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
       [t.toString()]
     );
-  } catch {}
+  } catch (e: any) { console.error("[x-agent]", e.message ?? e); }
 }
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ async function editAdminMessages(msgIds: Map<string, number>, text: string) {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ chat_id: chatId, message_id: messageId, text, parse_mode: "Markdown" }),
       });
-    } catch {}
+    } catch (e: any) { console.error("[x-agent]", e.message ?? e); }
   }
 }
 
@@ -540,7 +540,7 @@ async function processMention(tweet: any) {
       const top = markets.slice(0, 5).map((m: any) => `${m.symbol} ${m.timeframe} L:$${m.long_pool} S:$${m.short_pool}`).join(", ");
       marketContext = `\nActive markets: ${top}`;
     }
-  } catch {}
+  } catch (e: any) { console.error("[x-agent]", e.message ?? e); }
 
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: `Tweet from @${xUsername}: "${text}"${userContext}${marketContext}` },

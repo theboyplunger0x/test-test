@@ -493,6 +493,20 @@ export default function FeedPage() {
     setTokenModalInfo(buildTokenInfo(symbol, chain));
   };
 
+  function tokenInfoToCoin(t: TokenInfo): Coin {
+    return {
+      id: t.address, symbol: t.symbol, name: t.name, price: t.price,
+      change24h: t.change24h, marketCap: t.marketCap, volume24h: t.volume24h,
+      liquidity: t.liquidity, age: "—", migrated: true,
+      chain: t.chainLabel as Coin["chain"], ca: t.address,
+    };
+  }
+
+  function openMarketForToken(t: TokenInfo) {
+    const coin = liveCoins.find(c => c.symbol === t.symbol);
+    handleOpenMarket(coin ?? tokenInfoToCoin(t));
+  }
+
   function handleCATradeResult(token: TokenInfo) {
     setSelectedTokenInfo(token);
     setTokenModalInfo(token);
@@ -865,27 +879,7 @@ export default function FeedPage() {
                 setTokenProfileToken(null);
               }}
               onBet={handleAdd}
-              onOpenMarket={() => {
-                const coin = liveCoins.find(c => c.symbol === tokenProfileToken.symbol);
-                if (coin) {
-                  handleOpenMarket(coin);
-                } else {
-                  handleOpenMarket({
-                    id:        tokenProfileToken.address,
-                    symbol:    tokenProfileToken.symbol,
-                    name:      tokenProfileToken.name,
-                    price:     tokenProfileToken.price,
-                    change24h: tokenProfileToken.change24h,
-                    marketCap: tokenProfileToken.marketCap,
-                    volume24h: tokenProfileToken.volume24h,
-                    liquidity: tokenProfileToken.liquidity,
-                    age:       "—",
-                    migrated:  true,
-                    chain:     tokenProfileToken.chainLabel as Coin["chain"],
-                    ca:        tokenProfileToken.address,
-                  });
-                }
-              }}
+              onOpenMarket={() => openMarketForToken(tokenProfileToken)}
               onSweep={handleSweep}
               onPlaceOrder={handlePlaceOrder}
               loggedIn={!!user}
@@ -1311,28 +1305,7 @@ export default function FeedPage() {
                   if (!user) { setAuthOpen(true); return "Sign in to trade"; }
                   return handleAdd(marketId, side, amount, message);
                 }}
-                onOpenMarket={() => {
-                  if (!user) { setAuthOpen(true); return; }
-                  const coin = liveCoins.find(c => c.symbol === tokenModalInfo.symbol);
-                  if (coin) {
-                    handleOpenMarket(coin);
-                  } else {
-                    handleOpenMarket({
-                      id:        tokenModalInfo.address,
-                      symbol:    tokenModalInfo.symbol,
-                      name:      tokenModalInfo.name,
-                      price:     tokenModalInfo.price,
-                      change24h: tokenModalInfo.change24h,
-                      marketCap: tokenModalInfo.marketCap,
-                      volume24h: tokenModalInfo.volume24h,
-                      liquidity: tokenModalInfo.liquidity,
-                      age:       "—",
-                      migrated:  true,
-                      chain:     tokenModalInfo.chainLabel as Coin["chain"],
-                      ca:        tokenModalInfo.address,
-                    });
-                  }
-                }}
+                onOpenMarket={() => { if (!user) { setAuthOpen(true); return; } openMarketForToken(tokenModalInfo); }}
                 onSweep={async (side, amount, timeframe, symbol, chain) => {
                   if (!user) { setAuthOpen(true); return "Sign in to trade"; }
                   return handleSweep(side, amount, timeframe, symbol, chain);
@@ -1370,28 +1343,7 @@ export default function FeedPage() {
               if (!user) { setAuthOpen(true); return "Sign in to trade"; }
               return handleSweep(side, amount, timeframe, symbol, chain);
             }}
-            onOpenMarket={() => {
-              if (!user) { setAuthOpen(true); return; }
-              const coin = liveCoins.find(c => c.symbol === chartModalInfo.symbol);
-              if (coin) {
-                handleOpenMarket(coin);
-              } else {
-                handleOpenMarket({
-                  id:        chartModalInfo.address,
-                  symbol:    chartModalInfo.symbol,
-                  name:      chartModalInfo.name,
-                  price:     chartModalInfo.price,
-                  change24h: chartModalInfo.change24h,
-                  marketCap: chartModalInfo.marketCap,
-                  volume24h: chartModalInfo.volume24h,
-                  liquidity: chartModalInfo.liquidity,
-                  age:       "—",
-                  migrated:  true,
-                  chain:     chartModalInfo.chainLabel as Coin["chain"],
-                  ca:        chartModalInfo.address,
-                });
-              }
-            }}
+            onOpenMarket={() => { if (!user) { setAuthOpen(true); return; } openMarketForToken(chartModalInfo!); }}
             loggedIn={!!user}
             onAuthRequired={() => setAuthOpen(true)}
             paperMode={paperMode}
