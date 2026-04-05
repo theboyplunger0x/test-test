@@ -201,7 +201,7 @@ export default function CallCard({
               onClick={() => setFadeOpen(true)}
               className={`mt-3 w-full py-2 rounded-xl text-[12px] font-black border transition-all ${fadeBg}`}
             >
-              Fade — go {fadeSide === "long" ? "Long ▲" : "Short ▼"}
+              {fadeSide === "long" ? "Go Long ▲" : "Go Short ▼"}
             </motion.button>
           ) : (
             <motion.div
@@ -213,7 +213,7 @@ export default function CallCard({
             >
               <div className="flex justify-between items-center">
                 <span className={`text-[12px] font-black ${fadeSideColor}`}>
-                  Fade → {fadeSide === "long" ? "Long ▲" : "Short ▼"}
+                  {fadeSide === "long" ? "Go Long ▲" : "Go Short ▼"}
                 </span>
                 <button onClick={() => { setFadeOpen(false); setCustomAmt(""); setFadeError(""); }}
                   className={`text-[11px] font-bold ${dk ? "text-white/25 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>✕</button>

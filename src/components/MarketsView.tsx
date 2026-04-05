@@ -1231,7 +1231,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                   return items.map((item, i) => {
                     if (item.type === "debate") {
                       return (
-                        <motion.div key={`debate-${item.data.market.id}`} className="sm:col-span-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                        <motion.div key={`debate-${item.data.market.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
                           <DebateCard debate={item.data} dk={dk} index={i}
                             onViewProfile={(u) => onViewProfile?.(u)}
                             onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
@@ -1242,7 +1242,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                     }
                     if (item.type === "call") {
                       return (
-                        <motion.div key={`call-${item.data.id}`} className="sm:col-span-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
+                        <motion.div key={`call-${item.data.id}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.02 }}>
                           <CallCard call={item.data} dk={dk} index={i}
                             onViewProfile={(u) => onViewProfile?.(u)}
                             onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
