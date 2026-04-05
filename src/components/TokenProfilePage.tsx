@@ -148,7 +148,7 @@ export default function TokenProfilePage({
   const [viewTab, setViewTab]       = useState<"calls" | "trade">("calls");
 
   // Trade state
-  const [tradeMode, setTradeMode]   = useState<"trade" | "sweep">("trade");
+  const [tradeMode, setTradeMode]   = useState<"call" | "market" | "sweep">("call");
   const [tradeSide, setTradeSide]   = useState<"long" | "short" | null>(null);
   const [tradeAmt, setTradeAmt]     = useState<number | null>(null);
   const [tradeCustom, setTradeCustom] = useState("");
@@ -238,12 +238,16 @@ export default function TokenProfilePage({
     if (!loggedIn) { onAuthRequired(); return; }
     setTradeLoading(true); setTradeErr("");
     let err: string | null = null;
-    if (tradeMode === "sweep" && onSweep) {
-      err = await onSweep(tradeSide!, tradeFinalAmt!, tradeTf, token.symbol, token.chainLabel);
-    } else if (!activeTradeMarket && onAutoTrade) {
+    if (tradeMode === "call" && onAutoTrade) {
+      // Always create new market
       err = await onAutoTrade(tradeSide!, tradeFinalAmt!, tradeTf, tradeMsg.trim() || undefined);
-    } else if (activeTradeMarket && onBet) {
+    } else if (tradeMode === "market" && activeTradeMarket && onBet) {
+      // Enter existing market
       err = await onBet(activeTradeMarket.id, tradeSide!, tradeFinalAmt!, tradeMsg.trim() || undefined);
+    } else if (tradeMode === "sweep" && onSweep) {
+      err = await onSweep(tradeSide!, tradeFinalAmt!, tradeTf, token.symbol, token.chainLabel);
+    } else if (tradeMode === "market" && !activeTradeMarket) {
+      err = "No open market for this timeframe. Try making a Call instead.";
     }
     setTradeLoading(false);
     if (err) setTradeErr(err);
@@ -333,10 +337,14 @@ export default function TokenProfilePage({
       {/* ── TRADE VIEW ── */}
       {viewTab === "trade" && (
         <div className="px-5 py-4">
-          {/* Order type: Market | Sweep | Advanced */}
+          {/* Order type: Call | Market | Sweep | Advanced */}
           <div className="flex items-center gap-3 mb-3">
-            <button onClick={() => setTradeMode("trade")}
-              className={`text-[11px] font-black transition-all ${tradeMode === "trade" ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>
+            <button onClick={() => setTradeMode("call")}
+              className={`text-[11px] font-black transition-all ${tradeMode === "call" ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>
+              Call
+            </button>
+            <button onClick={() => setTradeMode("market")}
+              className={`text-[11px] font-black transition-all ${tradeMode === "market" ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30 hover:text-white/50" : "text-gray-400 hover:text-gray-600"}`}>
               Market
             </button>
             <button onClick={() => setTradeMode("sweep")}
@@ -362,10 +370,10 @@ export default function TokenProfilePage({
             </motion.button>
           </div>
 
-          {/* Duration (Trade only) */}
-          {tradeMode === "trade" && (
+          {/* Duration */}
+          {tradeMode === "call" && (
             <div className="mb-3">
-              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Duration</p>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Timeframe</p>
               <div className="flex flex-wrap gap-1">
                 {TFS.map(tf => (
                   <button key={tf} onClick={() => setTradeTf(tf)}
@@ -378,6 +386,28 @@ export default function TokenProfilePage({
               </div>
             </div>
           )}
+          {tradeMode === "market" && (() => {
+            const openTfs = [...new Set(markets.filter(m => m.status === "open" && !!m.is_paper === paperMode).map(m => m.timeframe))];
+            return (
+              <div className="mb-3">
+                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Open Markets</p>
+                {openTfs.length === 0 ? (
+                  <p className={`text-[10px] ${muted}`}>No open markets. Try making a Call.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {openTfs.map(tf => (
+                      <button key={tf} onClick={() => setTradeTf(tf)}
+                        className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
+                          tradeTf === tf
+                            ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
+                            : dk ? "bg-white/5 text-white/40 border-white/10" : "bg-gray-100 text-gray-400 border-gray-200"
+                        }`}>{tf}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {tradeMode === "sweep" && (
             <p className={`text-[8px] font-black uppercase tracking-widest mb-3 ${muted} opacity-50`}>Sweeps all open timeframes</p>
           )}
@@ -403,8 +433,8 @@ export default function TokenProfilePage({
             </div>
           </div>
 
-          {/* Message (Trade only) */}
-          {tradeMode === "trade" && (
+          {/* Message (Call only) */}
+          {tradeMode === "call" && (
             <textarea value={tradeMsg} onChange={e => setTradeMsg(e.target.value)}
               maxLength={60} placeholder={`${token.symbol} to the moon!`} rows={1}
               className={`w-full border text-[10px] font-bold p-2 rounded-lg outline-none resize-none mb-3 transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/15" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
@@ -419,7 +449,7 @@ export default function TokenProfilePage({
                 ? tradeSide === "long" ? "bg-emerald-500 text-white hover:bg-emerald-400" : "bg-red-500 text-white hover:bg-red-400"
                 : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}>
-            {tradeLoading ? "Placing..." : tradeMode === "sweep" ? `Sweep ${tradeSide === "long" ? "▲" : tradeSide === "short" ? "▼" : ""} ${tradeFinalAmt ? `$${tradeFinalAmt}` : ""}`.trim() : activeTradeMarket ? "Trade" : "Open Market"}
+            {tradeLoading ? "Placing..." : tradeMode === "call" ? "Make Call" : tradeMode === "sweep" ? "Sweep" : "Trade"}
           </motion.button>
         </div>
       )}
