@@ -356,101 +356,179 @@ export default function TokenProfilePage({
             </span>
           </div>
 
-          {/* Side */}
-          <div className="flex gap-2 mb-3">
-            <motion.button whileTap={{ scale: 0.96 }} onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide(tradeSide === "long" ? null : "long"); }}
-              className={`flex-1 rounded-xl py-2.5 text-center transition-all ${tradeSide === "long" ? "bg-emerald-500" : dk ? "bg-emerald-500/10" : "bg-emerald-50"}`}>
-              <p className={`text-[14px] font-black ${tradeSide === "long" ? "text-white" : "text-emerald-300"}`}>{loggedIn ? "▲ Long" : "Sign in"}</p>
-              <p className={`text-[10px] font-black ${tradeSide === "long" ? "text-emerald-100/80" : "text-emerald-400/60"}`}>{tLongMult.toFixed(2)}x</p>
-            </motion.button>
-            <motion.button whileTap={{ scale: 0.96 }} onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide(tradeSide === "short" ? null : "short"); }}
-              className={`flex-1 rounded-xl py-2.5 text-center transition-all ${tradeSide === "short" ? "bg-red-500" : dk ? "bg-red-500/10" : "bg-rose-50"}`}>
-              <p className={`text-[14px] font-black ${tradeSide === "short" ? "text-white" : "text-red-300"}`}>{loggedIn ? "▼ Short" : "Sign in"}</p>
-              <p className={`text-[10px] font-black ${tradeSide === "short" ? "text-red-100/80" : "text-red-400/60"}`}>{tShortMult.toFixed(2)}x</p>
-            </motion.button>
-          </div>
-
-          {/* Duration */}
+          {/* ── CALL MODE ── */}
           {tradeMode === "call" && (
-            <div className="mb-3">
-              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Timeframe</p>
-              <div className="flex flex-wrap gap-1">
-                {TFS.map(tf => (
-                  <button key={tf} onClick={() => setTradeTf(tf)}
-                    className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
-                      tradeTf === tf
-                        ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
-                        : dk ? "bg-white/5 text-white/40 border-white/10" : "bg-gray-100 text-gray-400 border-gray-200"
-                    }`}>{tf}</button>
+            <>
+              {/* Timeframe */}
+              <div className="mb-3">
+                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Timeframe</p>
+                <div className="flex flex-wrap gap-1">
+                  {TFS.map(tf => (
+                    <button key={tf} onClick={() => setTradeTf(tf)}
+                      className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
+                        tradeTf === tf
+                          ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
+                          : dk ? "bg-white/5 text-white/40 border-white/10" : "bg-gray-100 text-gray-400 border-gray-200"
+                      }`}>{tf}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Thesis */}
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className={`text-[8px] font-black uppercase tracking-widest ${muted}`}>Your Thesis</p>
+                  <span className={`text-[9px] font-bold tabular-nums ${tradeMsg.length > 50 ? "text-amber-400" : muted}`}>{tradeMsg.length}/60</span>
+                </div>
+                <textarea value={tradeMsg} onChange={e => setTradeMsg(e.target.value)}
+                  maxLength={60} placeholder={`"this thing is cooked"`} rows={1}
+                  className={`w-full border text-[11px] font-bold p-2.5 rounded-lg outline-none resize-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/15" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+              </div>
+
+              {/* Position: Side + Amount together */}
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Your Position</p>
+              <div className="flex gap-2 mb-2">
+                <button onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide("short"); }}
+                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all border ${tradeSide === "short" ? "bg-red-500/15 border-red-500/30 text-red-400" : dk ? "bg-white/4 border-white/8 text-white/40 hover:bg-white/8" : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"}`}>
+                  ▼ Short
+                </button>
+                <button onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide("long"); }}
+                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all border ${tradeSide === "long" ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : dk ? "bg-white/4 border-white/8 text-white/40 hover:bg-white/8" : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"}`}>
+                  Long ▲
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {presets.map(a => (
+                  <button key={a} onClick={() => { setTradeAmt(a); setTradeCustom(String(a)); }}
+                    className={`py-1.5 rounded-lg text-[10px] font-black transition-all ${tradeAmt === a && tradeCustom === String(a) ? dk ? "bg-white/15 text-white" : "bg-gray-200 text-gray-900" : dk ? "bg-white/5 text-white/40" : "bg-gray-100 text-gray-400"}`}>
+                    ${a}
+                  </button>
                 ))}
               </div>
-            </div>
+              <div className="relative mb-3">
+                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${muted}`}>$</span>
+                <input type="number" placeholder="custom" value={tradeCustom}
+                  onChange={e => { setTradeCustom(e.target.value); setTradeAmt(null); }}
+                  className={`w-full border text-[11px] font-bold pl-6 pr-3 py-1.5 rounded-lg outline-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+              </div>
+
+              {tradeErr && <p className="text-[10px] font-bold text-red-400 mb-2">{tradeErr}</p>}
+
+              <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade} disabled={!tradeReady || tradeLoading}
+                className={`w-full py-3 rounded-xl text-[13px] font-black transition-all ${
+                  tradeLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+                  : tradeReady ? "bg-amber-500 text-black hover:bg-amber-400" : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                }`}>
+                {tradeLoading ? "Placing..." : `Make ${tradeTf} call${paperMode ? " (paper)" : ""}`}
+              </motion.button>
+            </>
           )}
+
+          {/* ── MARKET MODE ── */}
           {tradeMode === "market" && (() => {
             const openTfs = [...new Set(markets.filter(m => m.status === "open" && !!m.is_paper === paperMode).map(m => m.timeframe))];
             return (
-              <div className="mb-3">
-                <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Open Markets</p>
-                {openTfs.length === 0 ? (
-                  <p className={`text-[10px] ${muted}`}>No open markets. Try making a Call.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {openTfs.map(tf => (
-                      <button key={tf} onClick={() => setTradeTf(tf)}
-                        className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
-                          tradeTf === tf
-                            ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
-                            : dk ? "bg-white/5 text-white/40 border-white/10" : "bg-gray-100 text-gray-400 border-gray-200"
-                        }`}>{tf}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <>
+                {/* Timeframe — only open markets */}
+                <div className="mb-3">
+                  <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Open Markets</p>
+                  {openTfs.length === 0 ? (
+                    <p className={`text-[10px] ${muted}`}>No open markets. Try making a Call.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {openTfs.map(tf => (
+                        <button key={tf} onClick={() => setTradeTf(tf)}
+                          className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
+                            tradeTf === tf
+                              ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
+                              : dk ? "bg-white/5 text-white/40 border-white/10" : "bg-gray-100 text-gray-400 border-gray-200"
+                          }`}>{tf}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Side + Amount */}
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide("short"); }}
+                    className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all border ${tradeSide === "short" ? "bg-red-500/15 border-red-500/30 text-red-400" : dk ? "bg-white/4 border-white/8 text-white/40 hover:bg-white/8" : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"}`}>
+                    ▼ Short
+                  </button>
+                  <button onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide("long"); }}
+                    className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all border ${tradeSide === "long" ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : dk ? "bg-white/4 border-white/8 text-white/40 hover:bg-white/8" : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"}`}>
+                    Long ▲
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5 mb-2">
+                  {presets.map(a => (
+                    <button key={a} onClick={() => { setTradeAmt(a); setTradeCustom(String(a)); }}
+                      className={`py-1.5 rounded-lg text-[10px] font-black transition-all ${tradeAmt === a && tradeCustom === String(a) ? dk ? "bg-white/15 text-white" : "bg-gray-200 text-gray-900" : dk ? "bg-white/5 text-white/40" : "bg-gray-100 text-gray-400"}`}>
+                      ${a}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative mb-3">
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${muted}`}>$</span>
+                  <input type="number" placeholder="custom" value={tradeCustom}
+                    onChange={e => { setTradeCustom(e.target.value); setTradeAmt(null); }}
+                    className={`w-full border text-[11px] font-bold pl-6 pr-3 py-1.5 rounded-lg outline-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+                </div>
+
+                {tradeErr && <p className="text-[10px] font-bold text-red-400 mb-2">{tradeErr}</p>}
+
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade} disabled={!tradeReady || tradeLoading || openTfs.length === 0}
+                  className={`w-full py-3 rounded-xl text-[13px] font-black transition-all ${
+                    tradeLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+                    : tradeReady && openTfs.length > 0
+                      ? tradeSide === "long" ? "bg-emerald-500 text-white hover:bg-emerald-400" : "bg-red-500 text-white hover:bg-red-400"
+                      : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  }`}>
+                  {tradeLoading ? "Placing..." : "Trade"}
+                </motion.button>
+              </>
             );
           })()}
+
+          {/* ── SWEEP MODE ── */}
           {tradeMode === "sweep" && (
-            <p className={`text-[8px] font-black uppercase tracking-widest mb-3 ${muted} opacity-50`}>Sweeps all open timeframes</p>
+            <>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-2 ${muted} opacity-50`}>Sweeps all open timeframes</p>
+              <div className="flex gap-2 mb-2">
+                <button onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide("short"); }}
+                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all border ${tradeSide === "short" ? "bg-red-500/15 border-red-500/30 text-red-400" : dk ? "bg-white/4 border-white/8 text-white/40 hover:bg-white/8" : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"}`}>
+                  ▼ Short
+                </button>
+                <button onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide("long"); }}
+                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all border ${tradeSide === "long" ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : dk ? "bg-white/4 border-white/8 text-white/40 hover:bg-white/8" : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"}`}>
+                  Long ▲
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {presets.map(a => (
+                  <button key={a} onClick={() => { setTradeAmt(a); setTradeCustom(String(a)); }}
+                    className={`py-1.5 rounded-lg text-[10px] font-black transition-all ${tradeAmt === a && tradeCustom === String(a) ? dk ? "bg-white/15 text-white" : "bg-gray-200 text-gray-900" : dk ? "bg-white/5 text-white/40" : "bg-gray-100 text-gray-400"}`}>
+                    ${a}
+                  </button>
+                ))}
+              </div>
+              <div className="relative mb-3">
+                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${muted}`}>$</span>
+                <input type="number" placeholder="custom" value={tradeCustom}
+                  onChange={e => { setTradeCustom(e.target.value); setTradeAmt(null); }}
+                  className={`w-full border text-[11px] font-bold pl-6 pr-3 py-1.5 rounded-lg outline-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+              </div>
+
+              {tradeErr && <p className="text-[10px] font-bold text-red-400 mb-2">{tradeErr}</p>}
+
+              <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade} disabled={!tradeReady || tradeLoading}
+                className={`w-full py-3 rounded-xl text-[13px] font-black transition-all ${
+                  tradeLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+                  : tradeReady ? "bg-amber-500 text-black hover:bg-amber-400" : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                }`}>
+                {tradeLoading ? "Sweeping..." : "Sweep"}
+              </motion.button>
+            </>
           )}
-
-          {/* Amount */}
-          <div className="mb-3">
-            <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Amount</p>
-            <div className="grid grid-cols-4 gap-1.5 mb-2">
-              {presets.map(a => (
-                <button key={a} onClick={() => { setTradeAmt(a); setTradeCustom(String(a)); }}
-                  className={`py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                    tradeAmt === a && tradeCustom === String(a)
-                      ? tradeSide === "long" ? "bg-emerald-500 text-white" : tradeSide === "short" ? "bg-red-500 text-white" : dk ? "bg-white text-black" : "bg-gray-900 text-white"
-                      : dk ? "bg-white/5 text-white/40" : "bg-gray-100 text-gray-400"
-                  }`}>${a}</button>
-              ))}
-            </div>
-            <div className="relative">
-              <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${muted}`}>$</span>
-              <input type="number" placeholder="custom" value={tradeCustom}
-                onChange={e => { setTradeCustom(e.target.value); setTradeAmt(null); }}
-                className={`w-full border text-[11px] font-bold pl-6 pr-3 py-1.5 rounded-lg outline-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
-            </div>
-          </div>
-
-          {/* Message (Call only) */}
-          {tradeMode === "call" && (
-            <textarea value={tradeMsg} onChange={e => setTradeMsg(e.target.value)}
-              maxLength={60} placeholder={`${token.symbol} to the moon!`} rows={1}
-              className={`w-full border text-[10px] font-bold p-2 rounded-lg outline-none resize-none mb-3 transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/15" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
-          )}
-
-          {tradeErr && <p className="text-[10px] font-bold text-red-400 mb-2">{tradeErr}</p>}
-
-          <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade} disabled={!tradeReady || tradeLoading}
-            className={`w-full py-3 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all ${
-              tradeLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
-              : tradeReady
-                ? tradeSide === "long" ? "bg-emerald-500 text-white hover:bg-emerald-400" : "bg-red-500 text-white hover:bg-red-400"
-                : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
-            }`}>
-            {tradeLoading ? "Placing..." : tradeMode === "call" ? "Make Call" : tradeMode === "sweep" ? "Sweep" : "Trade"}
-          </motion.button>
         </div>
       )}
 
