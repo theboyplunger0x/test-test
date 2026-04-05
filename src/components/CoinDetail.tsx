@@ -967,6 +967,7 @@ export default function CoinDetail({
       {/* ── BELOW: Full-width sections ───────────────────────────────────────── */}
 
       {/* ── Your Positions ────────────────────────────────────────── */}
+      <div className={`border-t ${dk ? "border-white/8" : "border-gray-200"}`} />
       {myPositions.length > 0 && (() => {
         // Group by sweep_id for multi-tf view
         const sweepGroups = new Map<string, MyPosition[]>();
@@ -990,7 +991,9 @@ export default function CoinDetail({
         const isLong = myPositions[0]?.side === "long";
 
         return (
-          <div className={`mx-4 my-3 rounded-xl border ${dk ? "border-white/10 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
+          <div className="px-4 pt-4 pb-2">
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${dk ? "text-white/25" : "text-gray-400"}`}>Your Position</p>
+          <div className={`rounded-xl border ${dk ? "border-white/10 bg-white/[0.02]" : "border-gray-200 bg-gray-50"}`}>
             <button onClick={() => setMyPosExpanded(!myPosExpanded)}
               className="w-full flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
@@ -1048,10 +1051,12 @@ export default function CoinDetail({
               </div>
             )}
           </div>
+          </div>
         );
       })()}
 
       {/* ── Orders (open/closed) ──────────────────────────────────── */}
+      <div className={`border-t ${dk ? "border-white/8" : "border-gray-200"}`} />
       {(() => {
         const openMarkets   = feedMarkets.filter(m => m.status === "open" && new Date(m.closes_at).getTime() > Date.now());
         const closedMarkets = feedMarkets.filter(m => m.status !== "open" || new Date(m.closes_at).getTime() <= Date.now());
@@ -1117,7 +1122,8 @@ export default function CoinDetail({
         };
 
         return (
-          <div className={`border-t ${dk ? "border-white/8" : "border-gray-100"}`}>
+          <div className="px-4 pt-3 pb-6">
+            <div className={`rounded-xl border overflow-hidden ${dk ? "border-white/8" : "border-gray-200"}`}>
             <div className={`flex items-center gap-3 px-4 py-2 border-b ${dk ? "border-white/6 bg-[#0a0a0a]" : "border-gray-100 bg-gray-50"}`}>
               <span className={`text-[10px] font-black uppercase tracking-widest ${dk ? "text-white/40" : "text-gray-400"}`}>Orders</span>
               <div className={`flex rounded-lg overflow-hidden text-[10px] font-black ${dk ? "bg-white/5" : "bg-gray-100"}`}>
@@ -1134,6 +1140,7 @@ export default function CoinDetail({
             ) : (
               <div>{visible.map(renderCard)}</div>
             )}
+            </div>
           </div>
         );
       })()}
