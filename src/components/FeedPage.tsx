@@ -1297,9 +1297,9 @@ export default function FeedPage() {
                 token={tokenModalInfo}
                 dk={dk}
                 onClose={() => setTokenModalInfo(null)}
-                onViewChart={() => {
-                  setChartModalInfo(tokenModalInfo);
-                  setTokenModalInfo(null);
+                onAutoTrade={async (side, amount, timeframe, tagline) => {
+                  if (!user) { setAuthOpen(true); return "Sign in to trade"; }
+                  return handleAutoTrade(side, amount, timeframe, tagline);
                 }}
                 onBet={async (marketId, side, amount, message) => {
                   if (!user) { setAuthOpen(true); return "Sign in to trade"; }

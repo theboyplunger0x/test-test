@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+import type { Candle } from "@/lib/chartData";
 import { api } from "@/lib/api";
-import { TokenInfo, getOHLCV, resolutionForTf, searchBySymbol } from "@/lib/chartData";
+import { TokenInfo, getOHLCV, resolutionForTf, searchBySymbol, getPriceByPair } from "@/lib/chartData";
+import type { Market } from "@/lib/api";
+
+const Chart = dynamic(() => import("./Chart"), { ssr: false });
+const FEE = 0.05;
+function calcMult(mine: number, other: number) { return mine === 0 ? 0 : 1 + (other * (1 - FEE)) / mine; }
 
 const TFS = ["1m", "5m", "15m", "1h", "4h", "24h"];
 
@@ -97,6 +104,8 @@ interface Position {
 
 interface MarketRow {
   id: string;
+  symbol: string;
+  chain: string;
   timeframe: string;
   entry_price: string;
   status: string;
@@ -104,6 +113,7 @@ interface MarketRow {
   short_pool: string;
   is_paper: boolean;
   tagline: string;
+  created_at: string;
   opener_username: string;
   opener_avatar: string | null;
 }
@@ -112,8 +122,9 @@ interface Props {
   token: TokenInfo;
   dk: boolean;
   onClose: () => void;
-  onViewChart: () => void;
+  onViewChart?: () => void;
   onBet?: (marketId: string, side: "long" | "short", amount: number, message?: string) => Promise<string | null>;
+  onAutoTrade?: (side: "long" | "short", amount: number, timeframe: string, tagline?: string) => Promise<string | null>;
   onOpenMarket?: () => void;
   onSweep?: (side: "long" | "short", amount: number, timeframe: string, symbol?: string, chain?: string) => Promise<string | null>;
   onPlaceOrder?: (side: "long" | "short", amount: number, timeframe: string, autoReopen: boolean, symbol?: string, chain?: string, ca?: string) => Promise<string | null>;
@@ -124,7 +135,7 @@ interface Props {
 }
 
 export default function TokenProfilePage({
-  token, dk, onClose, onViewChart, loggedIn, onAuthRequired, paperMode,
+  token, dk, onClose, onBet, onAutoTrade, onSweep, loggedIn, onAuthRequired, paperMode, presets = [5, 25, 100, 500],
 }: Props) {
   const [markets, setMarkets]     = useState<MarketRow[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -132,6 +143,22 @@ export default function TokenProfilePage({
   const [chartTf, setChartTf]     = useState("1h");
   const [loading, setLoading]     = useState(true);
   const [resolvedCA, setResolvedCA] = useState(token.address ?? "");
+
+  // View tab: calls (social) or trade (chart + trade panel)
+  const [viewTab, setViewTab]       = useState<"calls" | "trade">("calls");
+
+  // Trade state
+  const [tradeMode, setTradeMode]   = useState<"trade" | "sweep">("trade");
+  const [tradeSide, setTradeSide]   = useState<"long" | "short" | null>(null);
+  const [tradeAmt, setTradeAmt]     = useState<number | null>(null);
+  const [tradeCustom, setTradeCustom] = useState("");
+  const [tradeTf, setTradeTf]       = useState("5m");
+  const [tradeMsg, setTradeMsg]     = useState("");
+  const [tradeErr, setTradeErr]     = useState("");
+  const [tradeLoading, setTradeLoading] = useState(false);
+  const [bigCandles, setBigCandles] = useState<Candle[]>([]);
+  const [bigChartLoading, setBigChartLoading] = useState(false);
+  const [livePrice, setLivePrice]   = useState<number | null>(null);
 
   // If address is empty (navigated from feed card), look it up
   useEffect(() => {
@@ -163,6 +190,65 @@ export default function TokenProfilePage({
     const { resolution, limit } = resolutionForTf(chartTf);
     getOHLCV(addr, token.chainLabel ?? "solana", resolution, limit).then(c => setCandles(c)).catch(() => {});
   }, [token.pairAddress, token.address, chartTf]);
+
+  // Fetch bigger chart when trade tab is active
+  const fetchBigChart = useCallback(async (tf: string) => {
+    const addr = token.pairAddress || token.address || resolvedCA;
+    if (!addr) return;
+    setBigChartLoading(true);
+    try {
+      const { resolution, limit } = resolutionForTf(tf);
+      const data = await getOHLCV(addr, token.chainLabel ?? "solana", resolution, limit);
+      setBigCandles(data);
+    } catch {}
+    setBigChartLoading(false);
+  }, [token.pairAddress, token.address, resolvedCA, token.chainLabel]);
+
+  useEffect(() => {
+    if (viewTab === "trade") fetchBigChart(chartTf);
+  }, [viewTab, chartTf, fetchBigChart]);
+
+  // Live price poll when in trade view
+  useEffect(() => {
+    if (viewTab !== "trade" || !token.pairAddress || !token.chainId) return;
+    const poll = async () => {
+      try { const p = await getPriceByPair(token.chainId, token.pairAddress); if (p) setLivePrice(p); } catch {}
+    };
+    poll();
+    const i = setInterval(poll, 5_000);
+    return () => clearInterval(i);
+  }, [viewTab, token.pairAddress, token.chainId]);
+
+  // Active market for trade
+  const activeTradeMarket = markets
+    .filter(m => m.symbol && m.status === "open" && m.timeframe === tradeTf && !!m.is_paper === paperMode)
+    .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())[0] ?? null;
+
+  const tLongPool  = activeTradeMarket ? parseFloat(activeTradeMarket.long_pool)  : 0;
+  const tShortPool = activeTradeMarket ? parseFloat(activeTradeMarket.short_pool) : 0;
+  const tTotal     = tLongPool + tShortPool;
+  const tLongMult  = tTotal > 0 ? calcMult(tLongPool, tShortPool)  : 1.95;
+  const tShortMult = tTotal > 0 ? calcMult(tShortPool, tLongPool)  : 1.95;
+
+  const tradeFinalAmt = tradeCustom ? parseFloat(tradeCustom) || null : tradeAmt;
+  const tradeReady = !!tradeSide && !!tradeFinalAmt && tradeFinalAmt >= 1;
+
+  async function handleTrade() {
+    if (!tradeReady) return;
+    if (!loggedIn) { onAuthRequired(); return; }
+    setTradeLoading(true); setTradeErr("");
+    let err: string | null = null;
+    if (tradeMode === "sweep" && onSweep) {
+      err = await onSweep(tradeSide!, tradeFinalAmt!, tradeTf, token.symbol, token.chainLabel);
+    } else if (!activeTradeMarket && onAutoTrade) {
+      err = await onAutoTrade(tradeSide!, tradeFinalAmt!, tradeTf, tradeMsg.trim() || undefined);
+    } else if (activeTradeMarket && onBet) {
+      err = await onBet(activeTradeMarket.id, tradeSide!, tradeFinalAmt!, tradeMsg.trim() || undefined);
+    }
+    setTradeLoading(false);
+    if (err) setTradeErr(err);
+    else { setTradeSide(null); setTradeAmt(null); setTradeCustom(""); setTradeMsg(""); }
+  }
 
   const modeMarketIds = new Set(markets.filter(m => m.status === "open" && !!m.is_paper === paperMode).map(m => m.id));
   const modePositions = positions.filter(p => modeMarketIds.has(p.market_id ?? ""));
@@ -223,45 +309,123 @@ export default function TokenProfilePage({
                   : dk ? "bg-white/6 text-white/35 hover:bg-white/12" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
               }`}>{tf}</button>
           ))}
-          <button onClick={onViewChart}
-            className={`ml-auto px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"}`}>
-            Chart + Trade →
-          </button>
         </div>
 
       </div>
 
-      {/* Active markets */}
-      {(() => {
-        const openMarkets = markets.filter(m => m.status === "open" && !!m.is_paper === paperMode);
-        const byTf = new Map<string, MarketRow>();
-        for (const m of openMarkets) {
-          const existing = byTf.get(m.timeframe);
-          if (!existing || (parseFloat(m.long_pool) + parseFloat(m.short_pool)) > (parseFloat(existing.long_pool) + parseFloat(existing.short_pool))) {
-            byTf.set(m.timeframe, m);
-          }
-        }
-        const tfMarkets = Array.from(byTf.values());
-        if (tfMarkets.length === 0 && markets.length === 0) return null;
-        return (
-          <div className={`px-5 py-3 border-b ${border}`}>
-            <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${muted}`}>Active calls</p>
-            <div className="flex flex-wrap gap-2">
-              {tfMarkets.map(m => {
-                const count = openMarkets.filter(om => om.timeframe === m.timeframe).length;
-                return (
-                  <span key={m.id}
-                    className={`px-3 py-1.5 rounded-xl text-[11px] font-black border ${dk ? "bg-white/5 text-white/60 border-white/10" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
-                    {m.timeframe}{count > 1 ? ` (${count})` : ""}
-                  </span>
-                );
-              })}
+      {/* Calls / Trade tabs */}
+      <div className={`flex border-b ${border} sticky top-0 z-10 ${dk ? "bg-[#0c0c0c]" : "bg-white"}`}>
+        {(["calls", "trade"] as const).map(tab => (
+          <button key={tab} onClick={() => setViewTab(tab)}
+            className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-wider transition-all relative ${
+              viewTab === tab ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"
+            }`}>
+            {tab === "calls" ? "Calls" : "Trade"}
+            {viewTab === tab && <span className={`absolute bottom-0 left-0 right-0 h-[2px] ${dk ? "bg-white" : "bg-gray-900"}`} />}
+          </button>
+        ))}
+      </div>
+
+      {/* ── TRADE VIEW ── */}
+      {viewTab === "trade" && (
+        <div className="px-5 py-4">
+          {/* Bigger chart */}
+          <div className={`relative w-full h-[180px] rounded-xl overflow-hidden mb-3 ${dk ? "bg-[#0e0e0e]" : "bg-gray-50"}`}>
+            {bigCandles.length > 0 && <Chart candles={bigCandles} livePrice={livePrice ?? undefined} dk={dk} />}
+            {bigChartLoading && bigCandles.length === 0 && <div className={`absolute inset-0 flex items-center justify-center ${muted} text-[12px]`}>Loading...</div>}
+          </div>
+
+          {/* Trade / Sweep toggle */}
+          <div className={`flex mb-3 border-b ${border}`}>
+            {(["trade", "sweep"] as const).map(m => (
+              <button key={m} onClick={() => setTradeMode(m)}
+                className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider transition-all relative ${
+                  tradeMode === m ? dk ? "text-white" : "text-gray-900" : dk ? "text-white/30" : "text-gray-400"
+                }`}>
+                {m === "trade" ? "Trade" : "Sweep"}
+                {tradeMode === m && <span className={`absolute bottom-0 left-0 right-0 h-[2px] ${dk ? "bg-white" : "bg-gray-900"}`} />}
+              </button>
+            ))}
+          </div>
+
+          {/* Side */}
+          <div className="flex gap-2 mb-3">
+            <motion.button whileTap={{ scale: 0.96 }} onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide(tradeSide === "long" ? null : "long"); }}
+              className={`flex-1 rounded-xl py-2.5 text-center transition-all ${tradeSide === "long" ? "bg-emerald-500" : dk ? "bg-emerald-500/10" : "bg-emerald-50"}`}>
+              <p className={`text-[14px] font-black ${tradeSide === "long" ? "text-white" : "text-emerald-300"}`}>{loggedIn ? "▲ Long" : "Sign in"}</p>
+              <p className={`text-[10px] font-black ${tradeSide === "long" ? "text-emerald-100/80" : "text-emerald-400/60"}`}>{tLongMult.toFixed(2)}x</p>
+            </motion.button>
+            <motion.button whileTap={{ scale: 0.96 }} onClick={() => { if (!loggedIn) { onAuthRequired(); return; } setTradeSide(tradeSide === "short" ? null : "short"); }}
+              className={`flex-1 rounded-xl py-2.5 text-center transition-all ${tradeSide === "short" ? "bg-red-500" : dk ? "bg-red-500/10" : "bg-rose-50"}`}>
+              <p className={`text-[14px] font-black ${tradeSide === "short" ? "text-white" : "text-red-300"}`}>{loggedIn ? "▼ Short" : "Sign in"}</p>
+              <p className={`text-[10px] font-black ${tradeSide === "short" ? "text-red-100/80" : "text-red-400/60"}`}>{tShortMult.toFixed(2)}x</p>
+            </motion.button>
+          </div>
+
+          {/* Duration (Trade only) */}
+          {tradeMode === "trade" && (
+            <div className="mb-3">
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Duration</p>
+              <div className="flex flex-wrap gap-1">
+                {TFS.map(tf => (
+                  <button key={tf} onClick={() => setTradeTf(tf)}
+                    className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
+                      tradeTf === tf
+                        ? dk ? "bg-white text-black border-white" : "bg-gray-900 text-white border-gray-900"
+                        : dk ? "bg-white/5 text-white/40 border-white/10" : "bg-gray-100 text-gray-400 border-gray-200"
+                    }`}>{tf}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {tradeMode === "sweep" && (
+            <p className={`text-[8px] font-black uppercase tracking-widest mb-3 ${muted} opacity-50`}>Sweeps all open timeframes</p>
+          )}
+
+          {/* Amount */}
+          <div className="mb-3">
+            <p className={`text-[8px] font-black uppercase tracking-widest mb-1.5 ${muted}`}>Amount</p>
+            <div className="grid grid-cols-4 gap-1.5 mb-2">
+              {presets.map(a => (
+                <button key={a} onClick={() => { setTradeAmt(a); setTradeCustom(String(a)); }}
+                  className={`py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                    tradeAmt === a && tradeCustom === String(a)
+                      ? tradeSide === "long" ? "bg-emerald-500 text-white" : tradeSide === "short" ? "bg-red-500 text-white" : dk ? "bg-white text-black" : "bg-gray-900 text-white"
+                      : dk ? "bg-white/5 text-white/40" : "bg-gray-100 text-gray-400"
+                  }`}>${a}</button>
+              ))}
+            </div>
+            <div className="relative">
+              <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${muted}`}>$</span>
+              <input type="number" placeholder="custom" value={tradeCustom}
+                onChange={e => { setTradeCustom(e.target.value); setTradeAmt(null); }}
+                className={`w-full border text-[11px] font-bold pl-6 pr-3 py-1.5 rounded-lg outline-none transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/20" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
             </div>
           </div>
-        );
-      })()}
 
-      {/* Positions feed */}
+          {/* Message (Trade only) */}
+          {tradeMode === "trade" && (
+            <textarea value={tradeMsg} onChange={e => setTradeMsg(e.target.value)}
+              maxLength={60} placeholder={`${token.symbol} to the moon!`} rows={1}
+              className={`w-full border text-[10px] font-bold p-2 rounded-lg outline-none resize-none mb-3 transition-all ${dk ? "bg-white/5 border-white/8 text-white placeholder:text-white/15" : "bg-gray-50 border-gray-200 text-gray-900"}`} />
+          )}
+
+          {tradeErr && <p className="text-[10px] font-bold text-red-400 mb-2">{tradeErr}</p>}
+
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleTrade} disabled={!tradeReady || tradeLoading}
+            className={`w-full py-3 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all ${
+              tradeLoading ? dk ? "bg-white/8 text-white/30" : "bg-gray-100 text-gray-400"
+              : tradeReady
+                ? tradeSide === "long" ? "bg-emerald-500 text-white hover:bg-emerald-400" : "bg-red-500 text-white hover:bg-red-400"
+                : dk ? "bg-white/10 text-white/40 cursor-not-allowed" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+            }`}>
+            {tradeLoading ? "Placing..." : tradeMode === "sweep" ? "Sweep" : activeTradeMarket ? "Trade" : "Open Market"}
+          </motion.button>
+        </div>
+      )}
+
+      {/* ── CALLS VIEW ── */}
+      {viewTab === "calls" && (
       <div className="pb-6">
         {loading && (
           <div className="flex justify-center py-10">
@@ -320,6 +484,7 @@ export default function TokenProfilePage({
           </div>
         ))}
       </div>
+      )}
     </motion.div>
   );
 }
