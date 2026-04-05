@@ -16,7 +16,6 @@ interface Props {
   onViewProfile?: (username: string) => void;
   onBet?:         (id: string, side: "long" | "short", amount: number) => Promise<string | null>;
   shakingIds?:    Set<string>;
-  followingUsernames?: string[];
   calls?:         Call[];
   debates?:       Debate[];
   onFadeCall?:    (call: Call, side: "long" | "short", amount: number) => Promise<string | null>;
@@ -987,9 +986,9 @@ function OBCard({ entry, dk, onClick }: { entry: OBEntry; dk: boolean; onClick: 
   );
 }
 
-const MARKET_FILTERS = ["all", "hot", "calls", "debates", "sweep", "p2p", "following"] as const;
+const MARKET_FILTERS = ["all", "calls", "debates", "hot", "sweep", "p2p"] as const;
 type MarketFilter = typeof MARKET_FILTERS[number];
-const FILTER_LABELS: Record<MarketFilter, string> = { all: "All", hot: "Hot X's", calls: "Calls", debates: "Debates", sweep: "Sweep", p2p: "P2P", following: "Following" };
+const FILTER_LABELS: Record<MarketFilter, string> = { all: "All", calls: "Calls", debates: "Debates", hot: "Hot X's", sweep: "Sweep", p2p: "P2P" };
 const HOT_THRESHOLD = 5; // multiplier above this = hot
 
 // ── Markets Tape Sidebar ───────────────────────────────────────────────────────
@@ -1092,7 +1091,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile, paperMode }: { dk: bool
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, followingUsernames = [], calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken }: Props) {
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken }: Props) {
   const [selectedFilter, setSelectedFilter] = useState<MarketFilter>("all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 
@@ -1118,15 +1117,12 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
   });
 
   // Filter by category
-  const followSet = new Set(followingUsernames.map(u => u.toLowerCase()));
   const filteredMarkets = selectedFilter === "all"
     ? marketsWithMult
     : selectedFilter === "hot"
     ? marketsWithMult.filter(m => m.bestMult >= HOT_THRESHOLD)
     : selectedFilter === "sweep"
     ? marketsWithMult.filter(m => !!m.sweep_id)
-    : selectedFilter === "following"
-    ? marketsWithMult.filter(m => m.opener_username && followSet.has(m.opener_username.toLowerCase()))
     : marketsWithMult; // p2p = all individual markets
 
   // Sort: by recent activity in "all", by multiplier in "hot"
@@ -1179,6 +1175,36 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                 })}
               </div>
             </div>
+
+            {/* Calls + Debates at top when "All" */}
+            {selectedFilter === "all" && debates.length > 0 && (
+              <div className="mb-4">
+                <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${dk ? "text-white/25" : "text-gray-400"}`}>Hot Debates</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {debates.slice(0, 4).map((d, i) => (
+                    <DebateCard key={d.market.id} debate={d} dk={dk} index={i}
+                      onViewProfile={(u) => onViewProfile?.(u)}
+                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                      onFade={(marketId, side) => onFadeDebate?.(marketId, side)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {selectedFilter === "all" && calls.length > 0 && (
+              <div className="mb-4">
+                <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${dk ? "text-white/25" : "text-gray-400"}`}>Recent Calls</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {calls.slice(0, 6).map((c, i) => (
+                    <CallCard key={c.id} call={c} dk={dk} index={i}
+                      onViewProfile={(u) => onViewProfile?.(u)}
+                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                      onFade={onFadeCall}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {selectedFilter === "calls" ? (
               /* Calls — same design as Calls tab */
