@@ -129,7 +129,7 @@ export default function FeedPage() {
   const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
   const [mainTab, setMainTab]           = useState<MainTab>(() => {
     if (typeof window === "undefined") return "calls";
-    return (localStorage.getItem("fud_tab") as MainTab) || "calls";
+    return (localStorage.getItem("fud_tab") as MainTab) || "markets";
   });
   useEffect(() => { localStorage.setItem("fud_tab", mainTab); }, [mainTab]);
   const [calls, setCalls]               = useState<Call[]>([]);
@@ -293,7 +293,7 @@ export default function FeedPage() {
 
   // Fetch recent calls + debates — refresh every 30s
   useEffect(() => {
-    if (mainTab !== "calls") return;
+    if (mainTab !== "calls" && mainTab !== "markets") return;
     let cancelled = false;
     async function load(initial = false) {
       if (initial) setCallsLoading(true);
@@ -685,8 +685,8 @@ export default function FeedPage() {
   }
 
   const MAIN_TABS: { key: MainTab; label: string }[] = [
+    { key: "markets",  label: "Feed" },
     { key: "calls",    label: "Calls" },
-    { key: "markets",  label: "Markets" },
     { key: "chart",    label: "Chart" },
     { key: "feed",     label: "P2P" },
     { key: "trending", label: "Discover" },
@@ -1037,6 +1037,19 @@ export default function FeedPage() {
               onBet={handleAdd}
               shakingIds={shakingIds}
               followingUsernames={followingList}
+              calls={calls}
+              debates={debates}
+              onFadeCall={async (call, side, amount) => {
+                if (!user) { setAuthOpen(true); return null; }
+                if (!call.market_id) return "Cannot fade — market not found.";
+                if (call.status !== "open") return "This market is already closed.";
+                return handleAdd(call.market_id, side, amount, undefined, call.id);
+              }}
+              onFadeDebate={(marketId, side) => {
+                if (!user) { setAuthOpen(true); return; }
+                handleAdd(marketId, side, 25);
+              }}
+              onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
             />
           </motion.div>
         )}

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, Market, LeaderboardEntry } from "@/lib/api";
+import CallCard, { type Call } from "./CallCard";
+import DebateCard, { type Debate } from "./DebateCard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -15,6 +17,11 @@ interface Props {
   onBet?:         (id: string, side: "long" | "short", amount: number) => Promise<string | null>;
   shakingIds?:    Set<string>;
   followingUsernames?: string[];
+  calls?:         Call[];
+  debates?:       Debate[];
+  onFadeCall?:    (call: Call, side: "long" | "short", amount: number) => Promise<string | null>;
+  onFadeDebate?:  (marketId: string, side: "long" | "short") => void;
+  onViewToken?:   (symbol: string, chain: string) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -980,9 +987,9 @@ function OBCard({ entry, dk, onClick }: { entry: OBEntry; dk: boolean; onClick: 
   );
 }
 
-const MARKET_FILTERS = ["all", "hot", "sweep", "p2p", "following"] as const;
+const MARKET_FILTERS = ["all", "hot", "calls", "debates", "sweep", "p2p", "following"] as const;
 type MarketFilter = typeof MARKET_FILTERS[number];
-const FILTER_LABELS: Record<MarketFilter, string> = { all: "All", hot: "Hot X's", sweep: "Sweep", p2p: "P2P", following: "Following" };
+const FILTER_LABELS: Record<MarketFilter, string> = { all: "All", hot: "Hot X's", calls: "Calls", debates: "Debates", sweep: "Sweep", p2p: "P2P", following: "Following" };
 const HOT_THRESHOLD = 5; // multiplier above this = hot
 
 // ── Markets Tape Sidebar ───────────────────────────────────────────────────────
@@ -1085,7 +1092,7 @@ function MarketsTape({ dk, onSelectToken, onViewProfile, paperMode }: { dk: bool
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, followingUsernames = [] }: Props) {
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, followingUsernames = [], calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken }: Props) {
   const [selectedFilter, setSelectedFilter] = useState<MarketFilter>("all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 
@@ -1173,13 +1180,46 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {sortedMarkets.map((m, i) => (
-                <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
-                  <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} onBet={onBet} shaking={shakingIds?.has(m.id)} isP2PView={selectedFilter === "p2p"} paperMode={paperMode} />
-                </motion.div>
-              ))}
-            </div>
+            {selectedFilter === "calls" ? (
+              /* Calls — same design as Calls tab */
+              calls.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {calls.map((c, i) => (
+                    <CallCard key={c.id} call={c} dk={dk} index={i}
+                      onViewProfile={(u) => onViewProfile?.(u)}
+                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                      onFade={onFadeCall}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className={`text-center py-8 text-[13px] ${dk ? "text-white/30" : "text-gray-400"}`}>No calls yet</p>
+              )
+            ) : selectedFilter === "debates" ? (
+              /* Debates — same design as Hot Debates tab */
+              debates.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {debates.map((d, i) => (
+                    <DebateCard key={d.market.id} debate={d} dk={dk} index={i}
+                      onViewProfile={(u) => onViewProfile?.(u)}
+                      onViewToken={(symbol, chain) => onViewToken?.(symbol, chain)}
+                      onFade={(marketId, side) => onFadeDebate?.(marketId, side)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className={`text-center py-8 text-[13px] ${dk ? "text-white/30" : "text-gray-400"}`}>No active debates</p>
+              )
+            ) : (
+              /* Markets grid — All, Hot, Sweep, P2P, Following */
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {sortedMarkets.map((m, i) => (
+                  <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}>
+                    <MarketCard market={m} dk={dk} onClick={() => onSelectToken?.(m.symbol, m.chain)} onTrade={() => setTradeMarket(m)} onBet={onBet} shaking={shakingIds?.has(m.id)} isP2PView={selectedFilter === "p2p"} paperMode={paperMode} />
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </>
         )}
 
