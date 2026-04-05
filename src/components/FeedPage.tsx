@@ -706,14 +706,17 @@ export default function FeedPage() {
     }
   }
 
-  const MAIN_TABS: { key: MainTab; label: string }[] = [
+  const FEED_GROUP: { key: MainTab; label: string }[] = [
     { key: "markets",  label: "Feed" },
     { key: "calls",    label: "Calls" },
     { key: "feed",     label: "P2P" },
+  ];
+  const OTHER_TABS: { key: MainTab; label: string }[] = [
     { key: "trending", label: "Discover" },
     { key: "following", label: "Following" },
     { key: "ranks",    label: "Leaderboard" },
   ];
+  const isFeedGroup = FEED_GROUP.some(t => t.key === mainTab);
 
 
   return (
@@ -846,8 +849,24 @@ export default function FeedPage() {
         <AnimatePresence mode="wait">
           {!tokenProfileToken ? (
             <motion.div key="tabs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1">
-              {/* Main tabs */}
-              {MAIN_TABS.map(t => (
+              {/* Feed group — expands when active */}
+              {isFeedGroup ? (
+                <div className={`flex items-center gap-0.5 px-1 py-0.5 rounded-xl border ${dk ? "border-white/15" : "border-gray-300"}`}>
+                  {FEED_GROUP.map(t => (
+                    <button key={t.key} onClick={() => setMainTab(t.key)}
+                      className={`text-[12px] px-2.5 py-1 rounded-lg transition-all ${mainTab === t.key ? T.filterActive : T.filterInactive}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <button onClick={() => setMainTab("markets")}
+                  className={`text-[12px] px-3 py-1.5 rounded-xl transition-all ${T.filterInactive}`}>
+                  Feed
+                </button>
+              )}
+              {/* Other tabs */}
+              {OTHER_TABS.map(t => (
                 <button key={t.key} onClick={() => setMainTab(t.key)}
                   className={`text-[12px] px-3 py-1.5 rounded-xl transition-all ${mainTab === t.key ? T.filterActive : T.filterInactive}`}>
                   {t.label}
