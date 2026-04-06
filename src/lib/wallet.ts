@@ -207,89 +207,30 @@ class BettingEscrow(gl.Contract):
         }
 `;
 
-/**
- * Deploy a BettingEscrow contract — user signs with MetaMask.
- * Returns the contract address after deployment is finalized.
- */
-export async function deployBetOnChain(params: {
-  walletAddress: string;
-  symbol: string;
-  ca: string;
-  timeframe: string;
-  entryPrice: string;
-  side: "long" | "short";
-  amountGEN: number;
-}): Promise<{ contractAddress: string; deployHash: string }> {
-  const client = await getGenLayerClient(params.walletAddress);
-  const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${params.ca}`;
-  const valueWei = BigInt(Math.floor(params.amountGEN * 1e18));
-
-  console.log(`[wallet] Deploying escrow for ${params.symbol}... (MetaMask will prompt)`);
-
-  const deployHash = await (client as any).deployContract({
-    code: ESCROW_CODE,
-    args: [params.symbol, dexUrl, params.timeframe, params.entryPrice, params.side, params.walletAddress],
-    value: valueWei,
-    leaderOnly: false,
-  });
-
-  console.log(`[wallet] Deploy TX: ${deployHash}`);
-
-  const receipt = await (client as any).waitForTransactionReceipt({
-    hash: deployHash,
-    status: "ACCEPTED",
-    retries: 60,
-    interval: 3000,
-  });
-
-  const contractAddress = receipt.data?.contract_address;
-  if (!contractAddress) throw new Error("Deploy failed — no contract address");
-
-  console.log(`[wallet] Escrow deployed @ ${contractAddress}`);
-  return { contractAddress, deployHash };
-}
+// Treasury address — user sends GEN here, backend deploys escrow
+const TREASURY = "0x371832C59699cfF33Fe129B1df33EC41064C2dfa";
 
 /**
- * Take the other side of a bet — user sends GEN to the escrow contract.
+ * Send GEN to the project treasury via MetaMask.
+ * Returns the tx hash. The backend detects this and deploys the escrow.
  */
-export async function takeBetOnChain(params: {
+export async function sendGENToTreasury(params: {
   walletAddress: string;
-  contractAddress: string;
   amountGEN: number;
 }): Promise<string> {
-  const client = await getGenLayerClient(params.walletAddress);
-  const valueWei = BigInt(Math.floor(params.amountGEN * 1e18));
+  if (!window.ethereum) throw new Error("MetaMask not installed");
 
-  console.log(`[wallet] Taking bet on ${params.contractAddress}... (MetaMask will prompt)`);
+  const valueHex = "0x" + BigInt(Math.floor(params.amountGEN * 1e18)).toString(16);
 
-  const hash = await (client as any).writeContract({
-    address: params.contractAddress,
-    functionName: "take_bet",
-    args: [],
-    value: valueWei,
-    leaderOnly: false,
-  });
+  const txHash = await window.ethereum.request({
+    method: "eth_sendTransaction",
+    params: [{
+      from: params.walletAddress,
+      to: TREASURY,
+      value: valueHex,
+    }],
+  }) as string;
 
-  console.log(`[wallet] Take bet TX: ${hash}`);
-
-  await (client as any).waitForTransactionReceipt({
-    hash,
-    status: "ACCEPTED",
-    retries: 30,
-    interval: 2000,
-  });
-
-  return hash;
-}
-
-/**
- * Read escrow state from chain.
- */
-export async function readEscrowState(walletAddress: string, contractAddress: string): Promise<Record<string, unknown>> {
-  const client = await getGenLayerClient(walletAddress);
-  return await (client as any).readContract({
-    address: contractAddress,
-    functionName: "get_state",
-    args: [],
-  });
+  console.log(`[wallet] GEN transfer TX: ${txHash}`);
+  return txHash;
 }

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, Market } from "@/lib/api";
 import { Coin, formatPrice } from "@/lib/mockData";
-import { deployBetOnChain, takeBetOnChain, connectWallet } from "@/lib/wallet";
+import { sendGENToTreasury, connectWallet } from "@/lib/wallet";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 const QUICK_AMOUNTS = [10, 25, 50, 100];
@@ -72,47 +72,29 @@ export default function OpenMarketModal({
     try {
       if (isTestnet) {
         if (!coin.ca) throw new Error("On-chain testnet requires a token with a contract address. Search by CA.");
-        // On-chain flow: deploy escrow contract, user signs with MetaMask
+        // Hybrid flow: user sends GEN via MetaMask → backend deploys escrow
         let wallet = walletAddress;
         if (!wallet) {
           wallet = await connectWallet();
-          // Link wallet to account
           await api.linkWallet(wallet);
         }
 
-        // Get entry price
-        const dexData = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${coin.ca}`).then(r => r.json()) as any;
-        const pairs = (dexData.pairs ?? []).filter((p: any) => p.priceUsd && parseFloat(p.priceUsd) > 0);
-        const sorted = pairs.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
-        if (sorted.length === 0) throw new Error("No price found for this token");
-        const entryPrice = sorted[0].priceUsd;
+        setError("Sign GEN transfer in MetaMask...");
 
-        setError("Sign transaction in MetaMask...");
-
-        let contractAddress: string;
-        let deployHash: string;
+        // Step 1: User sends GEN to treasury via MetaMask
+        let txHash: string;
         try {
-          const result = await deployBetOnChain({
-            walletAddress: wallet,
-            symbol: coin.symbol,
-            ca: coin.ca!,
-            timeframe: tf,
-            entryPrice,
-            side,
-            amountGEN: amount,
-          });
-          contractAddress = result.contractAddress;
-          deployHash = result.deployHash;
+          txHash = await sendGENToTreasury({ walletAddress: wallet, amountGEN: amount });
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : "Deploy failed";
+          const msg = err instanceof Error ? err.message : "Transfer failed";
           if (msg.includes("User rejected") || msg.includes("denied")) throw new Error("Transaction rejected");
           throw err;
         }
 
-        setError("Deploying on GenLayer... ⏳");
+        setError("GEN sent! Deploying escrow on GenLayer... ⏳");
 
-        // Track in backend
-        await api.createEscrowBet({
+        // Step 2: Tell backend to deploy the escrow contract
+        const result = await api.createEscrowBet({
           symbol: coin.symbol,
           chain: coin.chain,
           timeframe: tf,
@@ -120,15 +102,16 @@ export default function OpenMarketModal({
           amount,
           ca: coin.ca,
           tagline: tagline.trim(),
-        }).catch(() => {}); // best-effort tracking
+        });
 
-        // Create a fake Market object for the UI
+        setError("");
+
         onSuccess({
-          id: contractAddress,
-          symbol: coin.symbol,
+          id: result.contract_address,
+          symbol: result.symbol,
           chain: coin.chain,
-          timeframe: tf,
-          entry_price: entryPrice,
+          timeframe: result.timeframe,
+          entry_price: result.entry_price,
           tagline: tagline.trim(),
           long_pool: side === "long" ? String(amount) : "0",
           short_pool: side === "short" ? String(amount) : "0",
