@@ -74,7 +74,7 @@ export async function deployEscrow(params: {
 
   const receipt = await client.waitForTransactionReceipt({
     hash: deployHash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 30,
     interval: 2000,
   });
@@ -106,7 +106,7 @@ export async function takeBet(contractAddress: string, depositB: bigint): Promis
 
   await client.waitForTransactionReceipt({
     hash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 30,
     interval: 2000,
   });
@@ -139,7 +139,7 @@ export async function resolveEscrow(contractAddress: string): Promise<{
 
   await client.waitForTransactionReceipt({
     hash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 60,
     interval: 3000,
   });
@@ -188,7 +188,7 @@ export async function cancelEscrow(contractAddress: string): Promise<string> {
 
   await client.waitForTransactionReceipt({
     hash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 30,
     interval: 2000,
   });
