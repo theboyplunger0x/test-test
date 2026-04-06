@@ -817,6 +817,12 @@ export default function FeedPage() {
               <motion.button whileTap={{ scale: 0.96 }}
                 onClick={async () => {
                   if (isTestnet) {
+                    if (walletAddr) {
+                      // Disconnect
+                      setWalletAddr(null);
+                      setGenBalance(0);
+                      return;
+                    }
                     try {
                       const addr = await connectWallet();
                       setWalletAddr(addr);
@@ -829,8 +835,14 @@ export default function FeedPage() {
                   else if (paperMode) setPaperCreditOpen(true);
                   else setDepositOpen(true);
                 }}
-                className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${isTestnet ? "bg-purple-500 hover:bg-purple-400 text-white" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
-                {isTestnet ? (walletAddr ? `Connected ✓` : "Connect Wallet") : paperMode ? "+ Credits" : "Deposit"}
+                className={`group px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${
+                  isTestnet
+                    ? walletAddr
+                      ? "bg-purple-500/80 hover:bg-red-500 text-white"
+                      : "bg-purple-500 hover:bg-purple-400 text-white"
+                    : "bg-blue-500 hover:bg-blue-400 text-white"
+                }`}>
+                {isTestnet ? (walletAddr ? <><span className="group-hover:hidden">Connected ✓</span><span className="hidden group-hover:inline">Disconnect</span></> : "Connect Wallet") : paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
               {/* Referral */}
