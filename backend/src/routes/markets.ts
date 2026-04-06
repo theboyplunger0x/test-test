@@ -79,7 +79,7 @@ export async function marketRoutes(app: FastifyInstance) {
 
   // POST /markets — open a new market (authenticated)
   app.post("/markets", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
-    const { symbol, chain, timeframe, tagline, paper = false, ca } = req.body as any;
+    const { symbol, chain, timeframe, tagline, paper = false, testnet = false, ca } = req.body as any;
     const user = (req as any).user;
 
     if (!VALID_TIMEFRAMES.includes(timeframe)) {
@@ -122,9 +122,9 @@ export async function marketRoutes(app: FastifyInstance) {
     const closesAt = nextWindowClose(timeframe as Timeframe);
 
     const { rows } = await db.query(
-      `INSERT INTO markets (symbol, chain, timeframe, entry_price, tagline, opener_id, closes_at, is_paper, ca)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, !!paper, ca ?? null]
+      `INSERT INTO markets (symbol, chain, timeframe, entry_price, tagline, opener_id, closes_at, is_paper, is_testnet, ca)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, !!paper, !!testnet, ca ?? null]
     );
     const newMarket = rows[0];
     scheduleResolution(newMarket.id, new Date(newMarket.closes_at));
@@ -153,15 +153,16 @@ export async function marketRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Market has expired" });
       }
 
-      // Use market's is_paper to pick balance column — clients can't override this
+      // Use market's is_paper/is_testnet to pick balance column — clients can't override this
       const isPaper        = !!market.is_paper;
-      const balanceCol     = isPaper ? "paper_balance_usd" : "balance_usd";
-      const insufficientMsg = isPaper ? "Insufficient paper balance" : "Insufficient balance";
+      const isTestnet      = !!market.is_testnet;
+      const balanceCol     = isTestnet ? "testnet_balance_gen" : isPaper ? "paper_balance_usd" : "balance_usd";
+      const insufficientMsg = isTestnet ? "Insufficient testnet GEN balance" : isPaper ? "Insufficient paper balance" : "Insufficient balance";
 
-      // Deduct from real or paper balance
+      // Deduct from balance
       const { rows: [userRow] } = await client.query(
         `UPDATE users SET ${balanceCol} = ${balanceCol} - $1
-         WHERE id = $2 AND ${balanceCol} >= $1 RETURNING balance_usd, paper_balance_usd`,
+         WHERE id = $2 AND ${balanceCol} >= $1 RETURNING balance_usd, paper_balance_usd, testnet_balance_gen`,
         [amount, user.userId]
       );
       if (!userRow) return reply.status(400).send({ error: insufficientMsg });
@@ -172,10 +173,10 @@ export async function marketRoutes(app: FastifyInstance) {
         `UPDATE markets SET ${poolCol} = ${poolCol} + $1 WHERE id = $2`, [amount, id]
       );
 
-      // Record position with is_paper matching the market
+      // Record position with is_paper/is_testnet matching the market
       const { rows: [position] } = await client.query(
-        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, message, faded_position_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [user.userId, id, side, amount, isPaper, message?.trim() || null, faded_position_id || null]
+        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message, faded_position_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [user.userId, id, side, amount, isPaper, isTestnet, message?.trim() || null, faded_position_id || null]
       );
 
       await client.query("COMMIT");
@@ -214,6 +215,7 @@ export async function marketRoutes(app: FastifyInstance) {
         position,
         new_balance:       userRow.balance_usd,
         new_paper_balance: userRow.paper_balance_usd,
+        new_testnet_balance: userRow.testnet_balance_gen,
       });
     } catch (err) {
       await client.query("ROLLBACK");

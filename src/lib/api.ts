@@ -23,6 +23,9 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
       headers,
     });
     const data = await res.json();
+    if (res.status === 401 && typeof window !== "undefined") {
+      localStorage.removeItem("token");
+    }
     if (!res.ok) throw new Error(data.error ?? "Request failed");
     return data as T;
   } catch (e: any) {
@@ -38,6 +41,8 @@ export type User = {
   username: string;
   balance_usd: string;
   paper_balance_usd: string;
+  testnet_balance_gen?: string;
+  wallet_address?: string;
   created_at?: string;
   tier?: "" | "basic" | "pro" | "top" | "elite";
   x_username?: string;
@@ -163,6 +168,7 @@ export type Market = {
   exit_price?: string | null;
   winner_side?: "long" | "short" | null;
   is_paper: boolean;
+  is_testnet?: boolean;
   sweep_id?: string | null;
   opener_username?: string;
   opener_avatar?: string;
@@ -234,12 +240,14 @@ export type SweepResult = {
   maker_multiplier:  number;
   new_balance:       string;
   new_paper_balance: string;
+  new_testnet_balance?: string;
 };
 
 export type CreateOrdersResult = {
   orders:            Order[];
   new_balance:       string;
   new_paper_balance: string;
+  new_testnet_balance?: string;
 };
 
 export const api = {
@@ -269,6 +277,18 @@ export const api = {
     req<{ paper_balance_usd: string }>("/auth/paper-credit", {
       method: "POST",
       body: JSON.stringify({ amount }),
+    }),
+
+  testnetCredit: (amount: number) =>
+    req<{ testnet_balance_gen: string }>("/auth/testnet-credit", {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    }),
+
+  linkWallet: (wallet_address: string) =>
+    req<{ wallet_address: string }>("/auth/link-wallet", {
+      method: "POST",
+      body: JSON.stringify({ wallet_address }),
     }),
 
   depositAddress: () =>
@@ -316,14 +336,14 @@ export const api = {
   getDebates: (paper = false) =>
     req<{ market: Market; shortCaller: { username: string; avatar_url: string | null; side: "short"; amount: string; message: string }; longCaller: { username: string; avatar_url: string | null; side: "long"; amount: string; message: string }; totalPool: number; ratio: number }[]>(`/markets/debates?paper=${paper}`),
 
-  createMarket: (symbol: string, chain: string, timeframe: string, tagline: string, paper = false, ca?: string) =>
+  createMarket: (symbol: string, chain: string, timeframe: string, tagline: string, paper = false, ca?: string, testnet = false) =>
     req<Market>("/markets", {
       method: "POST",
-      body: JSON.stringify({ symbol, chain, timeframe, tagline, paper, ca }),
+      body: JSON.stringify({ symbol, chain, timeframe, tagline, paper, testnet, ca }),
     }),
 
   placeBet: (marketId: string, side: "long" | "short", amount: number, paper = false, message?: string, faded_position_id?: string) =>
-    req<{ position: object; new_balance: string; new_paper_balance: string }>(`/markets/${marketId}/bet`, {
+    req<{ position: object; new_balance: string; new_paper_balance: string; new_testnet_balance?: string }>(`/markets/${marketId}/bet`, {
       method: "POST",
       body: JSON.stringify({ side, amount, paper, message, faded_position_id: faded_position_id || undefined }),
     }),
@@ -421,7 +441,7 @@ export const api = {
 
   createOrders: (orders: {
     symbol: string; chain: string; ca?: string; timeframe: string;
-    side: "long" | "short"; amount: number; is_paper?: boolean;
+    side: "long" | "short"; amount: number; is_paper?: boolean; is_testnet?: boolean;
     auto_reopen?: boolean; expires_at?: string; tagline?: string;
   }[]) =>
     req<CreateOrdersResult>("/orders", {
@@ -442,7 +462,7 @@ export const api = {
 
   sweep: (params: {
     symbol: string; chain: string; timeframe: string;
-    side: "long" | "short"; amount: number; is_paper?: boolean;
+    side: "long" | "short"; amount: number; is_paper?: boolean; is_testnet?: boolean;
   }) =>
     req<SweepResult>("/orders/sweep", {
       method: "POST",

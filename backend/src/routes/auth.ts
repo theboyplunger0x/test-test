@@ -101,7 +101,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.get("/auth/me", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, balance_usd, paper_balance_usd, tier, created_at, x_username, telegram_username, avatar_url, bio FROM users WHERE id = $1`, [userId]
+      `SELECT id, username, balance_usd, paper_balance_usd, testnet_balance_gen, wallet_address, tier, created_at, x_username, telegram_username, avatar_url, bio FROM users WHERE id = $1`, [userId]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
     return user;
@@ -120,6 +120,35 @@ export async function authRoutes(app: FastifyInstance) {
       [amount, userId]
     );
     return { paper_balance_usd: user.paper_balance_usd };
+  });
+
+  // POST /auth/testnet-credit — add testnet GEN to own account (max 1000 total)
+  app.post("/auth/testnet-credit", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const { userId } = (req as any).user;
+    const { amount } = req.body as any;
+    if (!amount || amount <= 0 || amount > 1000) {
+      return reply.status(400).send({ error: "Amount must be between 1 and 1000 GEN" });
+    }
+    const { rows: [user] } = await db.query(
+      `UPDATE users SET testnet_balance_gen = LEAST(testnet_balance_gen + $1, 1000)
+       WHERE id = $2 RETURNING testnet_balance_gen`,
+      [amount, userId]
+    );
+    return { testnet_balance_gen: user.testnet_balance_gen };
+  });
+
+  // POST /auth/link-wallet — link a wallet address to the account
+  app.post("/auth/link-wallet", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const { userId } = (req as any).user;
+    const { wallet_address } = req.body as any;
+    if (!wallet_address || !/^0x[a-fA-F0-9]{40}$/.test(wallet_address)) {
+      return reply.status(400).send({ error: "Invalid wallet address" });
+    }
+    const { rows: [user] } = await db.query(
+      `UPDATE users SET wallet_address = $1 WHERE id = $2 RETURNING wallet_address`,
+      [wallet_address.toLowerCase(), userId]
+    );
+    return { wallet_address: user.wallet_address };
   });
 
   // GET /auth/google/callback

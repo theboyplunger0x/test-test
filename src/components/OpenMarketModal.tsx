@@ -7,6 +7,7 @@ import { Coin, formatPrice } from "@/lib/mockData";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 const QUICK_AMOUNTS = [10, 25, 50, 100];
+const QUICK_AMOUNTS_TESTNET = [1, 5, 10, 25];
 
 export default function OpenMarketModal({
   coin,
@@ -15,6 +16,7 @@ export default function OpenMarketModal({
   onSuccess,
   onViewToken,
   paperMode = false,
+  isTestnet = false,
 }: {
   coin: Coin;
   dk: boolean;
@@ -22,6 +24,7 @@ export default function OpenMarketModal({
   onSuccess: (market: Market) => void;
   onViewToken?: () => void;
   paperMode?: boolean;
+  isTestnet?: boolean;
 }) {
   const [mode, setMode] = useState<"call" | "market" | "sweep">("call");
   const [tf, setTf] = useState("1h");
@@ -35,8 +38,8 @@ export default function OpenMarketModal({
 
   // Fetch open markets for Market mode
   useEffect(() => {
-    api.getMarkets().then(ms => setMarkets(ms.filter(m => m && m.symbol?.toUpperCase() === coin.symbol.toUpperCase() && m.status === "open" && !!m.is_paper === paperMode))).catch(() => {});
-  }, [coin.symbol, paperMode]);
+    api.getMarkets().then(ms => setMarkets(ms.filter(m => m && m.symbol?.toUpperCase() === coin.symbol.toUpperCase() && m.status === "open" && (isTestnet ? !!m.is_testnet : !!m.is_paper === paperMode)))).catch(() => {});
+  }, [coin.symbol, paperMode, isTestnet]);
 
   const bg        = dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200";
   const labelCls  = dk ? "text-white/40" : "text-gray-500";
@@ -65,14 +68,14 @@ export default function OpenMarketModal({
     setError("");
     try {
       if (mode === "call") {
-        const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode, coin.ca);
+        const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode && !isTestnet, coin.ca, isTestnet);
         await api.placeBet(market.id, side, amount);
         onSuccess(market);
       } else if (mode === "market" && activeMarket) {
         await api.placeBet(activeMarket.id, side, amount);
         onSuccess(activeMarket);
       } else if (mode === "sweep") {
-        await api.sweep({ symbol: coin.symbol, chain: coin.chain, timeframe: "5m", side, amount, is_paper: paperMode });
+        await api.sweep({ symbol: coin.symbol, chain: coin.chain, timeframe: "5m", side, amount, is_paper: paperMode && !isTestnet, is_testnet: isTestnet });
         onClose();
       }
     } catch (err: any) {
@@ -194,18 +197,18 @@ export default function OpenMarketModal({
           </div>
 
           <div className="grid grid-cols-4 gap-1.5 mb-2">
-            {QUICK_AMOUNTS.map((a) => (
+            {(isTestnet ? QUICK_AMOUNTS_TESTNET : QUICK_AMOUNTS).map((a) => (
               <button key={a} onClick={() => { setAmount(a); setCustomAmt(String(a)); }}
                 className={`py-2 rounded-xl text-[11px] font-black transition-all ${
                   amount === a && customAmt === String(a)
                     ? dk ? "bg-white text-black" : "bg-gray-900 text-white"
                     : dk ? "bg-white/6 text-white/50 hover:bg-white/12 hover:text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                }`}>${a}</button>
+                }`}>{isTestnet ? `${a} GEN` : `$${a}`}</button>
             ))}
           </div>
 
           <div className="relative">
-            <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${labelCls}`}>$</span>
+            <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${labelCls}`}>{isTestnet ? "GEN" : "$"}</span>
             <input type="number" placeholder="custom"
               value={customAmt}
               onChange={(e) => { setCustomAmt(e.target.value); setAmount(parseFloat(e.target.value) || null); }}
@@ -225,10 +228,10 @@ export default function OpenMarketModal({
 
         <button onClick={handleSubmit} disabled={!canSubmit}
           className={`w-full py-3 rounded-xl text-[13px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-            paperMode ? "bg-yellow-400 text-black hover:bg-yellow-300" : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-black"
+            isTestnet ? "bg-purple-500 text-white hover:bg-purple-400" : paperMode ? "bg-yellow-400 text-black hover:bg-yellow-300" : dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-black"
           }`}>
           {loading ? "Placing…"
-            : mode === "call" ? (paperMode ? `Make ${tf} call (paper)` : `Make ${tf} call`)
+            : mode === "call" ? (isTestnet ? `Make ${tf} call (testnet)` : paperMode ? `Make ${tf} call (paper)` : `Make ${tf} call`)
             : mode === "market" ? "Trade"
             : "Sweep"}
         </button>

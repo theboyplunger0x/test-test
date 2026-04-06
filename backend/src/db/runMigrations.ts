@@ -238,6 +238,13 @@ ALTER TABLE markets ADD COLUMN IF NOT EXISTS ca TEXT;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS idx_users_username_trgm  ON users USING gin(username gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_positions_user_paper ON positions(user_id, is_paper);
+
+-- v6: testnet mode (GenLayer Bradbury)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS testnet_balance_gen NUMERIC(18,6) NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_address TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_testnet BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE markets ADD COLUMN IF NOT EXISTS is_testnet BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE positions ADD COLUMN IF NOT EXISTS is_testnet BOOLEAN NOT NULL DEFAULT false;
 `;
 
 export async function runMigrations() {

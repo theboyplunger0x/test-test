@@ -219,20 +219,14 @@ export default function SearchModal({ dk, onClose, onViewToken, onViewChart, onO
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-3 shrink-0">
-                <button
-                  onClick={e => { e.stopPropagation(); onViewChart(t); onClose(); }}
-                  className={`text-[10px] font-bold transition-colors ${dk ? "text-white/35 hover:text-white/80" : "text-gray-400 hover:text-gray-700"}`}
-                >
-                  Chart →
-                </button>
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={e => { e.stopPropagation(); onOpenMarket(tokenToCoin(t)); onClose(); }}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                    dk ? "bg-white/8 hover:bg-white/16 text-white/60 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                    dk ? "bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 hover:text-yellow-300" : "bg-yellow-100 hover:bg-yellow-200 text-yellow-700"
                   }`}
                 >
-                  Make a call
+                  Trade
                 </button>
               </div>
             </div>
@@ -265,7 +259,7 @@ export default function SearchModal({ dk, onClose, onViewToken, onViewChart, onO
         {/* Footer hint */}
         {tab === "tokens" && tokens.length > 0 && (
           <div className={`px-4 py-2.5 border-t ${divider}`}>
-            <p className={`text-[10px] font-bold ${muted}`}>Click row → token profile · Chart → full chart · Market → open position</p>
+            <p className={`text-[10px] font-bold ${muted}`}>Click row → token profile · Trade → open position</p>
           </div>
         )}
       </motion.div>

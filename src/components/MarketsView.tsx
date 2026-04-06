@@ -1108,7 +1108,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
   const muted   = dk ? "text-white/30"  : "text-gray-400";
   const divider = dk ? "border-white/6" : "border-gray-200";
 
-  const openMarkets = liveMarkets.filter(m => m.status === "open" && (parseFloat(m.long_pool) + parseFloat(m.short_pool)) > 0);
+  const openMarkets = liveMarkets.filter(m => m.status === "open" && new Date(m.closes_at).getTime() > Date.now() && (parseFloat(m.long_pool) + parseFloat(m.short_pool)) > 0);
 
   // Hero: pick market with highest pool
   const hero = [...openMarkets].sort((a, b) =>

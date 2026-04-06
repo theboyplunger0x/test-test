@@ -26,7 +26,7 @@ export async function resolveMarket(marketId: string) {
         `SELECT * FROM positions WHERE market_id = $1`, [market.id]
       );
       for (const pos of positions) {
-        const col = pos.is_paper ? "paper_balance_usd" : "balance_usd";
+        const col = pos.is_testnet ? "testnet_balance_gen" : pos.is_paper ? "paper_balance_usd" : "balance_usd";
         await client.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [pos.amount, pos.user_id]);
       }
       await client.query("COMMIT");
@@ -44,7 +44,7 @@ export async function resolveMarket(marketId: string) {
         `SELECT * FROM positions WHERE market_id = $1`, [market.id]
       );
       for (const pos of positions) {
-        const col = pos.is_paper ? "paper_balance_usd" : "balance_usd";
+        const col = pos.is_testnet ? "testnet_balance_gen" : pos.is_paper ? "paper_balance_usd" : "balance_usd";
         await client.query(
           `UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`,
           [pos.amount, pos.user_id]
@@ -62,7 +62,7 @@ export async function resolveMarket(marketId: string) {
       await client.query(`UPDATE markets SET status = 'cancelled', exit_price = $1 WHERE id = $2`, [exitPrice, market.id]);
       const { rows: positions } = await client.query(`SELECT * FROM positions WHERE market_id = $1`, [market.id]);
       for (const pos of positions) {
-        const col = pos.is_paper ? "paper_balance_usd" : "balance_usd";
+        const col = pos.is_testnet ? "testnet_balance_gen" : pos.is_paper ? "paper_balance_usd" : "balance_usd";
         await client.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [pos.amount, pos.user_id]);
       }
       await client.query("COMMIT");
@@ -86,7 +86,7 @@ export async function resolveMarket(marketId: string) {
     for (const pos of winners) {
       const payout = calcPayout(parseFloat(pos.amount), winPool, losePool);
       await client.query(`UPDATE positions SET payout = $1 WHERE id = $2`, [payout, pos.id]);
-      const col = pos.is_paper ? "paper_balance_usd" : "balance_usd";
+      const col = pos.is_testnet ? "testnet_balance_gen" : pos.is_paper ? "paper_balance_usd" : "balance_usd";
       await client.query(
         `UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [payout, pos.user_id]
       );
@@ -116,7 +116,7 @@ export async function resolveMarket(marketId: string) {
         `, [market.id]);
 
         for (const order of autoOrders) {
-          const col = order.is_paper ? "paper_balance_usd" : "balance_usd";
+          const col = order.is_testnet ? "testnet_balance_gen" : order.is_paper ? "paper_balance_usd" : "balance_usd";
           const { rows: [u] } = await db.query(
             `SELECT ${col} FROM users WHERE id = $1`, [order.user_id]
           );
@@ -267,7 +267,7 @@ export async function expireUnfilledOrders() {
       // Refund remaining amount
       const refund = parseFloat(o.remaining_amount);
       if (refund > 0) {
-        const col = o.is_paper ? "paper_balance_usd" : "balance_usd";
+        const col = o.is_testnet ? "testnet_balance_gen" : o.is_paper ? "paper_balance_usd" : "balance_usd";
         await db.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [refund, o.user_id]);
       }
       // Notify

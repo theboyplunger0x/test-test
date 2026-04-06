@@ -161,13 +161,16 @@ export default function FeedPage() {
   const [trendingChain, setTrendingChain] = useState<string | null>(null);
   const [trendingSort, setTrendingSort]   = useState<"mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null>(null);
   const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
-  const [paperMode, setPaperMode]           = useState(() => {
-    if (typeof window === "undefined") return true;
-    const saved = localStorage.getItem("fud_paper");
-    return saved !== null ? saved === "true" : true;
+  const [tradingMode, setTradingMode]       = useState<"paper" | "testnet">(() => {
+    if (typeof window === "undefined") return "paper";
+    const saved = localStorage.getItem("fud_mode");
+    return saved === "testnet" ? "testnet" : "paper";
   });
+  const paperMode = tradingMode === "paper";
+  const isTestnet = tradingMode === "testnet";
+  const setPaperMode = (v: boolean) => setTradingMode(v ? "paper" : "testnet");
   const [followingList, setFollowingList]   = useState<string[]>([]);
-  useEffect(() => { localStorage.setItem("fud_paper", String(paperMode)); }, [paperMode]);
+  useEffect(() => { localStorage.setItem("fud_mode", tradingMode); }, [tradingMode]);
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
   const [paperCreditOpen, setPaperCreditOpen] = useState(false);
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
@@ -439,6 +442,7 @@ export default function FeedPage() {
         ...u,
         balance_usd:       result.new_balance,
         paper_balance_usd: result.new_paper_balance,
+        ...(result.new_testnet_balance ? { testnet_balance_gen: result.new_testnet_balance } : {}),
       } : null);
       return null;
     } catch (err: any) {
@@ -446,8 +450,8 @@ export default function FeedPage() {
     }
   }
 
-  // Filter markets by mode: paper markets for Paper tab, real markets for Real tab
-  const modeMarkets   = markets.filter(m => !!m.is_paper === paperMode);
+  // Filter markets by mode
+  const modeMarkets   = markets.filter(m => isTestnet ? !!m.is_testnet : !!m.is_paper === paperMode);
   const allChallenges = modeMarkets
     .map(marketToChallenge)
     .sort((a, b) => (b.lastBetAt ?? 0) - (a.lastBetAt ?? 0));
@@ -527,7 +531,7 @@ export default function FeedPage() {
     );
     if (!market) {
       try {
-        const created = await api.createMarket(token.symbol, token.chainLabel, timeframe, autoTagline, paperMode, token.address);
+        const created = await api.createMarket(token.symbol, token.chainLabel, timeframe, autoTagline, paperMode && !isTestnet, token.address, isTestnet);
         if (!created) return "Failed to create market";
         market = created;
         setMarkets(prev => [created, ...prev]);
@@ -609,7 +613,7 @@ export default function FeedPage() {
 
     async function createFreshMarket() {
       const ca = selectedTokenInfo?.address ?? chartModalInfo?.address ?? tokenModalInfo?.address;
-      const created = await api.createMarket(sym!, ch, timeframe, autoTagline, paperMode, ca);
+      const created = await api.createMarket(sym!, ch, timeframe, autoTagline, paperMode && !isTestnet, ca, isTestnet);
       if (!created) throw new Error("Failed to create market");
       setMarkets(prev => [created, ...prev]);
       return created;
@@ -668,10 +672,11 @@ export default function FeedPage() {
         timeframe,
         side,
         amount,
-        is_paper: paperMode,
+        is_paper: paperMode && !isTestnet,
+        is_testnet: isTestnet,
         auto_reopen: autoReopen,
       }]);
-      setUser(prev => prev ? { ...prev, balance_usd: result.new_balance, paper_balance_usd: result.new_paper_balance } : prev);
+      setUser(prev => prev ? { ...prev, balance_usd: result.new_balance, paper_balance_usd: result.new_paper_balance, testnet_balance_gen: result.new_testnet_balance } : prev);
       return null;
     } catch (err) {
       return err instanceof Error ? err.message : "Failed to place order";
@@ -689,7 +694,8 @@ export default function FeedPage() {
     const sym = symbol ?? selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol;
     const ch  = chain ?? selectedChain;
     if (!sym) return "No coin selected.";
-    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    if (!paperMode && !isTestnet && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    if (isTestnet && Number(user.testnet_balance_gen ?? 0) < amount) return "Insufficient GEN balance.";
     try {
       const result = await api.sweep({
         symbol: sym,
@@ -697,9 +703,10 @@ export default function FeedPage() {
         timeframe,
         side,
         amount,
-        is_paper: paperMode,
+        is_paper: paperMode && !isTestnet,
+        is_testnet: isTestnet,
       });
-      setUser(prev => prev ? { ...prev, balance_usd: result.new_balance, paper_balance_usd: result.new_paper_balance } : prev);
+      setUser(prev => prev ? { ...prev, balance_usd: result.new_balance, paper_balance_usd: result.new_paper_balance, testnet_balance_gen: result.new_testnet_balance } : prev);
       return null;
     } catch (err) {
       return err instanceof Error ? err.message : "Sweep failed";
@@ -755,18 +762,27 @@ export default function FeedPage() {
               {/* Balance */}
               <div className="hidden sm:flex flex-col items-end gap-0.5">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                  {paperMode ? "Paper" : "Balance"}
+                  {isTestnet ? "Testnet" : paperMode ? "Paper" : "Balance"}
                 </span>
-                <span className={`text-[13px] font-black tabular-nums ${paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
-                  {(() => { const n = Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd); return n >= 10000 ? `$${(n/1000).toFixed(1)}K` : n >= 1000 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`; })()}
+                <span className={`text-[13px] font-black tabular-nums ${isTestnet ? "text-purple-400" : paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
+                  {(() => {
+                    const n = Number(isTestnet ? (user.testnet_balance_gen ?? 0) : paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd);
+                    const sym = isTestnet ? " GEN" : "$";
+                    if (isTestnet) return `${n.toFixed(2)} GEN`;
+                    return n >= 10000 ? `${sym}${(n/1000).toFixed(1)}K` : n >= 1000 ? `${sym}${n.toFixed(0)}` : `${sym}${n.toFixed(2)}`;
+                  })()}
                 </span>
               </div>
 
-              {/* Deposit button */}
+              {/* Credits/Deposit button */}
               <motion.button whileTap={{ scale: 0.96 }}
-                onClick={() => paperMode ? setPaperCreditOpen(true) : setDepositOpen(true)}
-                className="px-3.5 py-2 rounded-xl text-[12px] font-black bg-blue-500 hover:bg-blue-400 text-white transition-all">
-                {paperMode ? "+ Credits" : "Deposit"}
+                onClick={() => {
+                  if (isTestnet) { api.testnetCredit(100).then(r => setUser(u => u ? { ...u, testnet_balance_gen: r.testnet_balance_gen } : u)).catch(() => {}); }
+                  else if (paperMode) setPaperCreditOpen(true);
+                  else setDepositOpen(true);
+                }}
+                className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${isTestnet ? "bg-purple-500 hover:bg-purple-400 text-white" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
+                {isTestnet ? "+ 100 GEN" : paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
               {/* Referral */}
@@ -1460,7 +1476,7 @@ export default function FeedPage() {
       </AnimatePresence>
       <AnimatePresence>
         {openMarketCoin && (
-          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode}
+          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet}
             onViewToken={() => {
               const c = openMarketCoin;
               setOpenMarketCoin(null);
@@ -1583,11 +1599,11 @@ export default function FeedPage() {
                       <span className="text-[20px] w-7 text-center">🃏</span>
                       <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Trading mode</span>
                       <div className={`flex rounded-lg p-0.5 border text-[11px] font-black shrink-0 ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
-                        <button onClick={() => setPaperMode(false)}
-                          className={`px-2.5 py-1 rounded-md transition-all ${!paperMode ? (dk ? "bg-white text-black" : "bg-gray-900 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-                          Real
+                        <button onClick={() => setTradingMode("testnet")}
+                          className={`px-2.5 py-1 rounded-md transition-all ${isTestnet ? (dk ? "bg-purple-500 text-white" : "bg-purple-600 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+                          Testnet
                         </button>
-                        <button onClick={() => setPaperMode(true)}
+                        <button onClick={() => setTradingMode("paper")}
                           className={`px-2.5 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
                           Paper
                         </button>
