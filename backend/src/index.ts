@@ -67,7 +67,12 @@ await app.register(activityRoutes);
 await app.register(userRoutes);
 await app.register(followRoutes);
 await app.register(notificationRoutes);
-await app.register(escrowRoutes);
+try {
+  await app.register(escrowRoutes);
+  console.log("[server] Escrow routes registered");
+} catch (err) {
+  console.error("[server] Failed to register escrow routes:", err);
+}
 
 // Health check
 app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString() }));
