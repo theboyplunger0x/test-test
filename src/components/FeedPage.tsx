@@ -547,7 +547,7 @@ export default function FeedPage() {
 
   async function handleCAQuickTrade(token: TokenInfo, side: "long" | "short", timeframe: string, amount: number, message?: string): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
-    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    if (!paperMode && !isTestnet && Number(user.balance_usd) < amount) return "Insufficient balance.";
     setSelectedTokenInfo(token);
     setSelectedCoin(token.symbol);
     const autoTagline = message?.trim() || `Will ${token.symbol} go ${side === "long" ? "UP" : "DOWN"} in ${timeframe}?`;
@@ -628,7 +628,7 @@ export default function FeedPage() {
     taglineInput?: string,
   ): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
-    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    if (!paperMode && !isTestnet && Number(user.balance_usd) < amount) return "Insufficient balance.";
     const sym = selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol ?? chartModalInfo?.symbol ?? tokenModalInfo?.symbol;
     if (!sym) return "No coin selected.";
 
@@ -691,7 +691,7 @@ export default function FeedPage() {
     const ch  = chain ?? selectedChain;
     const addr = ca ?? selectedTokenInfo?.address;
     if (!sym) return "No coin selected.";
-    if (!paperMode && Number(user.balance_usd) < amount) return "Insufficient balance.";
+    if (!paperMode && !isTestnet && Number(user.balance_usd) < amount) return "Insufficient balance.";
     try {
       const result = await api.createOrders([{
         symbol: sym,
@@ -723,7 +723,6 @@ export default function FeedPage() {
     const ch  = chain ?? selectedChain;
     if (!sym) return "No coin selected.";
     if (!paperMode && !isTestnet && Number(user.balance_usd) < amount) return "Insufficient balance.";
-    if (isTestnet && Number(user.testnet_balance_gen ?? 0) < amount) return "Insufficient GEN balance.";
     try {
       const result = await api.sweep({
         symbol: sym,

@@ -156,16 +156,25 @@ export async function marketRoutes(app: FastifyInstance) {
       // Use market's is_paper/is_testnet to pick balance column — clients can't override this
       const isPaper        = !!market.is_paper;
       const isTestnet      = !!market.is_testnet;
-      const balanceCol     = isTestnet ? "testnet_balance_gen" : isPaper ? "paper_balance_usd" : "balance_usd";
-      const insufficientMsg = isTestnet ? "Insufficient testnet GEN balance" : isPaper ? "Insufficient paper balance" : "Insufficient balance";
 
-      // Deduct from balance
-      const { rows: [userRow] } = await client.query(
-        `UPDATE users SET ${balanceCol} = ${balanceCol} - $1
-         WHERE id = $2 AND ${balanceCol} >= $1 RETURNING balance_usd, paper_balance_usd, testnet_balance_gen`,
-        [amount, user.userId]
-      );
-      if (!userRow) return reply.status(400).send({ error: insufficientMsg });
+      let userRow: any;
+      if (isTestnet) {
+        // Testnet: GEN moves via MetaMask, don't check/deduct DB balance
+        const { rows: [u] } = await client.query(
+          `SELECT balance_usd, paper_balance_usd, testnet_balance_gen FROM users WHERE id = $1`, [user.userId]
+        );
+        userRow = u;
+      } else {
+        const balanceCol     = isPaper ? "paper_balance_usd" : "balance_usd";
+        const insufficientMsg = isPaper ? "Insufficient paper balance" : "Insufficient balance";
+        const { rows: [u] } = await client.query(
+          `UPDATE users SET ${balanceCol} = ${balanceCol} - $1
+           WHERE id = $2 AND ${balanceCol} >= $1 RETURNING balance_usd, paper_balance_usd, testnet_balance_gen`,
+          [amount, user.userId]
+        );
+        if (!u) return reply.status(400).send({ error: insufficientMsg });
+        userRow = u;
+      }
 
       // Update pool
       const poolCol = side === "long" ? "long_pool" : "short_pool";
