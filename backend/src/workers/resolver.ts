@@ -102,6 +102,31 @@ export async function resolveMarket(marketId: string) {
     await client.query("COMMIT");
     console.log(`[resolver] Market ${market.id} (${market.symbol}) resolved → ${winnerSide} wins. Fee: $${fee}`);
 
+    // Testnet: pay winners on-chain via GEN transfer from treasury
+    if (market.is_testnet) {
+      (async () => {
+        try {
+          const { createWalletClient, createPublicClient, http, parseEther } = await import("viem");
+          const { privateKeyToAccount } = await import("viem/accounts");
+          const CHAIN_RPC = "https://zksync-os-testnet-genlayer.zksync.dev";
+          const chain = { id: 4221, name: "Bradbury", nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 }, rpcUrls: { default: { http: [CHAIN_RPC] } } };
+          const account = privateKeyToAccount(`0x${process.env.GENLAYER_PRIVATE_KEY!.replace(/^0x/, "")}` as `0x${string}`);
+          const wallet = createWalletClient({ account, chain, transport: http(CHAIN_RPC) });
+
+          for (const pos of winners) {
+            const { rows: [u] } = await db.query(`SELECT wallet_address FROM users WHERE id = $1`, [pos.user_id]);
+            if (!u?.wallet_address) continue;
+            const payout = calcPayout(parseFloat(pos.amount), winPool, losePool);
+            const payoutWei = parseEther(payout.toFixed(6));
+            const txHash = await wallet.sendTransaction({ to: u.wallet_address as `0x${string}`, value: payoutWei });
+            console.log(`[resolver] Testnet payout: ${payout.toFixed(4)} GEN → ${u.wallet_address.slice(0, 10)}... TX: ${txHash}`);
+          }
+        } catch (err) {
+          console.error("[resolver] Testnet payout error:", err);
+        }
+      })();
+    }
+
     // Fire-and-forget: auto_reopen + notifications
     (async () => {
       // Auto-reopen: recreate pending orders for makers who had auto_reopen = true
