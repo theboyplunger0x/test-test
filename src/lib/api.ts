@@ -7,7 +7,8 @@ function getToken() {
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const isEscrow = path.includes("/escrow");
+  const timeout = setTimeout(() => controller.abort(), isEscrow ? 120_000 : 15_000);
   try {
     const headers: Record<string, string> = {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
