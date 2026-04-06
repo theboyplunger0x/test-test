@@ -64,7 +64,7 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca: st
   console.log(`[genlayer:${network}] Deploy TX: ${deployHash}`);
   const deployReceipt = await client.waitForTransactionReceipt({
     hash: deployHash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 30,
     interval: 2000,
   });
@@ -88,7 +88,7 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca: st
   console.log(`[genlayer:${network}] Resolve TX: ${resolveHash}`);
   await client.waitForTransactionReceipt({
     hash: resolveHash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 60,
     interval: 3000,
   });
