@@ -1476,7 +1476,7 @@ export default function FeedPage() {
       </AnimatePresence>
       <AnimatePresence>
         {openMarketCoin && (
-          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet}
+          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet} walletAddress={user?.wallet_address}
             onViewToken={() => {
               const c = openMarketCoin;
               setOpenMarketCoin(null);

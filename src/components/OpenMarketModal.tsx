@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, Market } from "@/lib/api";
 import { Coin, formatPrice } from "@/lib/mockData";
+import { deployBetOnChain, takeBetOnChain, connectWallet } from "@/lib/wallet";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 const QUICK_AMOUNTS = [10, 25, 50, 100];
@@ -17,6 +18,7 @@ export default function OpenMarketModal({
   onViewToken,
   paperMode = false,
   isTestnet = false,
+  walletAddress,
 }: {
   coin: Coin;
   dk: boolean;
@@ -25,6 +27,7 @@ export default function OpenMarketModal({
   onViewToken?: () => void;
   paperMode?: boolean;
   isTestnet?: boolean;
+  walletAddress?: string;
 }) {
   const [mode, setMode] = useState<"call" | "market" | "sweep">("call");
   const [tf, setTf] = useState("1h");
@@ -67,7 +70,62 @@ export default function OpenMarketModal({
     setLoading(true);
     setError("");
     try {
-      if (mode === "call") {
+      if (isTestnet && coin.ca) {
+        // On-chain flow: deploy escrow contract, user signs with MetaMask
+        let wallet = walletAddress;
+        if (!wallet) {
+          wallet = await connectWallet();
+          // Link wallet to account
+          await api.linkWallet(wallet);
+        }
+
+        // Get entry price
+        const dexData = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${coin.ca}`).then(r => r.json()) as any;
+        const pairs = (dexData.pairs ?? []).filter((p: any) => p.priceUsd && parseFloat(p.priceUsd) > 0);
+        const sorted = pairs.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+        if (sorted.length === 0) throw new Error("No price found for this token");
+        const entryPrice = sorted[0].priceUsd;
+
+        setError("Confirm in MetaMask...");
+        const { contractAddress, deployHash } = await deployBetOnChain({
+          walletAddress: wallet,
+          symbol: coin.symbol,
+          ca: coin.ca,
+          timeframe: tf,
+          entryPrice,
+          side,
+          amountGEN: amount,
+        });
+
+        // Track in backend
+        await api.createEscrowBet({
+          symbol: coin.symbol,
+          chain: coin.chain,
+          timeframe: tf,
+          side,
+          amount,
+          ca: coin.ca,
+          tagline: tagline.trim(),
+        }).catch(() => {}); // best-effort tracking
+
+        // Create a fake Market object for the UI
+        onSuccess({
+          id: contractAddress,
+          symbol: coin.symbol,
+          chain: coin.chain,
+          timeframe: tf,
+          entry_price: entryPrice,
+          tagline: tagline.trim(),
+          long_pool: side === "long" ? String(amount) : "0",
+          short_pool: side === "short" ? String(amount) : "0",
+          status: "open",
+          closes_at: new Date(Date.now() + 60000).toISOString(),
+          opener_id: "",
+          created_at: new Date().toISOString(),
+          is_paper: false,
+          is_testnet: true,
+        });
+      } else if (mode === "call") {
         const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode && !isTestnet, coin.ca, isTestnet);
         await api.placeBet(market.id, side, amount);
         onSuccess(market);
