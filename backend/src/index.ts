@@ -16,7 +16,15 @@ import { activityRoutes }    from "./routes/activity.js";
 import { userRoutes }           from "./routes/users.js";
 import { followRoutes }         from "./routes/follows.js";
 import { notificationRoutes }   from "./routes/notifications.js";
-import { escrowRoutes }         from "./routes/escrow.js";
+// Dynamic import to prevent silent failures
+let escrowRoutes: any = null;
+try {
+  const mod = await import("./routes/escrow.js");
+  escrowRoutes = mod.escrowRoutes;
+  console.log("[server] Escrow module loaded OK");
+} catch (err) {
+  console.error("[server] Failed to load escrow module:", err);
+}
 import { scheduleAllPendingMarkets, resolveExpiredMarkets, expireUnfilledOrders } from "./workers/resolver.js";
 import { pollDeposits }              from "./workers/depositPoller.js";
 import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
@@ -67,11 +75,13 @@ await app.register(activityRoutes);
 await app.register(userRoutes);
 await app.register(followRoutes);
 await app.register(notificationRoutes);
-try {
-  await app.register(escrowRoutes);
-  console.log("[server] Escrow routes registered");
-} catch (err) {
-  console.error("[server] Failed to register escrow routes:", err);
+if (escrowRoutes) {
+  try {
+    await app.register(escrowRoutes);
+    console.log("[server] Escrow routes registered");
+  } catch (err) {
+    console.error("[server] Failed to register escrow routes:", err);
+  }
 }
 
 // Health check
