@@ -1,10 +1,9 @@
-// GenLayer Price Oracle
-// Deploys a Python intelligent contract to GenLayer — validators reach consensus
-// on the token price from DexScreener before returning it to us.
-// Falls back to direct DexScreener if GenLayer is not configured.
+// GenLayer Price Oracle — dual network support
+// Studionet: free, no gas — used for paper markets
+// Bradbury testnet: uses GEN gas — used for testnet markets
 
 import { createAccount, createClient } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { studionet, testnetBradbury } from "genlayer-js/chains";
 import { readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,51 +11,57 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ORACLE_PATH = path.join(__dirname, "../intelligent-oracles/price_oracle.py");
 
-let _client: any = null;
+// Two clients: studionet (free) and bradbury (GEN gas)
+const _clients: Record<string, any> = {};
 
-function getClient() {
-  if (_client) return _client;
+function getClient(network: "studionet" | "bradbury") {
+  if (_clients[network]) return _clients[network];
 
-  const rpcUrl    = process.env.GENLAYER_RPC_URL;
   const privateKey = process.env.GENLAYER_PRIVATE_KEY;
-
-  if (!rpcUrl || !privateKey) {
-    throw new Error("GENLAYER_RPC_URL and GENLAYER_PRIVATE_KEY not set");
-  }
+  if (!privateKey) throw new Error("GENLAYER_PRIVATE_KEY not set");
 
   const account = createAccount(`0x${privateKey.replace(/^0x/, "")}`);
-  _client = createClient({
-    chain: {
-      ...testnetBradbury,
-      rpcUrls: { default: { http: [rpcUrl] } },
-    },
-    account,
-  });
 
-  return _client;
+  if (network === "studionet") {
+    _clients[network] = createClient({
+      chain: {
+        ...studionet,
+        rpcUrls: { default: { http: ["https://studio.genlayer.com/api"] } },
+      },
+      account,
+    });
+  } else {
+    const rpcUrl = process.env.GENLAYER_RPC_URL ?? "https://rpc-bradbury.genlayer.com";
+    _clients[network] = createClient({
+      chain: {
+        ...testnetBradbury,
+        rpcUrls: { default: { http: [rpcUrl] } },
+      },
+      account,
+    });
+  }
+
+  return _clients[network];
 }
 
 /**
  * Ask GenLayer validators to reach consensus on the current price of a token.
- * Uses DexScreener — covers all meme coins and DEX pairs.
- * Timeout: ~60s (30 retries × 2s interval).
+ * @param network - "studionet" (paper, free) or "bradbury" (testnet, GEN gas)
  */
-export async function getPriceFromGenLayer(symbol: string, chain: string, ca: string): Promise<number> {
-  const client = getClient();
+export async function getPriceFromGenLayer(symbol: string, chain: string, ca: string, network: "studionet" | "bradbury" = "bradbury"): Promise<number> {
+  const client = getClient(network);
   const oracleCode = readFileSync(ORACLE_PATH, "utf-8");
 
-  // Always use CA-specific DexScreener endpoint — exact token, zero ambiguity
   const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${ca}`;
 
-  // Step 1: Deploy the oracle contract (symbol + url)
-  console.log(`[genlayer] Deploying price oracle for ${symbol} (${ca ? 'CA' : 'search'})...`);
+  console.log(`[genlayer:${network}] Deploying price oracle for ${symbol}...`);
   const deployHash = await client.deployContract({
     code: oracleCode,
     args: [symbol, dexUrl],
     leaderOnly: false,
   });
 
-  console.log(`[genlayer] Deploy TX: ${deployHash}`);
+  console.log(`[genlayer:${network}] Deploy TX: ${deployHash}`);
   const deployReceipt = await client.waitForTransactionReceipt({
     hash: deployHash,
     status: "FINALIZED",
@@ -67,22 +72,20 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca: st
   const oracleAddress = deployReceipt.data?.contract_address;
   if (!oracleAddress) throw new Error(`GenLayer deploy failed — no contract address`);
 
-  // Check if deploy execution succeeded
   const execResult = (deployReceipt as any).consensus_data?.leader_receipt?.[0]?.execution_result;
   if (execResult === "ERROR") throw new Error(`GenLayer deploy execution error`);
 
-  console.log(`[genlayer] Contract deployed @ ${oracleAddress}`);
+  console.log(`[genlayer:${network}] Contract deployed @ ${oracleAddress}`);
 
-  // Step 2: Call resolve() to fetch price via DexScreener + LLM consensus
-  console.log(`[genlayer] Calling resolve()...`);
+  console.log(`[genlayer:${network}] Calling resolve()...`);
   const resolveHash = await client.writeContract({
     address: oracleAddress,
     functionName: "resolve",
     args: [],
-    leaderOnly: false,
+    leaderOnly: network === "studionet",
   });
 
-  console.log(`[genlayer] Resolve TX: ${resolveHash}`);
+  console.log(`[genlayer:${network}] Resolve TX: ${resolveHash}`);
   await client.waitForTransactionReceipt({
     hash: resolveHash,
     status: "FINALIZED",
@@ -90,7 +93,6 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca: st
     interval: 3000,
   });
 
-  // Step 3: Read the resolved price
   const result = await client.readContract({
     address: oracleAddress,
     functionName: "get_price",
@@ -100,13 +102,10 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca: st
   const price = Number(result.price);
   if (!price || price <= 0) throw new Error(`GenLayer returned invalid price: ${result.price}`);
 
-  console.log(`[genlayer] ${symbol} = $${price} (oracle @ ${oracleAddress})`);
+  console.log(`[genlayer:${network}] ${symbol} = $${price} (oracle @ ${oracleAddress})`);
   return price;
 }
 
-/**
- * Returns true if GenLayer is configured in env vars.
- */
 export function isGenLayerConfigured(): boolean {
-  return !!(process.env.GENLAYER_RPC_URL && process.env.GENLAYER_PRIVATE_KEY);
+  return !!process.env.GENLAYER_PRIVATE_KEY;
 }
