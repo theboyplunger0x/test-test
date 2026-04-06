@@ -24,7 +24,7 @@ import SpotView from "./SpotView";
 import CallCard, { type Call } from "./CallCard";
 import DebateCard, { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
-import { connectWallet } from "@/lib/wallet";
+import { connectWallet, getConnectedWallet, getGENBalance, onAccountsChanged } from "@/lib/wallet";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -171,7 +171,34 @@ export default function FeedPage() {
   const isTestnet = tradingMode === "testnet";
   const setPaperMode = (v: boolean) => setTradingMode(v ? "paper" : "testnet");
   const [followingList, setFollowingList]   = useState<string[]>([]);
+  const [walletAddr, setWalletAddr]         = useState<string | null>(null);
+  const [genBalance, setGenBalance]         = useState<number>(0);
   useEffect(() => { localStorage.setItem("fud_mode", tradingMode); }, [tradingMode]);
+
+  // Auto-detect wallet on testnet mode
+  useEffect(() => {
+    if (!isTestnet) return;
+    getConnectedWallet().then(addr => {
+      if (addr) {
+        setWalletAddr(addr);
+        getGENBalance(addr).then(setGenBalance);
+      }
+    });
+    const unsub = onAccountsChanged((accounts) => {
+      const addr = accounts[0] ?? null;
+      setWalletAddr(addr);
+      if (addr) getGENBalance(addr).then(setGenBalance);
+      else setGenBalance(0);
+    });
+    return unsub;
+  }, [isTestnet]);
+
+  // Refresh GEN balance periodically when connected
+  useEffect(() => {
+    if (!isTestnet || !walletAddr) return;
+    const iv = setInterval(() => getGENBalance(walletAddr).then(setGenBalance), 15000);
+    return () => clearInterval(iv);
+  }, [isTestnet, walletAddr]);
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
   const [paperCreditOpen, setPaperCreditOpen] = useState(false);
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
@@ -760,22 +787,31 @@ export default function FeedPage() {
         <div className="flex items-center gap-2 shrink-0 ml-auto">
           {user ? (
             <>
-              {/* Balance */}
-              <div className="hidden sm:flex flex-col items-end gap-0.5">
-                <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                  {isTestnet ? (user.wallet_address ? "Wallet" : "Testnet") : paperMode ? "Paper" : "Balance"}
-                </span>
-                <span className={`text-[13px] font-black tabular-nums ${isTestnet ? "text-purple-400" : paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
-                  {isTestnet
-                    ? (user.wallet_address ? `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}` : "Not connected")
-                    : (() => {
-                        const n = Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd);
-                        const sym = "$";
-                        return n >= 10000 ? `${sym}${(n/1000).toFixed(1)}K` : n >= 1000 ? `${sym}${n.toFixed(0)}` : `${sym}${n.toFixed(2)}`;
-                      })()
-                  }
-                </span>
-              </div>
+              {/* Balance / Wallet */}
+              {isTestnet ? (
+                walletAddr ? (
+                  <div className="hidden sm:flex flex-col items-end gap-0.5">
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
+                      {walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}
+                    </span>
+                    <span className="text-[13px] font-black tabular-nums text-purple-400">
+                      {genBalance.toFixed(2)} GEN
+                    </span>
+                  </div>
+                ) : null
+              ) : (
+                <div className="hidden sm:flex flex-col items-end gap-0.5">
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
+                    {paperMode ? "Paper" : "Balance"}
+                  </span>
+                  <span className={`text-[13px] font-black tabular-nums ${paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
+                    {(() => {
+                      const n = Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd);
+                      return n >= 10000 ? `$${(n/1000).toFixed(1)}K` : n >= 1000 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`;
+                    })()}
+                  </span>
+                </div>
+              )}
 
               {/* Connect Wallet / Credits / Deposit button */}
               <motion.button whileTap={{ scale: 0.96 }}
@@ -783,9 +819,10 @@ export default function FeedPage() {
                   if (isTestnet) {
                     try {
                       const addr = await connectWallet();
-                      await api.linkWallet(addr);
-                      setUser(u => u ? { ...u, wallet_address: addr } : u);
-                    } catch (err: any) {
+                      setWalletAddr(addr);
+                      getGENBalance(addr).then(setGenBalance);
+                      if (user) api.linkWallet(addr).catch(() => {});
+                    } catch (err: unknown) {
                       console.error("Wallet connect failed:", err);
                     }
                   }
@@ -793,7 +830,7 @@ export default function FeedPage() {
                   else setDepositOpen(true);
                 }}
                 className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${isTestnet ? "bg-purple-500 hover:bg-purple-400 text-white" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
-                {isTestnet ? (user.wallet_address ? "Connected ✓" : "Connect Wallet") : paperMode ? "+ Credits" : "Deposit"}
+                {isTestnet ? (walletAddr ? `Connected ✓` : "Connect Wallet") : paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
               {/* Referral */}
@@ -1487,7 +1524,7 @@ export default function FeedPage() {
       </AnimatePresence>
       <AnimatePresence>
         {openMarketCoin && (
-          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet} walletAddress={user?.wallet_address}
+          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet} walletAddress={walletAddr ?? undefined}
             onViewToken={() => {
               const c = openMarketCoin;
               setOpenMarketCoin(null);

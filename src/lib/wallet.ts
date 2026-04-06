@@ -55,6 +55,35 @@ export async function connectWallet(): Promise<string> {
   return accounts[0];
 }
 
+/**
+ * Read GEN balance from Bradbury chain for a given address.
+ */
+export async function getGENBalance(address: string): Promise<number> {
+  if (!window.ethereum) return 0;
+  try {
+    const balanceHex = (await window.ethereum.request({
+      method: "eth_getBalance",
+      params: [address, "latest"],
+    })) as string;
+    return parseInt(balanceHex, 16) / 1e18;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Check if wallet is already connected (without prompting).
+ */
+export async function getConnectedWallet(): Promise<string | null> {
+  if (!window.ethereum) return null;
+  try {
+    const accounts = (await window.ethereum.request({ method: "eth_accounts" })) as string[];
+    return accounts[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function onAccountsChanged(cb: (accounts: string[]) => void): () => void {
   if (!window.ethereum) return () => {};
   const handler = (...args: unknown[]) => cb(args[0] as string[]);

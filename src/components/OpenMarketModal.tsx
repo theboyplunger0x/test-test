@@ -70,7 +70,8 @@ export default function OpenMarketModal({
     setLoading(true);
     setError("");
     try {
-      if (isTestnet && coin.ca) {
+      if (isTestnet) {
+        if (!coin.ca) throw new Error("On-chain testnet requires a token with a contract address. Search by CA.");
         // On-chain flow: deploy escrow contract, user signs with MetaMask
         let wallet = walletAddress;
         if (!wallet) {
