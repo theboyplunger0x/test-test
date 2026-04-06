@@ -2,12 +2,9 @@ FROM node:22-slim
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm install --no-cache
-
+# Copy everything first to bust cache on any file change
 COPY . .
-ARG CACHEBUST=1
-RUN npm run build && ls dist/routes/
+RUN npm install && npm run build && echo "ROUTES:" && ls dist/routes/ && echo "INDEX HEAD:" && head -5 dist/index.js
 
 EXPOSE 3001
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]
