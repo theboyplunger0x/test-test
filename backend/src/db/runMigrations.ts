@@ -245,6 +245,33 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_address TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_testnet BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE markets ADD COLUMN IF NOT EXISTS is_testnet BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE positions ADD COLUMN IF NOT EXISTS is_testnet BOOLEAN NOT NULL DEFAULT false;
+
+-- v7: on-chain escrow bets
+CREATE TABLE IF NOT EXISTS escrow_bets (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  contract_address  TEXT NOT NULL,
+  deploy_hash       TEXT NOT NULL,
+  symbol            TEXT NOT NULL,
+  chain             TEXT NOT NULL,
+  ca                TEXT,
+  timeframe         TEXT NOT NULL,
+  entry_price       TEXT NOT NULL,
+  exit_price        TEXT,
+  side_a            TEXT NOT NULL,
+  party_a_id        UUID REFERENCES users(id),
+  party_a_wallet    TEXT NOT NULL,
+  party_b_id        UUID REFERENCES users(id),
+  party_b_wallet    TEXT,
+  deposit_a         NUMERIC(18,6) NOT NULL,
+  deposit_b         NUMERIC(18,6),
+  winner_wallet     TEXT,
+  winner_side       TEXT,
+  tagline           TEXT NOT NULL DEFAULT '',
+  status            TEXT NOT NULL DEFAULT 'waiting',
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_escrow_status ON escrow_bets(status);
+CREATE INDEX IF NOT EXISTS idx_escrow_contract ON escrow_bets(contract_address);
 `;
 
 export async function runMigrations() {

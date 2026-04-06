@@ -468,4 +468,61 @@ export const api = {
       method: "POST",
       body: JSON.stringify(params),
     }),
+
+  // ── On-chain Escrow (testnet) ──────────────────────────────────────────────
+
+  getEscrowBets: () =>
+    req<EscrowBet[]>("/escrow"),
+
+  getEscrowState: (address: string) =>
+    req<Record<string, unknown>>(`/escrow/${address}`),
+
+  createEscrowBet: (params: {
+    symbol: string; chain: string; timeframe: string;
+    side: "long" | "short"; amount: number; ca: string; tagline?: string;
+  }) =>
+    req<{ contract_address: string; deploy_hash: string; entry_price: string; symbol: string; timeframe: string; side: string; deposit_a: number }>(
+      "/escrow/create", { method: "POST", body: JSON.stringify(params) }
+    ),
+
+  takeEscrowBet: (address: string, amount: number) =>
+    req<{ tx_hash: string; status: string }>(
+      `/escrow/${address}/take`, { method: "POST", body: JSON.stringify({ amount }) }
+    ),
+
+  resolveEscrowBet: (address: string) =>
+    req<{ exitPrice: string; winner: string; winnerSide: string; status: string }>(
+      `/escrow/${address}/resolve`, { method: "POST" }
+    ),
+
+  cancelEscrowBet: (address: string) =>
+    req<{ tx_hash: string; status: string }>(
+      `/escrow/${address}/cancel`, { method: "POST" }
+    ),
+};
+
+export type EscrowBet = {
+  id: string;
+  contract_address: string;
+  deploy_hash: string;
+  symbol: string;
+  chain: string;
+  ca: string;
+  timeframe: string;
+  entry_price: string;
+  exit_price?: string;
+  side_a: "long" | "short";
+  party_a_id: string;
+  party_a_wallet: string;
+  party_a_username?: string;
+  party_b_id?: string;
+  party_b_wallet?: string;
+  party_b_username?: string;
+  deposit_a: string;
+  deposit_b?: string;
+  winner_wallet?: string;
+  winner_side?: string;
+  tagline: string;
+  status: "waiting" | "active" | "resolved" | "cancelled";
+  created_at: string;
 };
