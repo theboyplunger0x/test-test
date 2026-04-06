@@ -4,7 +4,7 @@
 // Falls back to direct DexScreener if GenLayer is not configured.
 
 import { createAccount, createClient } from "genlayer-js";
-import { studionet } from "genlayer-js/chains";
+import { testnetBradbury } from "genlayer-js/chains";
 import { readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -27,7 +27,7 @@ function getClient() {
   const account = createAccount(`0x${privateKey.replace(/^0x/, "")}`);
   _client = createClient({
     chain: {
-      ...studionet,
+      ...testnetBradbury,
       rpcUrls: { default: { http: [rpcUrl] } },
     },
     account,
@@ -79,7 +79,7 @@ export async function getPriceFromGenLayer(symbol: string, chain: string, ca: st
     address: oracleAddress,
     functionName: "resolve",
     args: [],
-    leaderOnly: true, // leader-only for speed on studionet
+    leaderOnly: false,
   });
 
   console.log(`[genlayer] Resolve TX: ${resolveHash}`);
