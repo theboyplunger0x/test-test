@@ -87,16 +87,29 @@ export default function OpenMarketModal({
         if (sorted.length === 0) throw new Error("No price found for this token");
         const entryPrice = sorted[0].priceUsd;
 
-        setError("Confirm in MetaMask...");
-        const { contractAddress, deployHash } = await deployBetOnChain({
-          walletAddress: wallet,
-          symbol: coin.symbol,
-          ca: coin.ca,
-          timeframe: tf,
-          entryPrice,
-          side,
-          amountGEN: amount,
-        });
+        setError("Sign transaction in MetaMask...");
+
+        let contractAddress: string;
+        let deployHash: string;
+        try {
+          const result = await deployBetOnChain({
+            walletAddress: wallet,
+            symbol: coin.symbol,
+            ca: coin.ca!,
+            timeframe: tf,
+            entryPrice,
+            side,
+            amountGEN: amount,
+          });
+          contractAddress = result.contractAddress;
+          deployHash = result.deployHash;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Deploy failed";
+          if (msg.includes("User rejected") || msg.includes("denied")) throw new Error("Transaction rejected");
+          throw err;
+        }
+
+        setError("Deploying on GenLayer... ⏳");
 
         // Track in backend
         await api.createEscrowBet({

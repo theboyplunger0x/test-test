@@ -234,7 +234,7 @@ export async function deployBetOnChain(params: {
 
   const receipt = await (client as any).waitForTransactionReceipt({
     hash: deployHash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 60,
     interval: 3000,
   });
@@ -271,7 +271,7 @@ export async function takeBetOnChain(params: {
 
   await (client as any).waitForTransactionReceipt({
     hash,
-    status: "FINALIZED",
+    status: "ACCEPTED",
     retries: 30,
     interval: 2000,
   });
