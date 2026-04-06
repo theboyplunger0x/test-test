@@ -818,9 +818,10 @@ export default function FeedPage() {
                 onClick={async () => {
                   if (isTestnet) {
                     if (walletAddr) {
-                      // Disconnect
+                      // Disconnect — clear state, revoke MetaMask permission
                       setWalletAddr(null);
                       setGenBalance(0);
+                      try { await window.ethereum?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] }); } catch {}
                       return;
                     }
                     try {
