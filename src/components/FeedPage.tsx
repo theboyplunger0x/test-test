@@ -777,12 +777,12 @@ export default function FeedPage() {
               {/* Credits/Deposit button */}
               <motion.button whileTap={{ scale: 0.96 }}
                 onClick={() => {
-                  if (isTestnet) { api.testnetCredit(100).then(r => setUser(u => u ? { ...u, testnet_balance_gen: r.testnet_balance_gen } : u)).catch(() => {}); }
+                  if (isTestnet) { api.testnetCredit(10).then(r => setUser(u => u ? { ...u, testnet_balance_gen: r.testnet_balance_gen } : u)).catch(() => {}); }
                   else if (paperMode) setPaperCreditOpen(true);
                   else setDepositOpen(true);
                 }}
                 className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${isTestnet ? "bg-purple-500 hover:bg-purple-400 text-white" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
-                {isTestnet ? "+ 100 GEN" : paperMode ? "+ Credits" : "Deposit"}
+                {isTestnet ? "+ 10 GEN" : paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
               {/* Referral */}
