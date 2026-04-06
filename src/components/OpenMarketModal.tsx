@@ -72,28 +72,16 @@ export default function OpenMarketModal({
     try {
       if (isTestnet) {
         if (!coin.ca) throw new Error("On-chain testnet requires a token with a contract address. Search by CA.");
-        // Hybrid flow: user sends GEN via MetaMask → backend deploys escrow
+        // Hybrid flow: backend deploys escrow first, then user sends GEN
         let wallet = walletAddress;
         if (!wallet) {
           wallet = await connectWallet();
           await api.linkWallet(wallet);
         }
 
-        setError("Sign GEN transfer in MetaMask...");
+        setError("Deploying escrow on GenLayer... ⏳");
 
-        // Step 1: User sends GEN to treasury via MetaMask
-        let txHash: string;
-        try {
-          txHash = await sendGENToTreasury({ walletAddress: wallet, amountGEN: amount });
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : "Transfer failed";
-          if (msg.includes("User rejected") || msg.includes("denied")) throw new Error("Transaction rejected");
-          throw err;
-        }
-
-        setError("GEN sent! Deploying escrow on GenLayer... ⏳");
-
-        // Step 2: Tell backend to deploy the escrow contract
+        // Step 1: Backend deploys the escrow contract FIRST
         const result = await api.createEscrowBet({
           symbol: coin.symbol,
           chain: coin.chain,
@@ -103,6 +91,17 @@ export default function OpenMarketModal({
           ca: coin.ca,
           tagline: tagline.trim(),
         });
+
+        setError("Sign GEN transfer in MetaMask...");
+
+        // Step 2: User sends GEN to treasury (only after backend succeeded)
+        try {
+          await sendGENToTreasury({ walletAddress: wallet, amountGEN: amount });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Transfer failed";
+          if (msg.includes("User rejected") || msg.includes("denied")) throw new Error("Transaction rejected — escrow created but not funded");
+          throw err;
+        }
 
         setError("");
 
