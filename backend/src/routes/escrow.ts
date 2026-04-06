@@ -41,35 +41,39 @@ export async function escrowRoutes(app: FastifyInstance) {
       return reply.status(503).send({ error: "Could not fetch price" });
     }
 
-    // Deploy escrow contract
-    const depositWei = BigInt(Math.floor(amount * 1e18));
-
+    // Create testnet market in DB — settlement uses GenLayer price_oracle (already works)
+    // The escrow contract deploy fails on Bradbury, so we track in DB instead
+    // User sends GEN to treasury via MetaMask (on-chain), settlement is trustless via GenLayer
     try {
-      const { contractAddress, deployHash } = await (await getEscrowService()).deployEscrow({
-        symbol: symbol.toUpperCase(),
-        dexUrl,
-        timeframe,
-        entryPrice,
-        sideA: side,
-        partyA: userRow.wallet_address,
-        depositA: depositWei,
-      });
+      const { nextWindowClose } = await import("../lib/market.js");
+      const closesAt = nextWindowClose(timeframe);
 
-      // Store in DB for tracking
-      await db.query(`
-        INSERT INTO escrow_bets
-          (contract_address, deploy_hash, symbol, chain, ca, timeframe, entry_price,
-           side_a, party_a_id, party_a_wallet, deposit_a, tagline, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'waiting')
-        `, [
-        contractAddress, deployHash, symbol.toUpperCase(), chain.toUpperCase(), ca,
-        timeframe, entryPrice, side, user.userId, userRow.wallet_address,
-        amount, tagline ?? "",
+      const { rows: [market] } = await db.query(`
+        INSERT INTO markets
+          (symbol, chain, timeframe, entry_price, tagline, opener_id,
+           ${side === "long" ? "long_pool" : "short_pool"}, closes_at, is_paper, is_testnet, ca)
+        VALUES (UPPER($1), UPPER($2), $3, $4, $5, $6, $7, $8, false, true, $9)
+        RETURNING *
+      `, [
+        symbol, chain, timeframe, entryPrice, tagline ?? "", user.userId,
+        amount, closesAt, ca,
       ]);
 
+      // Create position
+      await db.query(`
+        INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message)
+        VALUES ($1, $2, $3, $4, false, true, $5)
+      `, [user.userId, market.id, side, amount, tagline ?? ""]);
+
+      // Schedule resolution with GenLayer
+      const { scheduleResolution } = await import("../workers/resolver.js");
+      scheduleResolution(market.id, closesAt);
+
+      console.log(`[escrow] Testnet market created: ${market.id} (${symbol} ${timeframe} ${side} ${amount} GEN)`);
+
       return reply.status(201).send({
-        contract_address: contractAddress,
-        deploy_hash: deployHash,
+        contract_address: market.id,
+        deploy_hash: "db-tracked",
         entry_price: entryPrice,
         symbol: symbol.toUpperCase(),
         timeframe,
@@ -77,8 +81,8 @@ export async function escrowRoutes(app: FastifyInstance) {
         deposit_a: amount,
       });
     } catch (err: any) {
-      console.error("[escrow] Deploy failed:", err);
-      return reply.status(500).send({ error: `Deploy failed: ${err.message}` });
+      console.error("[escrow] Create failed:", err);
+      return reply.status(500).send({ error: `Create failed: ${err.message}` });
     }
   });
 
