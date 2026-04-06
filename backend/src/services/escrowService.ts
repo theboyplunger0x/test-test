@@ -79,8 +79,9 @@ export async function deployEscrow(params: {
     interval: 2000,
   });
 
-  const contractAddress = receipt.data?.contract_address;
-  if (!contractAddress) throw new Error("Escrow deploy failed — no contract address");
+  console.log(`[escrow] Receipt:`, JSON.stringify(receipt, null, 2));
+  const contractAddress = receipt.data?.contract_address ?? (receipt as any).contract_address ?? (receipt as any).contractAddress;
+  if (!contractAddress) throw new Error(`Escrow deploy failed — no contract address. Receipt keys: ${Object.keys(receipt ?? {}).join(", ")}`);
 
   console.log(`[escrow] Contract deployed @ ${contractAddress}`);
   return { contractAddress, deployHash };
