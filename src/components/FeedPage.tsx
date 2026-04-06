@@ -24,6 +24,7 @@ import SpotView from "./SpotView";
 import CallCard, { type Call } from "./CallCard";
 import DebateCard, { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
+import { connectWallet } from "@/lib/wallet";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -762,27 +763,37 @@ export default function FeedPage() {
               {/* Balance */}
               <div className="hidden sm:flex flex-col items-end gap-0.5">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                  {isTestnet ? "Testnet" : paperMode ? "Paper" : "Balance"}
+                  {isTestnet ? (user.wallet_address ? "Wallet" : "Testnet") : paperMode ? "Paper" : "Balance"}
                 </span>
                 <span className={`text-[13px] font-black tabular-nums ${isTestnet ? "text-purple-400" : paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
-                  {(() => {
-                    const n = Number(isTestnet ? (user.testnet_balance_gen ?? 0) : paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd);
-                    const sym = isTestnet ? " GEN" : "$";
-                    if (isTestnet) return `${n.toFixed(2)} GEN`;
-                    return n >= 10000 ? `${sym}${(n/1000).toFixed(1)}K` : n >= 1000 ? `${sym}${n.toFixed(0)}` : `${sym}${n.toFixed(2)}`;
-                  })()}
+                  {isTestnet
+                    ? (user.wallet_address ? `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}` : "Not connected")
+                    : (() => {
+                        const n = Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd);
+                        const sym = "$";
+                        return n >= 10000 ? `${sym}${(n/1000).toFixed(1)}K` : n >= 1000 ? `${sym}${n.toFixed(0)}` : `${sym}${n.toFixed(2)}`;
+                      })()
+                  }
                 </span>
               </div>
 
-              {/* Credits/Deposit button */}
+              {/* Connect Wallet / Credits / Deposit button */}
               <motion.button whileTap={{ scale: 0.96 }}
-                onClick={() => {
-                  if (isTestnet) { api.testnetCredit(10).then(r => setUser(u => u ? { ...u, testnet_balance_gen: r.testnet_balance_gen } : u)).catch(() => {}); }
+                onClick={async () => {
+                  if (isTestnet) {
+                    try {
+                      const addr = await connectWallet();
+                      await api.linkWallet(addr);
+                      setUser(u => u ? { ...u, wallet_address: addr } : u);
+                    } catch (err: any) {
+                      console.error("Wallet connect failed:", err);
+                    }
+                  }
                   else if (paperMode) setPaperCreditOpen(true);
                   else setDepositOpen(true);
                 }}
                 className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${isTestnet ? "bg-purple-500 hover:bg-purple-400 text-white" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
-                {isTestnet ? "+ 10 GEN" : paperMode ? "+ Credits" : "Deposit"}
+                {isTestnet ? (user.wallet_address ? "Connected ✓" : "Connect Wallet") : paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
               {/* Referral */}
