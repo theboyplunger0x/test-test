@@ -36,7 +36,7 @@ export async function resolveMarket(marketId: string) {
 
     let exitPrice: number;
     try {
-      exitPrice = await getPrice(market.symbol, market.chain, market.ca);
+      exitPrice = await getPrice(market.symbol, market.chain, market.ca, !!market.is_testnet);
     } catch {
       // Oracle failed — cancel and refund
       await client.query(`UPDATE markets SET status = 'cancelled' WHERE id = $1`, [market.id]);

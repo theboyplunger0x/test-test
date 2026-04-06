@@ -70,11 +70,11 @@ export async function getPrice(symbol: string, chain = "SOL"): Promise<number> {
  * Get price for market resolution — tries GenLayer first (decentralized consensus),
  * falls back to DexScreener. When CA is provided, uses the exact token endpoint.
  */
-export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: string | null): Promise<number> {
+export async function getPriceForResolution(symbol: string, chain = "SOL", ca?: string | null, useGenLayer = false): Promise<number> {
   const chainId = CHAIN_MAP[chain.toUpperCase()] ?? "solana";
 
-  // GenLayer only when we have a CA (exact token, no ambiguity)
-  if (ca && isGenLayerConfigured()) {
+  // GenLayer only for testnet markets (saves gas — paper/real use DexScreener directly)
+  if (useGenLayer && ca && isGenLayerConfigured()) {
     try {
       return await getPriceFromGenLayer(symbol, chainId, ca);
     } catch (err) {
