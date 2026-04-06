@@ -6,7 +6,8 @@ COPY package.json package-lock.json ./
 RUN npm install --no-cache
 
 COPY . .
-RUN npm run build && echo "=== BUILD OUTPUT ===" && ls -la dist/ && ls -la dist/routes/ && cat dist/index.js | head -30
+ARG CACHEBUST=1
+RUN npm run build && ls dist/routes/
 
 EXPOSE 3001
 CMD ["npm", "start"]
