@@ -94,17 +94,20 @@ export function onAccountsChanged(cb: (accounts: string[]) => void): () => void 
 // ── GenLayer Client (browser, MetaMask-signed) ───────────────────────────────
 
 let _glClient: ReturnType<typeof createClient> | null = null;
+let _glClientAddr: string | null = null;
 
-export function getGenLayerClient(walletAddress: string) {
-  if (_glClient) return _glClient;
-  if (!window.ethereum) throw new Error("MetaMask not installed");
+export async function getGenLayerClient(walletAddress: string) {
+  if (_glClient && _glClientAddr === walletAddress) return _glClient;
 
   _glClient = createClient({
     chain: testnetBradbury,
     account: walletAddress as `0x${string}`,
-    provider: window.ethereum,
   });
 
+  // Switch MetaMask to Bradbury network via SDK
+  await (_glClient as any).connect("testnetBradbury");
+
+  _glClientAddr = walletAddress;
   return _glClient;
 }
 
@@ -217,7 +220,7 @@ export async function deployBetOnChain(params: {
   side: "long" | "short";
   amountGEN: number;
 }): Promise<{ contractAddress: string; deployHash: string }> {
-  const client = getGenLayerClient(params.walletAddress);
+  const client = await getGenLayerClient(params.walletAddress);
   const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${params.ca}`;
   const valueWei = BigInt(Math.floor(params.amountGEN * 1e18));
 
@@ -254,7 +257,7 @@ export async function takeBetOnChain(params: {
   contractAddress: string;
   amountGEN: number;
 }): Promise<string> {
-  const client = getGenLayerClient(params.walletAddress);
+  const client = await getGenLayerClient(params.walletAddress);
   const valueWei = BigInt(Math.floor(params.amountGEN * 1e18));
 
   console.log(`[wallet] Taking bet on ${params.contractAddress}... (MetaMask will prompt)`);
@@ -283,7 +286,7 @@ export async function takeBetOnChain(params: {
  * Read escrow state from chain.
  */
 export async function readEscrowState(walletAddress: string, contractAddress: string): Promise<Record<string, unknown>> {
-  const client = getGenLayerClient(walletAddress);
+  const client = await getGenLayerClient(walletAddress);
   return await (client as any).readContract({
     address: contractAddress,
     functionName: "get_state",
