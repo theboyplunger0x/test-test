@@ -3,7 +3,11 @@
 
 import { FastifyInstance } from "fastify";
 import { db } from "../db/client.js";
-import { deployEscrow, takeBet, resolveEscrow, getEscrowState, cancelEscrow } from "../services/escrowService.js";
+
+// Lazy import to prevent silent failures if genlayer-js has issues
+async function getEscrowService() {
+  return await import("../services/escrowService.js");
+}
 
 export async function escrowRoutes(app: FastifyInstance) {
 
@@ -41,7 +45,7 @@ export async function escrowRoutes(app: FastifyInstance) {
     const depositWei = BigInt(Math.floor(amount * 1e18));
 
     try {
-      const { contractAddress, deployHash } = await deployEscrow({
+      const { contractAddress, deployHash } = await (await getEscrowService()).deployEscrow({
         symbol: symbol.toUpperCase(),
         dexUrl,
         timeframe,
@@ -98,7 +102,7 @@ export async function escrowRoutes(app: FastifyInstance) {
     const depositWei = BigInt(Math.floor(amount * 1e18));
 
     try {
-      const txHash = await takeBet(address, depositWei);
+      const txHash = await (await getEscrowService()).takeBet(address, depositWei);
 
       await db.query(`
         UPDATE escrow_bets
@@ -118,7 +122,7 @@ export async function escrowRoutes(app: FastifyInstance) {
     const { address } = req.params as any;
 
     try {
-      const result = await resolveEscrow(address);
+      const result = await (await getEscrowService()).resolveEscrow(address);
 
       await db.query(`
         UPDATE escrow_bets
@@ -137,7 +141,7 @@ export async function escrowRoutes(app: FastifyInstance) {
   app.get("/escrow/:address", async (req, reply) => {
     const { address } = req.params as any;
     try {
-      const state = await getEscrowState(address);
+      const state = await (await getEscrowService()).getEscrowState(address);
       return state;
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
@@ -162,7 +166,7 @@ export async function escrowRoutes(app: FastifyInstance) {
     const { address } = req.params as any;
 
     try {
-      const txHash = await cancelEscrow(address);
+      const txHash = await (await getEscrowService()).cancelEscrow(address);
       await db.query(`UPDATE escrow_bets SET status = 'cancelled' WHERE contract_address = $1`, [address]);
       return { tx_hash: txHash, status: "cancelled" };
     } catch (err: any) {
