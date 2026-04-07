@@ -1133,7 +1133,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
     : selectedFilter === "hot"
     ? marketsWithMult.filter(m => m.bestMult >= HOT_THRESHOLD && !m.sweep_id)
     : selectedFilter === "sweep"
-    ? marketsWithMult.filter(m => !!m.sweep_id)
+    ? marketsWithMult.filter(m => !!m.sweep_id && m.bestMult >= 15)
     : selectedFilter === "p2p"
     ? marketsWithMult.filter(m => !m.sweep_id)
     : marketsWithMult;
