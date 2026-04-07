@@ -30,7 +30,7 @@ import { fetchTrending } from "@/lib/chartData";
 
 type Filter = "all" | "hot" | "juicy";
 type Theme = "dark" | "light";
-type MainTab = "calls" | "markets" | "feed" | "trending" | "following" | "ranks" | "chart";
+type MainTab = "calls" | "markets" | "feed" | "sweep" | "trending" | "following" | "ranks" | "chart";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
@@ -744,6 +744,7 @@ export default function FeedPage() {
     { key: "markets",  label: "Feed" },
     { key: "calls",    label: "Calls" },
     { key: "feed",     label: "P2P" },
+    { key: "sweep",    label: "Sweep" },
   ];
   const OTHER_TABS: { key: MainTab; label: string }[] = [
     { key: "trending", label: "Discover" },
@@ -1160,6 +1161,42 @@ export default function FeedPage() {
               tapeBorder={T.sidebarBorder} sidebarLabel={T.sidebarLabel} tapeColLabel={T.tapeColLabel}
               open={tapeOpen} onToggle={() => setTapeOpen(o => !o)}
               onViewProfile={(u) => setProfileUser(u)} paperMode={paperMode} />
+            </div>
+          </motion.div>
+        )}
+
+        {/* SWEEP TAB */}
+        {!tokenProfileToken && mainTab === "sweep" && (
+          <motion.div key="sweep" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex">
+            <div className="flex-1 overflow-hidden flex flex-col">
+            <MarketsView
+              dk={dk}
+              liveMarkets={markets
+                .filter(m => m.status === "open" && !!m.is_paper === paperMode && !!m.sweep_id && new Date(m.closes_at).getTime() > Date.now())
+                .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
+              }
+              paperMode={paperMode}
+              presets={tradePresets}
+              onSelectToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+              onViewProfile={(u) => setProfileUser(u)}
+              onBet={handleAdd}
+              shakingIds={shakingIds}
+              calls={calls}
+              debates={debates}
+              onFadeCall={async (call, side, amount) => {
+                if (!user) { setAuthOpen(true); return null; }
+                if (!call.market_id) return "Cannot fade — market not found.";
+                if (call.status !== "open") return "This market is already closed.";
+                return handleAdd(call.market_id, side, amount, undefined, call.id);
+              }}
+              onFadeDebate={(marketId, side) => {
+                if (!user) { setAuthOpen(true); return; }
+                handleAdd(marketId, side, 25);
+              }}
+              onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+              loggedIn={!!user}
+              onAuthRequired={() => setAuthOpen(true)}
+            />
             </div>
           </motion.div>
         )}
