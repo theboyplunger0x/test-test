@@ -1138,10 +1138,8 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
     ? marketsWithMult.filter(m => !m.sweep_id)
     : marketsWithMult;
 
-  // Sort: by recent activity in "all", by multiplier in "hot"
-  const sortedMarkets = selectedFilter === "hot"
-    ? [...filteredMarkets].sort((a, b) => b.bestMult - a.bestMult)
-    : filteredMarkets;
+  // Sort: all filters by recent activity
+  const sortedMarkets = filteredMarkets;
 
   const hasGrid = sortedMarkets.length > 0;
 
@@ -1151,8 +1149,8 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
       <div className="flex-1 overflow-y-auto">
       <div className="px-4 md:px-5 py-5 max-w-7xl mx-auto space-y-6">
 
-        {/* Hero row */}
-        {hero ? (
+        {/* Hero row — hidden in sweep-only mode */}
+        {!hideFilterBar && (hero ? (
           <div className="flex gap-4 items-start">
             <HeroCard market={hero} dk={dk} onTrade={() => { if (!loggedIn && onAuthRequired) { onAuthRequired(); return; } setTradeMarket(hero); }} />
             <div className="hidden lg:block">
@@ -1165,7 +1163,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
             <p className={`text-[15px] font-black ${strong}`}>No open markets yet.</p>
             <p className={`text-[12px] ${muted} mt-1`}>Be the first to open one.</p>
           </div>
-        )}
+        ))}
 
         {/* Unified grid: P2P markets + OB cards */}
         {hasGrid && (
