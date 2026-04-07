@@ -1653,23 +1653,21 @@ export default function FeedPage() {
                     </button>
                   </div>
 
-                  {/* Trading Mode */}
-                  {user && (
-                    <div className={`flex items-center gap-3.5 px-5 py-4`}>
-                      <span className="text-[20px] w-7 text-center">🃏</span>
-                      <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Trading mode</span>
-                      <div className={`flex rounded-lg p-0.5 border text-[11px] font-black shrink-0 ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
-                        <button onClick={() => setTradingMode("testnet")}
-                          className={`px-2.5 py-1 rounded-md transition-all ${isTestnet ? (dk ? "bg-purple-500 text-white" : "bg-purple-600 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-                          Testnet
-                        </button>
-                        <button onClick={() => setTradingMode("paper")}
-                          className={`px-2.5 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-                          Paper
-                        </button>
-                      </div>
+                  {/* Trading Mode — visible even without login */}
+                  <div className={`flex items-center gap-3.5 px-5 py-4`}>
+                    <span className="text-[20px] w-7 text-center">🃏</span>
+                    <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Trading mode</span>
+                    <div className={`flex rounded-lg p-0.5 border text-[11px] font-black shrink-0 ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
+                      <button onClick={() => setTradingMode("paper")}
+                        className={`px-2.5 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+                        Paper
+                      </button>
+                      <button onClick={() => setTradingMode("testnet")}
+                        className={`px-2.5 py-1 rounded-md transition-all ${isTestnet ? (dk ? "bg-purple-500 text-white" : "bg-purple-600 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+                        Testnet
+                      </button>
                     </div>
-                  )}
+                  </div>
 
                   {/* Quick Bet Amounts */}
                   <div className={`px-5 py-4`}>
