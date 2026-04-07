@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import rateLimit from "@fastify/rate-limit";
+import oauthPlugin from "@fastify/oauth2";
 
 import { authRoutes }        from "./routes/auth.js";
 import { marketRoutes }      from "./routes/markets.js";
@@ -53,6 +54,21 @@ app.decorate("authenticate", async (req: any, reply: any) => {
     reply.status(401).send({ error: "Unauthorized" });
   }
 });
+
+// Google OAuth (optional — skipped if credentials not set)
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  await app.register(oauthPlugin, {
+    name: "googleOAuth2",
+    scope: ["profile", "email"],
+    credentials: {
+      client: { id: process.env.GOOGLE_CLIENT_ID, secret: process.env.GOOGLE_CLIENT_SECRET },
+    },
+    startRedirectPath: "/auth/google",
+    callbackUri: process.env.GOOGLE_CALLBACK_URL ?? "https://test-test-production.up.railway.app/auth/google/callback",
+    discovery: { issuer: "https://accounts.google.com" },
+  });
+  console.log("[server] Google OAuth registered");
+}
 
 // Routes
 await app.register(authRoutes);

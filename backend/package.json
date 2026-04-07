@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.80.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/jwt": "^10.0.0",
+    "@fastify/oauth2": "^8.2.0",
     "@fastify/rate-limit": "^10.3.0",
     "@scure/bip32": "^1.6.2",
     "@scure/bip39": "^1.5.4",

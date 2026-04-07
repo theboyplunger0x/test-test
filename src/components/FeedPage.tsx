@@ -744,7 +744,7 @@ export default function FeedPage() {
     { key: "markets",  label: "Feed" },
     { key: "calls",    label: "Calls" },
     { key: "feed",     label: "P2P" },
-    { key: "sweep",    label: "Sweep" },
+    { key: "sweep",    label: "Hot X's" },
   ];
   const OTHER_TABS: { key: MainTab; label: string }[] = [
     { key: "trending", label: "Discover" },
@@ -1165,7 +1165,7 @@ export default function FeedPage() {
           </motion.div>
         )}
 
-        {/* SWEEP TAB */}
+        {/* HOT X's TAB */}
         {!tokenProfileToken && mainTab === "sweep" && (
           <motion.div key="sweep" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex">
             <div className="flex-1 overflow-hidden flex flex-col">
@@ -1177,7 +1177,7 @@ export default function FeedPage() {
               }
               paperMode={paperMode}
               presets={tradePresets}
-              defaultFilter="sweep"
+              defaultFilter="hot"
               hideFilterBar
               onSelectToken={(symbol, chain) => handleCoinClick(symbol, chain)}
               onViewProfile={(u) => setProfileUser(u)}
