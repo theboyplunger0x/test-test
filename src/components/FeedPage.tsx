@@ -1172,11 +1172,13 @@ export default function FeedPage() {
             <MarketsView
               dk={dk}
               liveMarkets={markets
-                .filter(m => m.status === "open" && !!m.is_paper === paperMode && !!m.sweep_id && new Date(m.closes_at).getTime() > Date.now())
+                .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
                 .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
               }
               paperMode={paperMode}
               presets={tradePresets}
+              defaultFilter="sweep"
+              hideFilterBar
               onSelectToken={(symbol, chain) => handleCoinClick(symbol, chain)}
               onViewProfile={(u) => setProfileUser(u)}
               onBet={handleAdd}

@@ -23,6 +23,8 @@ interface Props {
   onViewToken?:   (symbol: string, chain: string) => void;
   loggedIn?:      boolean;
   onAuthRequired?: () => void;
+  defaultFilter?: MarketFilter;
+  hideFilterBar?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1100,8 +1102,8 @@ function MarketsTape({ dk, onSelectToken, onViewProfile, paperMode }: { dk: bool
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken, loggedIn, onAuthRequired }: Props) {
-  const [selectedFilter, setSelectedFilter] = useState<MarketFilter>("all");
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken, loggedIn, onAuthRequired, defaultFilter, hideFilterBar }: Props) {
+  const [selectedFilter, setSelectedFilter] = useState<MarketFilter>(defaultFilter ?? "all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 
   const strong  = dk ? "text-white"     : "text-gray-900";
@@ -1129,10 +1131,12 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
   const filteredMarkets = selectedFilter === "all"
     ? marketsWithMult
     : selectedFilter === "hot"
-    ? marketsWithMult.filter(m => m.bestMult >= HOT_THRESHOLD)
+    ? marketsWithMult.filter(m => m.bestMult >= HOT_THRESHOLD && !m.sweep_id)
     : selectedFilter === "sweep"
     ? marketsWithMult.filter(m => !!m.sweep_id)
-    : marketsWithMult; // p2p = all individual markets
+    : selectedFilter === "p2p"
+    ? marketsWithMult.filter(m => !m.sweep_id)
+    : marketsWithMult;
 
   // Sort: by recent activity in "all", by multiplier in "hot"
   const sortedMarkets = selectedFilter === "hot"
@@ -1166,7 +1170,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
         {/* Unified grid: P2P markets + OB cards */}
         {hasGrid && (
           <>
-            <div className={`flex items-center justify-between border-b ${divider} pb-3`}>
+            {!hideFilterBar && <div className={`flex items-center justify-between border-b ${divider} pb-3`}>
               <h2 className={`text-[16px] font-black ${strong}`}>All Markets</h2>
               <div className="flex items-center gap-1">
                 {MARKET_FILTERS.map(f => {
@@ -1183,7 +1187,7 @@ export default function MarketsView({ dk, liveMarkets = [], paperMode = false, p
                   );
                 })}
               </div>
-            </div>
+            </div>}
 
             {selectedFilter === "calls" ? (
               /* Calls — same design as Calls tab */
