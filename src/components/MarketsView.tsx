@@ -25,12 +25,19 @@ interface Props {
   onAuthRequired?: () => void;
   defaultFilter?: MarketFilter;
   hideFilterBar?: boolean;
+  isTestnet?:     boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+// Currency formatting — set _gen flag at component level
+let _gen = false;
 function fmtPool(n: number): string {
+  if (_gen) { return n >= 1000 ? `${(n / 1000).toFixed(1)}k GEN` : `${n.toFixed(0)} GEN`; }
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
   return `$${n.toFixed(0)}`;
+}
+function $(n: number): string {
+  return _gen ? `${n.toFixed(0)} GEN` : `$${n.toFixed(0)}`;
 }
 function fmtMult(m: number): string {
   if (!m || m <= 0) return "—";
@@ -412,7 +419,7 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
             {/* Amount */}
             <div>
               <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${dk ? "border-white/10 bg-white/4" : "border-gray-200 bg-gray-50"}`}>
-                <span className={`text-[14px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                <span className={`text-[14px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>{_gen ? "GEN" : "$"}</span>
                 <input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)}
                   className={`flex-1 bg-transparent text-[16px] font-black outline-none ${dk ? "text-white placeholder:text-white/20" : "text-gray-900 placeholder:text-gray-300"}`} />
               </div>
@@ -457,7 +464,7 @@ function QuickTradeModal({ market, dk, onClose, paperMode, presets }: { market: 
                 side === "short" ? "bg-red-500 hover:bg-red-400 text-white" :
                 dk ? "bg-white/6 text-white/20" : "bg-gray-100 text-gray-300"
               } disabled:opacity-50`}>
-              {loading ? "Executing…" : !side ? "Select a side" : side && amt > 0 && fillPreview.length === 0 && !bookLoading ? `Place order ${side === "long" ? "▲ Long" : "▼ Short"} $${amt}` : `Sweep ${side === "long" ? "▲ Long" : "▼ Short"} $${amt > 0 ? amt : "—"}`}
+              {loading ? "Executing…" : !side ? "Select a side" : side && amt > 0 && fillPreview.length === 0 && !bookLoading ? `Place order ${side === "long" ? "▲ Long" : "▼ Short"} ${$(amt)}` : `Sweep ${side === "long" ? "▲ Long" : "▼ Short"} ${amt > 0 ? $(amt) : "—"}`}
             </button>
 
             {/* Order book — collapsible */}
@@ -819,7 +826,7 @@ function MarketCard({ market, dk, onClick, onTrade, onBet, shaking, isP2PView, p
                   </div>
                   <div className="flex gap-1.5">
                     <div className="relative flex-1">
-                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
+                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>{_gen ? "GEN" : "$"}</span>
                       <input autoFocus type="number" placeholder="custom" value={p2pCustom}
                         onChange={e => setP2pCustom(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && handleP2pCustom()}
@@ -1102,7 +1109,8 @@ function MarketsTape({ dk, onSelectToken, onViewProfile, paperMode }: { dk: bool
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken, loggedIn, onAuthRequired, defaultFilter, hideFilterBar }: Props) {
+export default function MarketsView({ dk, liveMarkets = [], paperMode = false, presets = [10, 25, 50, 100], onSelectToken, onViewProfile, onBet, shakingIds, calls = [], debates = [], onFadeCall, onFadeDebate, onViewToken, loggedIn, onAuthRequired, defaultFilter, hideFilterBar, isTestnet = false }: Props) {
+  _gen = isTestnet;
   const [selectedFilter, setSelectedFilter] = useState<MarketFilter>(defaultFilter ?? "all");
   const [tradeMarket, setTradeMarket]     = useState<Market | null>(null);
 

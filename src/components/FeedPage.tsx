@@ -1122,6 +1122,7 @@ export default function FeedPage() {
             <div className="flex-1 overflow-hidden flex flex-col">
             <MarketsView
               dk={dk}
+              isTestnet={isTestnet}
               liveMarkets={markets
                 .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
                 .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
@@ -1171,6 +1172,7 @@ export default function FeedPage() {
             <div className="flex-1 overflow-hidden flex flex-col">
             <MarketsView
               dk={dk}
+              isTestnet={isTestnet}
               liveMarkets={markets
                 .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
                 .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())

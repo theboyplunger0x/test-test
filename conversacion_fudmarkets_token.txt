@@ -1,0 +1,251 @@
+Usuario: Token de aca a 1 mes? Armarlo como una dividend company?
+ya con app funcionando a pleno
+
+Por ahi armar un contrato que me permita vender del 100% 20% o algo asi
+entonces seria como financiar o conseguir inversores pero directamente del contrato. Como podria ser?
+
+tiene sentido? pero que no sea pre-sale habra alguna forma de hacerlo?
+
+Asistente: Sí, tiene sentido, pero no lo llamaría “token tipo dividend company” si querés hacerlo prolijo.
+
+En la práctica, un token que da derecho a dividendos, utilidades o retorno económico por la app se parece mucho más a un security token / valor negociable que a un utility token.
+
+La idea central sería esta:
+No vender un “token futuro”.
+Vender hoy un derecho contractual o societario real sobre el negocio que después, si querés, puede representarse on-chain.
+
+Lo más ordenado sería elegir entre 3 caminos:
+1) Equity o SAFE, sin token al inicio.
+2) Contrato de participación económica.
+3) Security token desde el día 1.
+
+Mi opinión: si querés velocidad y que no huela a presale, levantar con SAFE o revenue-share privado ahora y dejar el token fuera del instrumento de inversión.
+
+Usuario: estoy hablando de un token crypto para mi app fudmarkets, hablamos algo ya
+
+Asistente: Sí, entendido: un token crypto para FudMarkets, no equity tradicional.
+
+Si el token da dividendos, revenue share o derecho económico sobre la app, se acerca mucho a un valor negociable / security más que a un utility token.
+
+Los dos caminos:
+A) Token utility de verdad: fees, descuentos, staking, rewards, acceso, gobernanza limitada.
+B) Token con derecho económico: X% de ganancias, fees o recompras con ingresos. Eso se parece más a un security token.
+
+La opción más sana:
+- ronda privada por contrato + token utility cuando la app ya lo pueda usar,
+en vez de un token que reparta dividendos.
+
+Usuario: Uy, ya hace un montón lo de buybacks. A mí me interesa un montón eso. O sea, yo pensaba decir, tipo, bueno, o sea, poned que hay un 100% de tokens, yo tengo un 50% de tokens. Y si vos tenés un 1% de tokens, te va a llegar un 1% de la revenue mensual. ¿se entiende? No había pensado eso. Pero vos decís que hay un marco regulatorio medio complicado ahí. Mira, no sabía. Eso es una cagada bastante seria, porque me gustaba la idea, como hacer algo un poquitito más interesante. Después están los buybacks, que es algo que se hace y no creo que tenga tanta regulación, porque lo hacen todos, ¿no?
+
+Asistente: Sí, te entiendo perfecto.
+
+Lo de “si vos tenés 1% de los tokens, te llega 1% de la revenue mensual” es mucho más sensible regulatoriamente que un utility token común, porque se parece a un instrumento de inversión.
+
+Orden de riesgo:
+- Más riesgoso: revenue share directo.
+- Intermedio: buybacks con fees, sobre todo si se vende como tesis de inversión.
+- Menos riesgoso: token con utilidad real desde el día 1.
+
+Mi recomendación:
+1. No prometer pro-rata de revenue mensual al holder.
+2. Si querés capturar upside del negocio en el token, hacerlo vía utilidad real + buybacks discrecionales.
+3. Si querés dar revenue de verdad a inversores, ponerlo en un contrato privado separado, no en el token público.
+
+Usuario: Y ponerle, lo podrías en otro país sin que me hinchen las pelotas, lo del security token.
+
+Asistente: Sí, podés estructurarlo desde otro país, pero no existe el “país donde nadie te jode” si el token en sustancia es un security token.
+
+La clave no es sólo dónde lo armás, sino qué hace el token y a quién se lo ofrecés.
+
+Jurisdicciones serias para estructurarlo:
+- Suiza
+- Liechtenstein
+- ADGM
+
+Pero no sirven para “esquivar” regulación; sirven para hacerlo mejor estructurado.
+
+Mi recomendación:
+- token utility + buybacks discrecionales, o
+- security token privado y bien armado, o
+- contrato privado off-chain para inversores + token utility separado.
+
+Usuario: Aunque euguira para saber más que nada.
+
+Asistente: Si quisiste decir “elegiría”, yo elegiría Suiza.
+No porque sea “sin regulación”, sino porque parece la opción más seria y previsible para algo tipo security token bien armado.
+
+Ranking:
+1. Suiza
+2. Liechtenstein
+3. ADGM
+
+Usuario: Mira, o sea, en un principio, te cuento, quiero que me respondas de forma concisa, porque habla demasiado últimamente. Así que te quería comentar que en un principio mi idea no era hacer token. No me parece, o sea, no creo que ninguna app ni proyecto necesite token legítimamente, ¿viste? Pero me di cuenta y me doy cuenta que es una estrategia de marketing enorme. O sea, la cantidad de atención que trae hacia el proyecto lanzar un token es zarpada, ¿viste?
+
+Asistente: Sí, totalmente.
+
+En muchísimos casos, el token no es necesario como producto; funciona más como:
+- marketing
+- distribución
+- comunidad
+- incentivos
+- liquidez narrativa
+
+Para tu caso:
+si lanzás token, que sea por growth, no por dividendos.
+
+Usuario: OK, pero ¿cuál sería la utilidad? Por lo menos la de las utilidades de las que hablamos me parecen una verga, con todo respeto. Y Buyback me parece lógico, me interesa, pero cualquier utilidad por fuera de eso sería puro humo, pura pantalla, no digo que no. Vamos, no sé, nos puede ocurrir algo que sea interesante igual.
+
+Asistente: Sí: si no hay una utilidad real, no la inventes.
+
+Las únicas utilidades que no me parecen tan humo son:
+1. Fee token: menos comisión si usás/stakeás el token.
+2. Access token: features/tier premium con staking/holding.
+3. Liquidity / market-making incentives.
+4. Buyback + burn / treasury buyback.
+
+Mi opinión:
+si vas a lanzar token, hacelo minimalista.
+La versión menos humo:
+- fee discounts
+- pro features
+- buybacks
+
+Usuario: Pero nunca lo vendería así como comprar que va a subir, sino te pones un feature común de es un feature más del token, del proyecto.
+
+Asistente: Sí, eso ayuda, pero no te salva por sí solo.
+
+Cambiar el discurso ayuda, pero la sustancia manda.
+Si en la práctica el token diera derecho a cobrar revenue, igual se parecería a un instrumento de inversión.
+
+Versión más sana:
+- fee reduction
+- acceso
+- staking para perks
+- buybacks discrecionales
+
+Usuario: No, no, ya los revenue los sacamos, o sea, solamente van a ver tipo un porcentaje de fees que van a ir a buybacks.
+
+Asistente: Sí, eso ya está bastante mejor.
+
+Si sacaron revenue share directo y dejaron sólo:
+- token con alguna utilidad mínima real
+- y un % de fees destinado a buybacks
+
+entonces quedan mucho menos expuestos que con revenue share directo.
+
+Importante:
+- que no haya derecho exigible del holder a cobrar caja
+- que el buyback sea política de tesorería/protocolo, no dividendo
+- y que el token tenga una función real mínima
+
+Usuario: A eso le sumaría que o sea, tengo un cashback en la app armado, que el cashback sea en fud markets, eh, que eso puede estar bueno. Después... Sí, no sé, me gusta el de staking para tipo menos fees, por eso interesante, pero medio choto, no debería ser más loco. Descuento en fees me gustan, buybacks me parecen zarpados y el cashback por ahí que sea tipo en fud.
+
+Asistente: Sí, ahí ya tenés una base bastante lógica:
+- % de fees → buybacks
+- cashback en token
+- staking → menos fees
+
+Y algunas ideas no-humo:
+1. Fee tiers más agresivos.
+2. Cashback boosted.
+3. Access real.
+4. Status / leaderboard utility.
+5. Launch / campaign participation.
+
+Pero mi lectura honesta:
+buybacks + cashback en token + staking para perks/fees ya es suficiente.
+
+Usuario: Y siquiera, y si quisiera sacar un token que tenga por lo menos buybacks, ¿es necesario tipo que esté embedded in the contract o tipo puedo sacar un token común y después armarlo, ¿se entiende? O sea, a mí no me molestaría que tenga, necesitaría que investigar cuáles son las tokenomics de Banker, por ejemplo, si es que Bnker, o sea, si tienen impuestos, por ejemplo. Los impuestos también están buenos.
+
+Asistente: Sí: no hace falta que el buyback esté “embedded” en el contrato.
+
+Hay dos formas:
+1. Política off-chain / treasury policy.
+2. On-chain / contract-enforced.
+
+Para arrancar:
+token normal + política de buybacks al principio.
+Después, si funciona, la automatizás.
+
+Sobre impuestos/taxes:
+si querés buy/sell tax, eso sí suele ir hardcoded desde el deploy.
+Pero para algo serio, no arrancaría con taxes.
+
+Lo más sano para FudMarkets:
+- token común
+- fees de la app financian buybacks
+- cashback en token
+- staking para bajar fees / subir cashback
+
+Usuario: Las tokenomics de $BNKR (BankrCoin / Bankr) son bastante simples y revenue-driven. Es el token nativo de Bankr, un AI agent/bot para tradear crypto en Base (y ahora también Solana). Acá te resumo lo principal y actualizado:
+Supply: Máximo y total de 100.000.000.000 BNKR (100 mil millones). Casi todo está en circulación (fair launch).
+Launch: Fair launch puro. Sin presale, sin VC allocation, sin team tokens reservados.
+Impuestos en el token: 0%.
+Mecanismo de valor: fees del producto + buybacks. Parte de la revenue de Bankr se usa para recomprar BNKR en mercado abierto.
+También hay revenue sharing para holders vía staking.
+Utility:
+- pagar suscripción premium
+- staking para recibir share de revenue
+- gobernanza/utilidad
+
+Ahora tu segunda pregunta: si querés sacar un token con buybacks, ¿tiene que estar embedded en el contrato o podés lanzar uno común y armarlo después?
+Te explico clarito y práctico:
+Buybacks solos: NO hace falta embedearlos.
+Si querés taxes: SÍ, tiene que estar embedded desde el principio.
+
+Asistente: Sí, esa lectura de BNKR va por donde veníamos hablando:
+- supply fijo
+- sin presale / sin team allocation
+- 0% tax
+- valor más por fees del producto + buybacks que por taxes
+
+Conclusión para vos:
+No necesitás meter buybacks en el contrato.
+Podés hacer token normal y usar parte de los fees de FudMarkets para recomprar en mercado.
+
+Mi recomendación:
+copiaría el modelo “revenue outside the token, buybacks in market”, no el modelo tax token.
+
+Usuario: Claro, pero nosotros no tenemos tipo un protocolo o tipo, esto sería un launcher o un launchpad, es bunker. y la nuestra es como más un proyecto, ¿no? Entonces, ahí difiere bastante.
+
+Asistente: Sí, difiere bastante.
+
+BNKR puede bancar buybacks porque el producto mismo imprime fees transaccionales de forma natural.
+Si FudMarkets es más una app/proyecto, el token queda más débil si su única narrativa es “algún día recompramos” pero no hay un flujo claro.
+
+Entonces:
+- Sí podés hacer buybacks igual, pero tienen que venir de una fuente muy clara.
+- En tu caso el token no debería nacer “por buybacks”.
+- Debería nacer por marketing, comunidad y perks reales en la app.
+- Y después sumarle buybacks cuando el negocio ya tenga caja visible.
+
+Usuario: Sí, pero ¿sabes qué pensaba? O sea, primero dos cosas. O sea, como las tokenomics van a ser FIDELAP, eso seguro. y pensaba tipo para un staking, para tipo desbloquear un un tier, como el tier máximo es un tier oculto que no se ve que se desbloquea con staking o algo así. Más que eso no me parecía, viste? Revenue afiliados, pero revenue afiliados es FIDELAP igual, ¿no? Pero me parece una buena idea. pero el revenue afiliados viene de ya viene tipo del volumen del trading que hagan tipo sus referidos. O sea, es lo mismo, ¿no? que básicamente que es FIDELAP, porque no es que salen de otro lado más que de las apuestas que hagan dentro de la app, ¿no? Entonces tenemos cashback, staking para acceso premium y buybacks, que es lo más importante. Y otra cosa que pensaba, ya que estamos por partes, porque no me gustan los hype launches, ¿viste? Pensaba de última sacar el token ahora y que sea tipo un un stealth launch, ¿viste? Engilito para que también se pueda comprar su play. Pero sí la app no está lista. No creo que le falte mucho, pero no está lista ya.
+
+Asistente: Sí, te sigo.
+
+La base cierra:
+- cashback
+- staking para destrabar tier premium/oculto
+- buybacks
+- afiliados como parte del mismo flywheel de actividad
+
+Pero no lanzaría el token antes de que la app esté usable de verdad.
+Aunque sea stealth launch, mejor que el token nazca con algo para hacer.
+
+Mi recomendación:
+Lanzar cuando existan al menos:
+1. cashback funcionando
+2. staking que desbloquea el tier oculto
+3. regla clara de buybacks, aunque sea manual
+
+Usuario: si dijiste fidelap nose de donde. fud seria el token
+
+Asistente: Sí, mala mía: $FUD, no FIDELAP.
+
+Entonces quedaría:
+- cashback en $FUD
+- staking de $FUD para desbloquear el tier oculto/premium
+- buybacks de $FUD con parte de los fees
+
+Y mantengo lo importante:
+no lanzaría $FUD antes de que la app tenga al menos esa utilidad mínima andando.
