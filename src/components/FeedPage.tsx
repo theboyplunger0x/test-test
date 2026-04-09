@@ -225,6 +225,7 @@ export default function FeedPage() {
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
   const [paperCreditLoading, setPaperCreditLoading] = useState(false);
   const [settingsOpen, setSettingsOpen]             = useState(false);
+  const [accountView, setAccountView]               = useState<"main" | "wallet">("main");
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
   const [chartModalInfo, setChartModalInfo]         = useState<TokenInfo | null>(null);
@@ -1642,20 +1643,25 @@ export default function FeedPage() {
         {referralOpen && <ReferralModal dk={dk} isLoggedIn={!!user} onClose={() => setReferralOpen(false)} onSignIn={() => setAuthOpen(true)} />}
       </AnimatePresence>
 
-      {/* Settings drawer */}
+      {/* Account drawer (with drill-down to Wallet) */}
       <AnimatePresence>
         {settingsOpen && (
           <>
             <motion.div key="settings-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSettingsOpen(false)} className="fixed inset-0 bg-black/60 z-40" />
+              onClick={() => { setSettingsOpen(false); setAccountView("main"); }} className="fixed inset-0 bg-black/60 z-40" />
             <motion.div key="settings-drawer" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className={`fixed right-0 top-0 h-full w-full md:w-[320px] border-l z-50 flex flex-col ${T.drawerBg}`}>
+              className={`fixed right-0 top-0 h-full w-full md:w-[320px] border-l z-50 flex flex-col overflow-hidden ${T.drawerBg}`}>
 
-              {/* Header — avatar + username */}
+              {/* Header — adapts to current view */}
               <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
                 <div className="flex items-center gap-3">
-                  {user ? (
+                  {accountView === "wallet" ? (
+                    <>
+                      <button onClick={() => setAccountView("main")} className={`text-[18px] font-bold transition-colors ${dk ? "text-white/60 hover:text-white" : "text-gray-500 hover:text-gray-900"}`}>←</button>
+                      <p className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>Wallet</p>
+                    </>
+                  ) : user ? (
                     <>
                       {user.avatar_url ? (
                         <img src={user.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
@@ -1675,99 +1681,135 @@ export default function FeedPage() {
                     <p className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>Account</p>
                   )}
                 </div>
-                <button onClick={() => setSettingsOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
+                <button onClick={() => { setSettingsOpen(false); setAccountView("main"); }} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              {/* Drill-down content area */}
+              <div className="flex-1 overflow-hidden relative">
+                <AnimatePresence initial={false} mode="wait">
+                  {accountView === "main" ? (
+                    <motion.div key="account-main"
+                      initial={{ x: "-30%", opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: "-30%", opacity: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className="absolute inset-0 overflow-y-auto">
 
-                {/* Main menu items */}
-                <div className={`border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
+                      <div className={`border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
 
-                  {/* Section: Earn */}
-                  <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Earn</p>
+                        {/* Section: Earn */}
+                        <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Earn</p>
+                        <button onClick={() => { setReferralOpen(true); setSettingsOpen(false); setAccountView("main"); }}
+                          className={`w-full flex items-center gap-3.5 px-5 py-3 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
+                          <span className="text-[20px] w-7 text-center">🎁</span>
+                          <span className={`text-[14px] font-bold flex-1 text-left ${dk ? "text-white" : "text-gray-900"}`}>Referrals & Cashback</span>
+                          <span className={`text-[14px] ${dk ? "text-white/30" : "text-gray-400"}`}>›</span>
+                        </button>
 
-                  {/* Referrals */}
-                  <button onClick={() => { setReferralOpen(true); setSettingsOpen(false); }}
-                    className={`w-full flex items-center gap-3.5 px-5 py-3 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
-                    <span className="text-[20px] w-7 text-center">🎁</span>
-                    <span className={`text-[14px] font-bold flex-1 text-left ${dk ? "text-white" : "text-gray-900"}`}>Referrals & Cashback</span>
-                  </button>
-
-                  {/* Section: Preferences */}
-                  <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Preferences</p>
-
-                  {/* Notifications */}
-                  <div className={`flex items-center gap-3.5 px-5 py-3`}>
-                    <span className="text-[20px] w-7 text-center">🔔</span>
-                    <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Position alerts</span>
-                    <button
-                      onClick={toggleNotifications}
-                      className={`relative w-11 h-6 rounded-full transition-all duration-200 shrink-0 ${notificationsEnabled ? "bg-emerald-500" : (dk ? "bg-white/10" : "bg-gray-200")}`}>
-                      <motion.span
-                        animate={{ x: notificationsEnabled ? 20 : 2 }}
-                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block" />
-                    </button>
-                  </div>
-                  {typeof window !== "undefined" && Notification.permission === "denied" && (
-                    <p className="text-[11px] font-bold px-5 pb-2 text-amber-400">Notifications blocked — enable in browser settings.</p>
-                  )}
-
-                  {/* Dark mode */}
-                  <div className={`flex items-center gap-3.5 px-5 py-3`}>
-                    <span className="text-[20px] w-7 text-center">🌙</span>
-                    <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Dark mode</span>
-                    <button
-                      onClick={() => setTheme(dk ? "light" : "dark")}
-                      className={`relative w-11 h-6 rounded-full transition-all duration-200 shrink-0 ${dk ? "bg-emerald-500" : "bg-gray-200"}`}>
-                      <motion.span
-                        animate={{ x: dk ? 20 : 2 }}
-                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block" />
-                    </button>
-                  </div>
-
-                  {/* Trading Mode moved to header */}
-
-                  {/* Section header: Wallet */}
-                  {(isTestnet || isReal || walletAddr) && user && (
-                    <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Wallet</p>
-                  )}
-
-                  {/* Wallet section — only when real/testnet or wallet connected */}
-                  {(isTestnet || isReal || walletAddr) && user && (
-                    <div className={`px-5 py-3`}>
-                      <div className="space-y-2">
-                        {walletAddr ? (
+                        {/* Section: Wallet */}
+                        {user && (
                           <>
-                            {/* Address display + copy */}
-                            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg ${dk ? "bg-white/5" : "bg-gray-100"}`}>
-                              <span className={`text-[11px] font-mono flex-1 ${dk ? "text-white/70" : "text-gray-700"}`}>
-                                {walletAddr.slice(0, 10)}...{walletAddr.slice(-8)}
+                            <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Wallet</p>
+                            <button onClick={() => setAccountView("wallet")}
+                              className={`w-full flex items-center gap-3.5 px-5 py-3 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
+                              <span className="text-[20px] w-7 text-center">🔐</span>
+                              <span className={`text-[14px] font-bold flex-1 text-left ${dk ? "text-white" : "text-gray-900"}`}>
+                                {walletAddr ? `${walletAddr.slice(0, 6)}...${walletAddr.slice(-4)}` : "Not connected"}
+                              </span>
+                              <span className={`text-[14px] ${dk ? "text-white/30" : "text-gray-400"}`}>›</span>
+                            </button>
+                          </>
+                        )}
+
+                        {/* Section: Preferences */}
+                        <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Preferences</p>
+                        <div className={`flex items-center gap-3.5 px-5 py-3`}>
+                          <span className="text-[20px] w-7 text-center">🔔</span>
+                          <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Position alerts</span>
+                          <button
+                            onClick={toggleNotifications}
+                            className={`relative w-11 h-6 rounded-full transition-all duration-200 shrink-0 ${notificationsEnabled ? "bg-emerald-500" : (dk ? "bg-white/10" : "bg-gray-200")}`}>
+                            <motion.span
+                              animate={{ x: notificationsEnabled ? 20 : 2 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                              className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block" />
+                          </button>
+                        </div>
+                        {typeof window !== "undefined" && Notification.permission === "denied" && (
+                          <p className="text-[11px] font-bold px-5 pb-2 text-amber-400">Notifications blocked — enable in browser settings.</p>
+                        )}
+
+                        <div className={`flex items-center gap-3.5 px-5 py-3 pb-4`}>
+                          <span className="text-[20px] w-7 text-center">🌙</span>
+                          <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Dark mode</span>
+                          <button
+                            onClick={() => setTheme(dk ? "light" : "dark")}
+                            className={`relative w-11 h-6 rounded-full transition-all duration-200 shrink-0 ${dk ? "bg-emerald-500" : "bg-gray-200"}`}>
+                            <motion.span
+                              animate={{ x: dk ? 20 : 2 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                              className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow block" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Sign out */}
+                      {user && (
+                        <button
+                          onClick={() => { handleLogout(); setSettingsOpen(false); setAccountView("main"); }}
+                          className={`w-full flex items-center gap-3.5 px-5 py-4 transition-all ${dk ? "hover:bg-red-500/8" : "hover:bg-red-50"}`}>
+                          <span className="text-[20px] w-7 text-center">↩</span>
+                          <span className="text-[14px] font-bold text-red-500">Sign out</span>
+                        </button>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div key="account-wallet"
+                      initial={{ x: "30%", opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: "30%", opacity: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className="absolute inset-0 overflow-y-auto px-5 py-4 space-y-4">
+
+                      {walletAddr ? (
+                        <>
+                          {/* Address display + copy */}
+                          <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Address</p>
+                            <div className={`flex items-center gap-2 px-3 py-3 rounded-lg ${dk ? "bg-white/5" : "bg-gray-100"}`}>
+                              <span className={`text-[11px] font-mono flex-1 break-all ${dk ? "text-white/70" : "text-gray-700"}`}>
+                                {walletAddr}
                               </span>
                               <button onClick={() => { navigator.clipboard.writeText(walletAddr); }}
-                                className={`text-[10px] font-black px-2 py-1 rounded ${dk ? "bg-white/10 text-white/60 hover:bg-white/20" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                                className={`text-[10px] font-black px-2.5 py-1.5 rounded shrink-0 ${dk ? "bg-white/10 text-white/60 hover:bg-white/20" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
                                 COPY
                               </button>
                             </div>
+                          </div>
 
-                            {/* Privy wallet actions */}
-                            {privyAuthenticated && (
+                          {/* Funds */}
+                          {privyAuthenticated && (
+                            <div>
+                              <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Funds</p>
                               <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => privyFundWallet({ address: walletAddr }).catch(() => {})}
-                                  className="px-3 py-2 rounded-lg text-[11px] font-black bg-purple-500 hover:bg-purple-400 text-white transition-all">
-                                  + Fund
+                                  className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-emerald-500 hover:bg-emerald-400 text-white transition-all">
+                                  + Add funds
                                 </button>
                                 <button onClick={() => privyExportWallet().catch(() => {})}
-                                  className={`px-3 py-2 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
-                                  Export
+                                  className={`px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
+                                  Export key
                                 </button>
                               </div>
-                            )}
+                            </div>
+                          )}
 
+                          {/* Manage */}
+                          <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Manage</p>
                             <div className="grid grid-cols-2 gap-2">
                               <button onClick={() => { privyLinkWallet(); }}
-                                className={`px-3 py-2 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
+                                className={`px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
                                 Link another
                               </button>
                               <button onClick={async () => {
@@ -1775,12 +1817,17 @@ export default function FeedPage() {
                                 setGenBalance(0);
                                 try { await window.ethereum?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] }); } catch {}
                               }}
-                                className="px-3 py-2 rounded-lg text-[11px] font-black bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-all">
+                                className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-all">
                                 Disconnect
                               </button>
                             </div>
-                          </>
-                        ) : (
+                          </div>
+                        </>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className={`text-[12px] ${dk ? "text-white/50" : "text-gray-500"}`}>
+                            No wallet connected. Connect MetaMask or login with Privy to create an embedded wallet automatically.
+                          </p>
                           <button onClick={async () => {
                             try {
                               const addr = await connectWallet();
@@ -1789,27 +1836,14 @@ export default function FeedPage() {
                               api.linkWallet(addr).catch(() => {});
                             } catch {}
                           }}
-                            className="w-full px-3 py-2.5 rounded-lg text-[11px] font-black bg-purple-500 hover:bg-purple-400 text-white transition-all">
+                            className="w-full px-3 py-2.5 rounded-lg text-[12px] font-black bg-purple-500 hover:bg-purple-400 text-white transition-all">
                             Connect Wallet
                           </button>
-                        )}
-                      </div>
-                    </div>
+                        </div>
+                      )}
+                    </motion.div>
                   )}
-
-                  {/* Quick bet amounts moved to trade modal */}
-                </div>
-
-                {/* Sign out */}
-                {user && (
-                  <button
-                    onClick={() => { handleLogout(); setSettingsOpen(false); }}
-                    className={`w-full flex items-center gap-3.5 px-5 py-4 transition-all ${dk ? "hover:bg-red-500/8" : "hover:bg-red-50"}`}>
-                    <span className="text-[20px] w-7 text-center">↩</span>
-                    <span className="text-[14px] font-bold text-red-500">Sign out</span>
-                  </button>
-                )}
-
+                </AnimatePresence>
               </div>
             </motion.div>
           </>
