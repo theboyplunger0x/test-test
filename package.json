@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@privy-io/react-auth": "^3.19.1",
     "framer-motion": "^12.35.0",
     "genlayer-js": "^0.28.4",
     "lightweight-charts": "^5.1.0",

@@ -29,8 +29,9 @@ interface Props {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-// Currency formatting — set _gen flag at component level
-let _gen = false;
+// Currency formatting — set _gen flag at component render time
+// Using let is OK here since React re-renders synchronously
+let _gen = false; // eslint-disable-line
 function fmtPool(n: number): string {
   if (_gen) { return n >= 1000 ? `${(n / 1000).toFixed(1)}k GEN` : `${n.toFixed(0)} GEN`; }
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;

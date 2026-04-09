@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, AuthResponse } from "@/lib/api";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 
 type Tab  = "login" | "register";
 type View = "auth" | "forgot" | "forgot-sent";
@@ -90,6 +91,60 @@ export default function AuthModal({
   function handleGoogleLogin() {
     window.location.href = `${BASE}/auth/google`;
   }
+
+  // Privy integration
+  const { login: privyLogin, logout: privyLogout, authenticated: privyAuthenticated, user: privyUser, ready: privyReady } = usePrivy();
+  const { wallets: privyWallets } = useWallets();
+
+  useEffect(() => {
+    if (!privyReady || !privyAuthenticated || !privyUser) return;
+    // When Privy authenticates, create/login on our backend
+    (async () => {
+      try {
+        // Find best wallet: external first, then embedded, then primary
+        const externalWallet = privyWallets.find(w => w.walletClientType !== "privy");
+        const embeddedWallet = privyWallets.find(w => w.walletClientType === "privy");
+        const wallet = (externalWallet ?? embeddedWallet)?.address ?? privyUser.wallet?.address;
+        const email = privyUser.email?.address;
+        // Use privy ID as unique username to avoid collisions
+        const privyId = privyUser.id.replace("did:privy:", "");
+        const username = wallet
+          ? `${wallet.slice(2, 8).toLowerCase()}`
+          : `p_${privyId.slice(0, 8)}`;
+        const password = `privy_${privyId}`;
+
+        // Try login first (returning user), then register (new user)
+        let result: AuthResponse;
+        try {
+          result = await api.login(username, password);
+        } catch {
+          try {
+            result = await api.register(username, password, email);
+          } catch {
+            // Username taken by someone else — use longer unique name
+            const fallback = `p_${privyId.slice(0, 12)}`;
+            try {
+              result = await api.login(fallback, password);
+            } catch {
+              result = await api.register(fallback, password, email);
+            }
+          }
+        }
+
+        // Link wallet if available
+        if (wallet) {
+          api.linkWallet(wallet).catch(() => {});
+        }
+
+        localStorage.setItem("token", result.token);
+        onSuccess(result);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Privy login failed");
+        // Clear Privy session so user can retry
+        privyLogout().catch(() => {});
+      }
+    })();
+  }, [privyReady, privyAuthenticated, privyUser, privyWallets]);
 
   function switchTab(t: Tab) {
     setTab(t);
@@ -210,6 +265,12 @@ export default function AuthModal({
                   <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
                 </svg>
                 Continue with Google
+              </button>
+
+              {/* Privy button — wallet + email + social */}
+              <button onClick={() => privyLogin()} className={`w-full mt-2 py-3 rounded-xl text-[13px] font-black flex items-center justify-center gap-2 transition-all ${dk ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-purple-500 hover:bg-purple-400 text-white"}`}>
+                <span>🔐</span>
+                Login with Wallet
               </button>
 
               {/* Divider */}

@@ -25,6 +25,7 @@ import CallCard, { type Call } from "./CallCard";
 import DebateCard, { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import { connectWallet, getConnectedWallet, getGENBalance, onAccountsChanged } from "@/lib/wallet";
+import { usePrivy, useWallets, useFundWallet } from "@privy-io/react-auth";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -124,6 +125,9 @@ function tierBadge(tier?: string, telegramUsername?: string) {
 }
 
 export default function FeedPage() {
+  const { logout: privyLogout, authenticated: privyAuthenticated, user: privyUser, exportWallet: privyExportWallet, linkWallet: privyLinkWallet } = usePrivy();
+  const { wallets: privyWallets } = useWallets();
+  const { fundWallet: privyFundWallet } = useFundWallet();
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
   const prevLastBetAt                   = useRef<Record<string, number>>({});
@@ -199,6 +203,21 @@ export default function FeedPage() {
     const iv = setInterval(() => getGENBalance(walletAddr).then(setGenBalance), 15000);
     return () => clearInterval(iv);
   }, [isTestnet, walletAddr]);
+
+  // Privy wallet — sync with walletAddr when user is logged in via Privy
+  useEffect(() => {
+    if (!privyAuthenticated || !privyUser) return;
+    // Prefer external wallet, fallback to embedded
+    const external = privyWallets.find(w => w.walletClientType !== "privy");
+    const embedded = privyWallets.find(w => w.walletClientType === "privy");
+    const primary = external ?? embedded;
+    if (primary?.address) {
+      setWalletAddr(primary.address);
+      getGENBalance(primary.address).then(setGenBalance);
+      // Link to backend (idempotent)
+      api.linkWallet(primary.address).catch(() => {});
+    }
+  }, [privyAuthenticated, privyUser, privyWallets]);
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
   const [paperCreditOpen, setPaperCreditOpen] = useState(false);
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
@@ -430,6 +449,9 @@ export default function FeedPage() {
   function handleLogout() {
     localStorage.removeItem("token");
     setUser(null);
+    setWalletAddr(null);
+    setGenBalance(0);
+    privyLogout().catch(() => {});
   }
 
   function handleDeposited(newBalance: string) {
@@ -813,37 +835,25 @@ export default function FeedPage() {
                 </div>
               )}
 
-              {/* Connect Wallet / Credits / Deposit button */}
+              {/* Action button: testnet Fund, paper Credits, real Deposit */}
               <motion.button whileTap={{ scale: 0.96 }}
-                onClick={async () => {
+                onClick={() => {
                   if (isTestnet) {
                     if (walletAddr) {
-                      // Disconnect — clear state, revoke MetaMask permission
-                      setWalletAddr(null);
-                      setGenBalance(0);
-                      try { await window.ethereum?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] }); } catch {}
-                      return;
-                    }
-                    try {
-                      const addr = await connectWallet();
-                      setWalletAddr(addr);
-                      getGENBalance(addr).then(setGenBalance);
-                      if (user) api.linkWallet(addr).catch(() => {});
-                    } catch (err: unknown) {
-                      console.error("Wallet connect failed:", err);
+                      privyFundWallet({ address: walletAddr }).catch(() => {});
+                    } else {
+                      setAuthOpen(true);
                     }
                   }
                   else if (paperMode) setPaperCreditOpen(true);
                   else setDepositOpen(true);
                 }}
-                className={`group px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${
+                className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${
                   isTestnet
-                    ? walletAddr
-                      ? "bg-purple-500/80 hover:bg-red-500 text-white"
-                      : "bg-purple-500 hover:bg-purple-400 text-white"
+                    ? "bg-purple-500 hover:bg-purple-400 text-white"
                     : "bg-blue-500 hover:bg-blue-400 text-white"
                 }`}>
-                {isTestnet ? (walletAddr ? <><span className="group-hover:hidden">Connected ✓</span><span className="hidden group-hover:inline">Disconnect</span></> : "Connect Wallet") : paperMode ? "+ Credits" : "Deposit"}
+                {isTestnet ? (walletAddr ? "+ Fund" : "Connect") : paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
               {/* Referral */}
@@ -1709,6 +1719,73 @@ export default function FeedPage() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Wallet section — only when testnet or logged in with wallet */}
+                  {(isTestnet || walletAddr) && user && (
+                    <div className={`px-5 py-4`}>
+                      <div className="flex items-center gap-3.5 mb-3">
+                        <span className="text-[20px] w-7 text-center">🔐</span>
+                        <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Wallet</span>
+                      </div>
+                      <div className="pl-[2.75rem] space-y-2">
+                        {walletAddr ? (
+                          <>
+                            {/* Address display + copy */}
+                            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg ${dk ? "bg-white/5" : "bg-gray-100"}`}>
+                              <span className={`text-[11px] font-mono flex-1 ${dk ? "text-white/70" : "text-gray-700"}`}>
+                                {walletAddr.slice(0, 10)}...{walletAddr.slice(-8)}
+                              </span>
+                              <button onClick={() => { navigator.clipboard.writeText(walletAddr); }}
+                                className={`text-[10px] font-black px-2 py-1 rounded ${dk ? "bg-white/10 text-white/60 hover:bg-white/20" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                                COPY
+                              </button>
+                            </div>
+
+                            {/* Privy wallet actions */}
+                            {privyAuthenticated && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => privyFundWallet({ address: walletAddr }).catch(() => {})}
+                                  className="px-3 py-2 rounded-lg text-[11px] font-black bg-purple-500 hover:bg-purple-400 text-white transition-all">
+                                  + Fund
+                                </button>
+                                <button onClick={() => privyExportWallet().catch(() => {})}
+                                  className={`px-3 py-2 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
+                                  Export
+                                </button>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => { privyLinkWallet(); }}
+                                className={`px-3 py-2 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
+                                Link another
+                              </button>
+                              <button onClick={async () => {
+                                setWalletAddr(null);
+                                setGenBalance(0);
+                                try { await window.ethereum?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] }); } catch {}
+                              }}
+                                className="px-3 py-2 rounded-lg text-[11px] font-black bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-all">
+                                Disconnect
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <button onClick={async () => {
+                            try {
+                              const addr = await connectWallet();
+                              setWalletAddr(addr);
+                              getGENBalance(addr).then(setGenBalance);
+                              api.linkWallet(addr).catch(() => {});
+                            } catch {}
+                          }}
+                            className="w-full px-3 py-2.5 rounded-lg text-[11px] font-black bg-purple-500 hover:bg-purple-400 text-white transition-all">
+                            Connect Wallet
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Quick Bet Amounts */}
                   <div className={`px-5 py-4`}>
