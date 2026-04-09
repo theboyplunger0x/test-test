@@ -30,6 +30,7 @@ import { useAppTheme } from "@/hooks/useAppTheme";
 import BottomNav from "@/shell/BottomNav";
 import TradingModeToggle from "@/shell/TradingModeToggle";
 import BalanceSummary from "@/shell/BalanceSummary";
+import FundingCTA from "@/shell/FundingCTA";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -777,23 +778,13 @@ export default function FeedPage() {
               />
 
               {/* Action button */}
-              <motion.button whileTap={{ scale: 0.96 }}
-                onClick={() => {
-                  if (isTestnet || isReal) {
-                    if (walletAddr) wallet.fund();
-                    else setAuthOpen(true);
-                  }
-                  else if (paperMode) setPaperCreditOpen(true);
-                }}
-                className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${
-                  isTestnet
-                    ? "bg-purple-500 hover:bg-purple-400 text-white"
-                    : isReal
-                    ? "bg-emerald-500 hover:bg-emerald-400 text-white"
-                    : "bg-blue-500 hover:bg-blue-400 text-white"
-                }`}>
-                {isTestnet ? (walletAddr ? "+ Fund" : "Connect") : isReal ? (walletAddr ? "+ Fund" : "Connect") : paperMode ? "+ Credits" : "Deposit"}
-              </motion.button>
+              <FundingCTA
+                tradingMode={tradingMode}
+                walletAddr={walletAddr}
+                onFund={() => wallet.fund()}
+                onConnect={() => setAuthOpen(true)}
+                onPaperCredits={() => setPaperCreditOpen(true)}
+              />
 
               {/* Referral */}
               <motion.button whileTap={{ scale: 0.94 }} onClick={() => setReferralOpen(true)}
