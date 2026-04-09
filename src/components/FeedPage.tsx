@@ -809,6 +809,18 @@ export default function FeedPage() {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
+          {/* Trading mode toggle — visible for everyone, even not logged in */}
+          <div className={`hidden md:flex items-center rounded-lg p-0.5 border text-[10px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
+            <button onClick={() => setTradingMode("paper")}
+              className={`px-2 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+              Paper
+            </button>
+            <button onClick={() => setTradingMode("real")}
+              className={`px-2 py-1 rounded-md transition-all ${isReal ? "bg-emerald-500 text-white" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+              Real
+            </button>
+          </div>
+
           {user ? (
             <>
               {/* Balance / Wallet */}
@@ -962,7 +974,9 @@ export default function FeedPage() {
                   Feed
                 </button>
               )}
-              {/* Other tabs */}
+              {/* Divider between Feed group and other primary tabs */}
+              <span className={`mx-2 h-4 w-px ${dk ? "bg-white/15" : "bg-gray-300"}`} />
+              {/* Other primary tabs */}
               {OTHER_TABS.map(t => (
                 <button key={t.key} onClick={() => setMainTab(t.key)}
                   className={`text-[12px] px-3 py-1.5 rounded-xl transition-all ${mainTab === t.key ? T.filterActive : T.filterInactive}`}>
@@ -1658,7 +1672,7 @@ export default function FeedPage() {
                       </div>
                     </>
                   ) : (
-                    <p className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>Settings</p>
+                    <p className={`text-[15px] font-black ${dk ? "text-white" : "text-gray-900"}`}>Account</p>
                   )}
                 </div>
                 <button onClick={() => setSettingsOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
@@ -1669,22 +1683,21 @@ export default function FeedPage() {
                 {/* Main menu items */}
                 <div className={`border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
 
-                  {/* Leaderboard */}
-                  <button onClick={() => { setMainTab("ranks"); setSettingsOpen(false); }}
-                    className={`w-full flex items-center gap-3.5 px-5 py-4 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
-                    <span className="text-[20px] w-7 text-center">🏆</span>
-                    <span className={`text-[14px] font-bold flex-1 text-left ${dk ? "text-white" : "text-gray-900"}`}>Leaderboard</span>
-                  </button>
+                  {/* Section: Earn */}
+                  <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Earn</p>
 
                   {/* Referrals */}
                   <button onClick={() => { setReferralOpen(true); setSettingsOpen(false); }}
-                    className={`w-full flex items-center gap-3.5 px-5 py-4 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
+                    className={`w-full flex items-center gap-3.5 px-5 py-3 transition-all ${dk ? "hover:bg-white/5" : "hover:bg-gray-50"}`}>
                     <span className="text-[20px] w-7 text-center">🎁</span>
                     <span className={`text-[14px] font-bold flex-1 text-left ${dk ? "text-white" : "text-gray-900"}`}>Referrals & Cashback</span>
                   </button>
 
+                  {/* Section: Preferences */}
+                  <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Preferences</p>
+
                   {/* Notifications */}
-                  <div className={`flex items-center gap-3.5 px-5 py-4`}>
+                  <div className={`flex items-center gap-3.5 px-5 py-3`}>
                     <span className="text-[20px] w-7 text-center">🔔</span>
                     <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Position alerts</span>
                     <button
@@ -1701,7 +1714,7 @@ export default function FeedPage() {
                   )}
 
                   {/* Dark mode */}
-                  <div className={`flex items-center gap-3.5 px-5 py-4`}>
+                  <div className={`flex items-center gap-3.5 px-5 py-3`}>
                     <span className="text-[20px] w-7 text-center">🌙</span>
                     <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Dark mode</span>
                     <button
@@ -1714,30 +1727,17 @@ export default function FeedPage() {
                     </button>
                   </div>
 
-                  {/* Trading Mode — visible even without login */}
-                  <div className={`flex items-center gap-3.5 px-5 py-4`}>
-                    <span className="text-[20px] w-7 text-center">🃏</span>
-                    <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Trading mode</span>
-                    <div className={`flex rounded-lg p-0.5 border text-[11px] font-black shrink-0 ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
-                      <button onClick={() => setTradingMode("paper")}
-                        className={`px-2.5 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-                        Paper
-                      </button>
-                      <button onClick={() => setTradingMode("real")}
-                        className={`px-2.5 py-1 rounded-md transition-all ${isReal ? "bg-emerald-500 text-white" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-                        Real
-                      </button>
-                    </div>
-                  </div>
+                  {/* Trading Mode moved to header */}
 
-                  {/* Wallet section — only when testnet or logged in with wallet */}
-                  {(isTestnet || walletAddr) && user && (
-                    <div className={`px-5 py-4`}>
-                      <div className="flex items-center gap-3.5 mb-3">
-                        <span className="text-[20px] w-7 text-center">🔐</span>
-                        <span className={`text-[14px] font-bold flex-1 ${dk ? "text-white" : "text-gray-900"}`}>Wallet</span>
-                      </div>
-                      <div className="pl-[2.75rem] space-y-2">
+                  {/* Section header: Wallet */}
+                  {(isTestnet || isReal || walletAddr) && user && (
+                    <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Wallet</p>
+                  )}
+
+                  {/* Wallet section — only when real/testnet or wallet connected */}
+                  {(isTestnet || isReal || walletAddr) && user && (
+                    <div className={`px-5 py-3`}>
+                      <div className="space-y-2">
                         {walletAddr ? (
                           <>
                             {/* Address display + copy */}
@@ -1797,31 +1797,7 @@ export default function FeedPage() {
                     </div>
                   )}
 
-                  {/* Quick Bet Amounts */}
-                  <div className={`px-5 py-4`}>
-                    <div className="flex items-center gap-3.5 mb-3">
-                      <span className="text-[20px] w-7 text-center">💰</span>
-                      <span className={`text-[14px] font-bold ${dk ? "text-white" : "text-gray-900"}`}>Quick bet amounts</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2 pl-[2.75rem]">
-                      {tradePresets.map((v, i) => (
-                        <div key={i} className="relative">
-                          <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
-                          <input
-                            type="number"
-                            value={v}
-                            onChange={(e) => {
-                              const n = parseFloat(e.target.value);
-                              if (!isNaN(n) && n > 0) setTradePresets(prev => prev.map((p, j) => j === i ? n : p));
-                            }}
-                            className={`w-full pl-4 pr-1 py-2 rounded-xl text-[11px] font-black text-center border outline-none transition-all ${
-                              dk ? "bg-white/[0.03] border-white/8 text-white focus:border-white/20" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-gray-400"
-                            }`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  {/* Quick bet amounts moved to trade modal */}
                 </div>
 
                 {/* Sign out */}
