@@ -26,6 +26,7 @@ import DebateCard, { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import { connectWallet, getConnectedWallet, getGENBalance, onAccountsChanged } from "@/lib/wallet";
 import { usePrivy, useWallets, useFundWallet } from "@privy-io/react-auth";
+import { useTradingMode } from "@/hooks/useTradingMode";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -166,20 +167,11 @@ export default function FeedPage() {
   const [trendingChain, setTrendingChain] = useState<string | null>(null);
   const [trendingSort, setTrendingSort]   = useState<"mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null>(null);
   const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
-  const [tradingMode, setTradingMode]       = useState<"paper" | "real" | "testnet">(() => {
-    if (typeof window === "undefined") return "paper";
-    const saved = localStorage.getItem("fud_mode");
-    if (saved === "real" || saved === "testnet" || saved === "paper") return saved;
-    return "paper";
-  });
-  const paperMode = tradingMode === "paper";
-  const isTestnet = tradingMode === "testnet";
-  const isReal    = tradingMode === "real";
+  const { tradingMode, setTradingMode, paperMode, isTestnet, isReal } = useTradingMode();
   const setPaperMode = (v: boolean) => setTradingMode(v ? "paper" : "real");
   const [followingList, setFollowingList]   = useState<string[]>([]);
   const [walletAddr, setWalletAddr]         = useState<string | null>(null);
   const [genBalance, setGenBalance]         = useState<number>(0);
-  useEffect(() => { localStorage.setItem("fud_mode", tradingMode); }, [tradingMode]);
 
   // Auto-detect wallet on testnet mode
   useEffect(() => {
