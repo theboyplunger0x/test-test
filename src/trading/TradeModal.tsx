@@ -10,7 +10,7 @@ const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const QUICK_AMOUNTS_TESTNET = [1, 5, 10, 25];
 
-export default function OpenMarketModal({
+export default function TradeModal({
   coin,
   dk,
   onClose,

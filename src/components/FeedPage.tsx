@@ -10,7 +10,7 @@ import OrdersView from "./OrdersView";
 import CoinDetail from "./CoinDetail";
 import AuthModal from "./AuthModal";
 import DepositModal from "./DepositModal";
-import OpenMarketModal from "./OpenMarketModal";
+import TradeModal from "@/trading/TradeModal";
 import SearchModal from "./SearchModal";
 import ReferralModal from "./ReferralModal";
 import LeaderboardView from "./LeaderboardView";
@@ -1510,7 +1510,7 @@ export default function FeedPage() {
       </AnimatePresence>
       <AnimatePresence>
         {openMarketCoin && (
-          <OpenMarketModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet} walletAddress={walletAddr ?? undefined}
+          <TradeModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet} walletAddress={walletAddr ?? undefined}
             onViewToken={() => {
               const c = openMarketCoin;
               setOpenMarketCoin(null);
