@@ -26,6 +26,7 @@ import DebateCard, { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -146,7 +147,7 @@ export default function FeedPage() {
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
   const [chartSymbol, setChartSymbol]   = useState<string | null>(null);
   const [selectedTf, setSelectedTf]     = useState<string>("1h");
-  const [theme, setTheme]               = useState<Theme>("dark");
+  const { theme, setTheme, dk } = useAppTheme();
   const [tapeOpen, setTapeOpen]         = useState(false);
   const [user, setUser]                 = useState<User | null>(null);
   const [authOpen, setAuthOpen]         = useState(false);
@@ -189,7 +190,6 @@ export default function FeedPage() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("notificationsEnabled") === "true";
   });
-  const dk = theme === "dark";
 
   async function toggleNotifications() {
     if (!notificationsEnabled) {
