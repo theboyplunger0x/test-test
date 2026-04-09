@@ -27,12 +27,13 @@ import { api, User, AuthResponse, Market } from "@/lib/api";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAppTheme } from "@/hooks/useAppTheme";
+import BottomNav from "@/shell/BottomNav";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
+import type { MainTab } from "@/lib/navTypes";
 type Filter = "all" | "hot" | "juicy";
 type Theme = "dark" | "light";
-type MainTab = "calls" | "markets" | "feed" | "sweep" | "trending" | "following" | "ranks" | "chart";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 const FEE = 0.05;
@@ -1870,40 +1871,17 @@ export default function FeedPage() {
       </AnimatePresence>
 
       {/* Mobile bottom nav */}
-      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-30 border-t ${dk ? "bg-[#0a0a0a]/95 border-white/8" : "bg-white/95 border-gray-200"} backdrop-blur-lg`}>
-        <div className="flex items-stretch justify-around">
-          {[
-            { key: "markets" as MainTab, label: "Feed",       icon: "🏠" },
-            { key: "trending" as MainTab, label: "Discover",   icon: "🔍" },
-            { key: "following" as MainTab, label: "Following", icon: "👥" },
-            { key: "ranks" as MainTab, label: "Ranks",         icon: "🏆" },
-            { key: "account" as const, label: "Account",       icon: "👤" },
-          ].map((item) => {
-            const isAccount = item.key === "account";
-            const isActive = isAccount ? settingsOpen : (item.key === mainTab || (item.key === "markets" && (mainTab === "calls" || mainTab === "feed" || mainTab === "sweep")));
-            return (
-              <button key={item.label}
-                onClick={() => {
-                  if (isAccount) {
-                    setSettingsOpen(true);
-                  } else {
-                    setSettingsOpen(false);
-                    setMainTab(item.key);
-                    setTokenProfileToken(null);
-                  }
-                }}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-all ${
-                  isActive
-                    ? dk ? "text-white" : "text-gray-900"
-                    : dk ? "text-white/40" : "text-gray-400"
-                }`}>
-                <span className="text-[20px] leading-none">{item.icon}</span>
-                <span className="text-[9px] font-black uppercase tracking-wider">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      <BottomNav
+        dk={dk}
+        mainTab={mainTab}
+        settingsOpen={settingsOpen}
+        onNavigate={(tab) => {
+          setSettingsOpen(false);
+          setMainTab(tab);
+          setTokenProfileToken(null);
+        }}
+        onOpenAccount={() => setSettingsOpen(true)}
+      />
     </div>
   );
 }
