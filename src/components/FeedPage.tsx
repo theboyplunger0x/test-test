@@ -28,6 +28,7 @@ import { useTradingMode } from "@/hooks/useTradingMode";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import BottomNav from "@/shell/BottomNav";
+import TradingModeToggle from "@/shell/TradingModeToggle";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -760,16 +761,7 @@ export default function FeedPage() {
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
           {/* Trading mode toggle — visible for everyone, even not logged in */}
-          <div className={`hidden md:flex items-center rounded-lg p-0.5 border text-[10px] font-black ${dk ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"}`}>
-            <button onClick={() => setTradingMode("paper")}
-              className={`px-2 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-              Paper
-            </button>
-            <button onClick={() => setTradingMode("real")}
-              className={`px-2 py-1 rounded-md transition-all ${isReal ? "bg-emerald-500 text-white" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-              Real
-            </button>
-          </div>
+          <TradingModeToggle dk={dk} tradingMode={tradingMode} onChange={setTradingMode} />
 
           {user ? (
             <>
