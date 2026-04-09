@@ -15,10 +15,15 @@ interface FundingCTAProps {
 }
 
 /**
- * The header's primary action button.
+ * Header's primary action button — Polymarket-style "Deposit" CTA.
  *
- * Polymorphic by design — different jobs depending on trading mode and wallet
- * state. The variants are: + Fund / Connect / + Credits.
+ * Always shows "Deposit" label. The action behind it routes by context:
+ * - Paper mode → opens paper credits modal
+ * - Real/Testnet without wallet → triggers connect flow (Privy auth)
+ * - Real/Testnet with wallet → opens Privy fund flow
+ *
+ * One stable label, one stable color, three contextual destinations.
+ * No more polymorphic labels confusing the user.
  */
 export default function FundingCTA({
   tradingMode,
@@ -31,20 +36,6 @@ export default function FundingCTA({
   const isTestnet = tradingMode === "testnet";
   const isReal    = tradingMode === "real";
 
-  const label = isTestnet
-    ? (walletAddr ? "+ Fund" : "Connect")
-    : isReal
-      ? (walletAddr ? "+ Fund" : "Connect")
-      : paperMode
-        ? "+ Credits"
-        : "Deposit";
-
-  const colorCls = isTestnet
-    ? "bg-purple-500 hover:bg-purple-400 text-white"
-    : isReal
-      ? "bg-emerald-500 hover:bg-emerald-400 text-white"
-      : "bg-blue-500 hover:bg-blue-400 text-white";
-
   return (
     <motion.button whileTap={{ scale: 0.96 }}
       onClick={() => {
@@ -55,8 +46,8 @@ export default function FundingCTA({
           onPaperCredits();
         }
       }}
-      className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${colorCls}`}>
-      {label}
+      className="px-4 py-2 rounded-xl text-[12px] font-black bg-blue-500 hover:bg-blue-400 text-white transition-all">
+      Deposit
     </motion.button>
   );
 }
