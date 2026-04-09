@@ -33,6 +33,7 @@ import BalanceSummary from "@/shell/BalanceSummary";
 import FundingCTA from "@/shell/FundingCTA";
 import HeaderSearch from "@/shell/HeaderSearch";
 import AccountDrawer from "@/account/AccountDrawer";
+import FollowingScreen from "@/screens/FollowingScreen";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -1319,35 +1320,16 @@ export default function FeedPage() {
 
         {/* FOLLOWING TAB */}
         {!tokenProfileToken && mainTab === "following" && (
-          <motion.div key="following" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-y-auto px-4 md:px-5 py-4">
-              {calls.filter(c => followingList.includes(c.username)).length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {calls.filter(c => followingList.includes(c.username)).map((c, i) => (
-                    <CallCard key={c.id} call={c} dk={dk} index={i}
-                      onViewProfile={(u) => setProfileUser(u)}
-                      onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
-                      onFade={async (call, side, amount) => {
-                        if (!user) { setAuthOpen(true); return null; }
-                        if (!call.market_id) return "Cannot fade — market not found.";
-                        return handleAdd(call.market_id, side, amount, undefined, call.id);
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className={`flex flex-col items-center justify-center h-full gap-4 px-6`}>
-                  <span className="text-[40px]">👥</span>
-                  <div className="text-center">
-                    <p className={`text-[15px] font-black ${dk ? "text-white/70" : "text-gray-700"}`}>No activity from people you follow</p>
-                    <p className={`text-[12px] font-bold mt-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                      Follow traders to see their calls here.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
+          <FollowingScreen
+            dk={dk}
+            calls={calls}
+            followingList={followingList}
+            loggedIn={!!user}
+            onViewProfile={(u) => setProfileUser(u)}
+            onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+            onAuthRequired={() => setAuthOpen(true)}
+            onFade={(marketId, side, amount, fadedPositionId) => handleAdd(marketId, side, amount, undefined, fadedPositionId)}
+          />
         )}
 
         {/* RANKS TAB */}
