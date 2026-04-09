@@ -29,6 +29,7 @@ import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import BottomNav from "@/shell/BottomNav";
 import TradingModeToggle from "@/shell/TradingModeToggle";
+import BalanceSummary from "@/shell/BalanceSummary";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -766,37 +767,14 @@ export default function FeedPage() {
           {user ? (
             <>
               {/* Balance / Wallet */}
-              {isTestnet && walletAddr ? (
-                <div className="hidden sm:flex flex-col items-end gap-0.5">
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                    {walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}
-                  </span>
-                  <span className="text-[13px] font-black tabular-nums text-purple-400">
-                    {genBalance.toFixed(2)} GEN
-                  </span>
-                </div>
-              ) : isReal && walletAddr ? (
-                <div className="hidden sm:flex flex-col items-end gap-0.5">
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                    {walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}
-                  </span>
-                  <span className="text-[13px] font-black tabular-nums text-emerald-400">
-                    ${Number(user.balance_usd).toFixed(2)}
-                  </span>
-                </div>
-              ) : (
-                <div className="hidden sm:flex flex-col items-end gap-0.5">
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                    {paperMode ? "Paper" : isReal ? "Balance" : "Testnet"}
-                  </span>
-                  <span className={`text-[13px] font-black tabular-nums ${paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
-                    {(() => {
-                      const n = Number(paperMode ? (user.paper_balance_usd ?? 0) : user.balance_usd);
-                      return n >= 10000 ? `$${(n/1000).toFixed(1)}K` : n >= 1000 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`;
-                    })()}
-                  </span>
-                </div>
-              )}
+              <BalanceSummary
+                dk={dk}
+                tradingMode={tradingMode}
+                paperBalance={Number(user.paper_balance_usd ?? 0)}
+                realBalance={Number(user.balance_usd)}
+                walletAddr={walletAddr}
+                genBalance={genBalance}
+              />
 
               {/* Action button */}
               <motion.button whileTap={{ scale: 0.96 }}
