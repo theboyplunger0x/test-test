@@ -14,36 +14,35 @@ const BRADBURY = {
 
 const ESCROW_CODE_URL = "/api/escrow-code"; // served from backend or static
 
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      on: (event: string, cb: (...args: unknown[]) => void) => void;
-      removeListener: (event: string, cb: (...args: unknown[]) => void) => void;
-    };
-  }
+// window.ethereum is declared globally by Privy / wallet providers.
+// We use a permissive type to avoid collisions with their type definitions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EthereumProvider = any;
+function getEthereum(): EthereumProvider | undefined {
+  return typeof window !== "undefined" ? (window as unknown as { ethereum?: EthereumProvider }).ethereum : undefined;
 }
 
 export function isMetaMaskInstalled(): boolean {
-  return typeof window !== "undefined" && !!window.ethereum;
+  return !!getEthereum();
 }
 
 export async function connectWallet(): Promise<string> {
-  if (!window.ethereum) throw new Error("MetaMask not installed");
+  const eth = getEthereum();
+  if (!eth) throw new Error("MetaMask not installed");
 
-  const accounts = (await window.ethereum.request({
+  const accounts = (await eth.request({
     method: "eth_requestAccounts",
   })) as string[];
 
   // Switch to Bradbury network (add it if not present)
   try {
-    await window.ethereum.request({
+    await eth.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: BRADBURY.chainId }],
     });
   } catch (e: unknown) {
     if ((e as { code: number }).code === 4902) {
-      await window.ethereum.request({
+      await eth.request({
         method: "wallet_addEthereumChain",
         params: [BRADBURY],
       });
@@ -59,9 +58,10 @@ export async function connectWallet(): Promise<string> {
  * Read GEN balance from Bradbury chain for a given address.
  */
 export async function getGENBalance(address: string): Promise<number> {
-  if (!window.ethereum) return 0;
+  const eth = getEthereum();
+  if (!eth) return 0;
   try {
-    const balanceHex = (await window.ethereum.request({
+    const balanceHex = (await eth.request({
       method: "eth_getBalance",
       params: [address, "latest"],
     })) as string;
@@ -75,9 +75,10 @@ export async function getGENBalance(address: string): Promise<number> {
  * Check if wallet is already connected (without prompting).
  */
 export async function getConnectedWallet(): Promise<string | null> {
-  if (!window.ethereum) return null;
+  const eth = getEthereum();
+  if (!eth) return null;
   try {
-    const accounts = (await window.ethereum.request({ method: "eth_accounts" })) as string[];
+    const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
     return accounts[0] ?? null;
   } catch {
     return null;
@@ -85,10 +86,11 @@ export async function getConnectedWallet(): Promise<string | null> {
 }
 
 export function onAccountsChanged(cb: (accounts: string[]) => void): () => void {
-  if (!window.ethereum) return () => {};
+  const eth = getEthereum();
+  if (!eth) return () => {};
   const handler = (...args: unknown[]) => cb(args[0] as string[]);
-  window.ethereum.on("accountsChanged", handler);
-  return () => window.ethereum?.removeListener("accountsChanged", handler);
+  eth.on("accountsChanged", handler);
+  return () => eth.removeListener?.("accountsChanged", handler);
 }
 
 // ── GenLayer Client (browser, MetaMask-signed) ───────────────────────────────
@@ -218,11 +220,12 @@ export async function sendGENToTreasury(params: {
   walletAddress: string;
   amountGEN: number;
 }): Promise<string> {
-  if (!window.ethereum) throw new Error("MetaMask not installed");
+  const eth = getEthereum();
+  if (!eth) throw new Error("MetaMask not installed");
 
   const valueHex = "0x" + BigInt(Math.floor(params.amountGEN * 1e18)).toString(16);
 
-  const txHash = await window.ethereum.request({
+  const txHash = await eth.request({
     method: "eth_sendTransaction",
     params: [{
       from: params.walletAddress,

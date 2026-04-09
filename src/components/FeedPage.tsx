@@ -24,9 +24,8 @@ import SpotView from "./SpotView";
 import CallCard, { type Call } from "./CallCard";
 import DebateCard, { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
-import { connectWallet, getConnectedWallet, getGENBalance, onAccountsChanged } from "@/lib/wallet";
-import { usePrivy, useWallets, useFundWallet } from "@privy-io/react-auth";
 import { useTradingMode } from "@/hooks/useTradingMode";
+import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -126,9 +125,8 @@ function tierBadge(tier?: string, telegramUsername?: string) {
 }
 
 export default function FeedPage() {
-  const { logout: privyLogout, authenticated: privyAuthenticated, user: privyUser, exportWallet: privyExportWallet, linkWallet: privyLinkWallet } = usePrivy();
-  const { wallets: privyWallets } = useWallets();
-  const { fundWallet: privyFundWallet } = useFundWallet();
+  const wallet = usePrivyWallet({ autoDetect: true });
+  const { walletAddr, setWalletAddr, genBalance, privyAuthenticated } = wallet;
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
   const prevLastBetAt                   = useRef<Record<string, number>>({});
@@ -170,48 +168,8 @@ export default function FeedPage() {
   const { tradingMode, setTradingMode, paperMode, isTestnet, isReal } = useTradingMode();
   const setPaperMode = (v: boolean) => setTradingMode(v ? "paper" : "real");
   const [followingList, setFollowingList]   = useState<string[]>([]);
-  const [walletAddr, setWalletAddr]         = useState<string | null>(null);
-  const [genBalance, setGenBalance]         = useState<number>(0);
 
-  // Auto-detect wallet on testnet mode
-  useEffect(() => {
-    if (!isTestnet) return;
-    getConnectedWallet().then(addr => {
-      if (addr) {
-        setWalletAddr(addr);
-        getGENBalance(addr).then(setGenBalance);
-      }
-    });
-    const unsub = onAccountsChanged((accounts) => {
-      const addr = accounts[0] ?? null;
-      setWalletAddr(addr);
-      if (addr) getGENBalance(addr).then(setGenBalance);
-      else setGenBalance(0);
-    });
-    return unsub;
-  }, [isTestnet]);
-
-  // Refresh GEN balance periodically when connected
-  useEffect(() => {
-    if (!isTestnet || !walletAddr) return;
-    const iv = setInterval(() => getGENBalance(walletAddr).then(setGenBalance), 15000);
-    return () => clearInterval(iv);
-  }, [isTestnet, walletAddr]);
-
-  // Privy wallet — sync with walletAddr when user is logged in via Privy
-  useEffect(() => {
-    if (!privyAuthenticated || !privyUser) return;
-    // Prefer external wallet, fallback to embedded
-    const external = privyWallets.find(w => w.walletClientType !== "privy");
-    const embedded = privyWallets.find(w => w.walletClientType === "privy");
-    const primary = external ?? embedded;
-    if (primary?.address) {
-      setWalletAddr(primary.address);
-      getGENBalance(primary.address).then(setGenBalance);
-      // Link to backend (idempotent)
-      api.linkWallet(primary.address).catch(() => {});
-    }
-  }, [privyAuthenticated, privyUser, privyWallets]);
+  // Wallet state & effects managed inside usePrivyWallet hook.
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
   const [paperCreditOpen, setPaperCreditOpen] = useState(false);
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
@@ -444,9 +402,7 @@ export default function FeedPage() {
   function handleLogout() {
     localStorage.removeItem("token");
     setUser(null);
-    setWalletAddr(null);
-    setGenBalance(0);
-    privyLogout().catch(() => {});
+    wallet.logoutPrivy();
   }
 
   function handleDeposited(newBalance: string) {
@@ -853,11 +809,8 @@ export default function FeedPage() {
               <motion.button whileTap={{ scale: 0.96 }}
                 onClick={() => {
                   if (isTestnet || isReal) {
-                    if (walletAddr) {
-                      privyFundWallet({ address: walletAddr }).catch(() => {});
-                    } else {
-                      setAuthOpen(true);
-                    }
+                    if (walletAddr) wallet.fund();
+                    else setAuthOpen(true);
                   }
                   else if (paperMode) setPaperCreditOpen(true);
                 }}
@@ -1784,11 +1737,11 @@ export default function FeedPage() {
                             <div>
                               <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Funds</p>
                               <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => privyFundWallet({ address: walletAddr }).catch(() => {})}
+                                <button onClick={() => wallet.fund()}
                                   className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-emerald-500 hover:bg-emerald-400 text-white transition-all">
                                   + Add funds
                                 </button>
-                                <button onClick={() => privyExportWallet().catch(() => {})}
+                                <button onClick={() => wallet.exportKey()}
                                   className={`px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
                                   Export key
                                 </button>
@@ -1800,15 +1753,11 @@ export default function FeedPage() {
                           <div>
                             <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Manage</p>
                             <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => { privyLinkWallet(); }}
+                              <button onClick={() => wallet.linkAnother()}
                                 className={`px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
                                 Link another
                               </button>
-                              <button onClick={async () => {
-                                setWalletAddr(null);
-                                setGenBalance(0);
-                                try { await window.ethereum?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] }); } catch {}
-                              }}
+                              <button onClick={() => wallet.disconnect()}
                                 className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-all">
                                 Disconnect
                               </button>
@@ -1820,14 +1769,7 @@ export default function FeedPage() {
                           <p className={`text-[12px] ${dk ? "text-white/50" : "text-gray-500"}`}>
                             No wallet connected. Connect MetaMask or login with Privy to create an embedded wallet automatically.
                           </p>
-                          <button onClick={async () => {
-                            try {
-                              const addr = await connectWallet();
-                              setWalletAddr(addr);
-                              getGENBalance(addr).then(setGenBalance);
-                              api.linkWallet(addr).catch(() => {});
-                            } catch {}
-                          }}
+                          <button onClick={() => { wallet.connect().catch(() => {}); }}
                             className="w-full px-3 py-2.5 rounded-lg text-[12px] font-black bg-purple-500 hover:bg-purple-400 text-white transition-all">
                             Connect Wallet
                           </button>
