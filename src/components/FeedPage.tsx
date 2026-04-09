@@ -166,14 +166,16 @@ export default function FeedPage() {
   const [trendingChain, setTrendingChain] = useState<string | null>(null);
   const [trendingSort, setTrendingSort]   = useState<"mcap-desc" | "mcap-asc" | "vol-desc" | "vol-asc" | null>(null);
   const [livePrices, setLivePrices]         = useState<Record<string, number>>({});
-  const [tradingMode, setTradingMode]       = useState<"paper" | "testnet">(() => {
+  const [tradingMode, setTradingMode]       = useState<"paper" | "real" | "testnet">(() => {
     if (typeof window === "undefined") return "paper";
     const saved = localStorage.getItem("fud_mode");
-    return saved === "testnet" ? "testnet" : "paper";
+    if (saved === "real" || saved === "testnet" || saved === "paper") return saved;
+    return "paper";
   });
   const paperMode = tradingMode === "paper";
   const isTestnet = tradingMode === "testnet";
-  const setPaperMode = (v: boolean) => setTradingMode(v ? "paper" : "testnet");
+  const isReal    = tradingMode === "real";
+  const setPaperMode = (v: boolean) => setTradingMode(v ? "paper" : "real");
   const [followingList, setFollowingList]   = useState<string[]>([]);
   const [walletAddr, setWalletAddr]         = useState<string | null>(null);
   const [genBalance, setGenBalance]         = useState<number>(0);
@@ -810,21 +812,28 @@ export default function FeedPage() {
           {user ? (
             <>
               {/* Balance / Wallet */}
-              {isTestnet ? (
-                walletAddr ? (
-                  <div className="hidden sm:flex flex-col items-end gap-0.5">
-                    <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                      {walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}
-                    </span>
-                    <span className="text-[13px] font-black tabular-nums text-purple-400">
-                      {genBalance.toFixed(2)} GEN
-                    </span>
-                  </div>
-                ) : null
+              {isTestnet && walletAddr ? (
+                <div className="hidden sm:flex flex-col items-end gap-0.5">
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
+                    {walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}
+                  </span>
+                  <span className="text-[13px] font-black tabular-nums text-purple-400">
+                    {genBalance.toFixed(2)} GEN
+                  </span>
+                </div>
+              ) : isReal && walletAddr ? (
+                <div className="hidden sm:flex flex-col items-end gap-0.5">
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
+                    {walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}
+                  </span>
+                  <span className="text-[13px] font-black tabular-nums text-emerald-400">
+                    ${Number(user.balance_usd).toFixed(2)}
+                  </span>
+                </div>
               ) : (
                 <div className="hidden sm:flex flex-col items-end gap-0.5">
                   <span className={`text-[9px] font-black uppercase tracking-widest ${dk ? "text-white/25" : "text-gray-400"}`}>
-                    {paperMode ? "Paper" : "Balance"}
+                    {paperMode ? "Paper" : isReal ? "Balance" : "Testnet"}
                   </span>
                   <span className={`text-[13px] font-black tabular-nums ${paperMode ? "text-yellow-400" : "text-emerald-400"}`}>
                     {(() => {
@@ -835,10 +844,10 @@ export default function FeedPage() {
                 </div>
               )}
 
-              {/* Action button: testnet Fund, paper Credits, real Deposit */}
+              {/* Action button */}
               <motion.button whileTap={{ scale: 0.96 }}
                 onClick={() => {
-                  if (isTestnet) {
+                  if (isTestnet || isReal) {
                     if (walletAddr) {
                       privyFundWallet({ address: walletAddr }).catch(() => {});
                     } else {
@@ -846,14 +855,15 @@ export default function FeedPage() {
                     }
                   }
                   else if (paperMode) setPaperCreditOpen(true);
-                  else setDepositOpen(true);
                 }}
                 className={`px-3.5 py-2 rounded-xl text-[12px] font-black transition-all ${
                   isTestnet
                     ? "bg-purple-500 hover:bg-purple-400 text-white"
+                    : isReal
+                    ? "bg-emerald-500 hover:bg-emerald-400 text-white"
                     : "bg-blue-500 hover:bg-blue-400 text-white"
                 }`}>
-                {isTestnet ? (walletAddr ? "+ Fund" : "Connect") : paperMode ? "+ Credits" : "Deposit"}
+                {isTestnet ? (walletAddr ? "+ Fund" : "Connect") : isReal ? (walletAddr ? "+ Fund" : "Connect") : paperMode ? "+ Credits" : "Deposit"}
               </motion.button>
 
               {/* Referral */}
@@ -1713,9 +1723,9 @@ export default function FeedPage() {
                         className={`px-2.5 py-1 rounded-md transition-all ${paperMode ? "bg-yellow-400 text-black" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
                         Paper
                       </button>
-                      <button onClick={() => setTradingMode("testnet")}
-                        className={`px-2.5 py-1 rounded-md transition-all ${isTestnet ? (dk ? "bg-purple-500 text-white" : "bg-purple-600 text-white") : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
-                        Testnet
+                      <button onClick={() => setTradingMode("real")}
+                        className={`px-2.5 py-1 rounded-md transition-all ${isReal ? "bg-emerald-500 text-white" : (dk ? "text-white/30 hover:text-white/60" : "text-gray-400")}`}>
+                        Real
                       </button>
                     </div>
                   </div>
