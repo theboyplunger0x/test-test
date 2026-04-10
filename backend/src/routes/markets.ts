@@ -4,6 +4,7 @@ import { getPrice, screenToken } from "../services/oracle.js";
 import { nextWindowClose, calcPayout, calcHouseFee, type Timeframe } from "../lib/market.js";
 import { scheduleResolution } from "../workers/resolver.js";
 import { checkAndUpgradeTier } from "../lib/tier.js";
+import { createMarketOnChain, placeBetOnChain } from "../services/vaultService.js";
 
 const VALID_TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "1h", "4h", "12h", "24h"];
 
@@ -121,10 +122,26 @@ export async function marketRoutes(app: FastifyInstance) {
 
     const closesAt = nextWindowClose(timeframe as Timeframe);
 
+    const isPaper = !!paper;
+    const isTestnet = !!testnet;
+    const isRealMode = !isPaper && !isTestnet;
+
+    // Create on-chain market for Real mode (fire-and-forget with fallback)
+    let onchainMarketId: bigint | null = null;
+    if (isRealMode) {
+      try {
+        const closesAtUnix = Math.floor(closesAt.getTime() / 1000);
+        onchainMarketId = await createMarketOnChain(closesAtUnix, entryPrice);
+      } catch (e: any) {
+        console.error("[vault] Failed to create on-chain market:", e.message);
+        // Continue with DB-only — on-chain is best-effort in MVP
+      }
+    }
+
     const { rows } = await db.query(
-      `INSERT INTO markets (symbol, chain, timeframe, entry_price, tagline, opener_id, closes_at, is_paper, is_testnet, ca)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, !!paper, !!testnet, ca ?? null]
+      `INSERT INTO markets (symbol, chain, timeframe, entry_price, tagline, opener_id, closes_at, is_paper, is_testnet, ca, onchain_market_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, isPaper, isTestnet, ca ?? null, onchainMarketId !== null ? Number(onchainMarketId) : null]
     );
     const newMarket = rows[0];
     scheduleResolution(newMarket.id, new Date(newMarket.closes_at));
@@ -132,9 +149,10 @@ export async function marketRoutes(app: FastifyInstance) {
   });
 
   // POST /markets/:id/bet — 30 bets / minute per IP
+  // For Real mode: also accepts `signature` (EIP-712 hex) and `wallet_address` to forward on-chain.
   app.post("/markets/:id/bet", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const { id }   = req.params as any;
-    const { side, amount, message, faded_position_id } = req.body as any;
+    const { side, amount, message, faded_position_id, signature, wallet_address } = req.body as any;
     const user     = (req as any).user;
 
     if (!["long", "short"].includes(side)) return reply.status(400).send({ error: "side must be long or short" });
@@ -189,6 +207,29 @@ export async function marketRoutes(app: FastifyInstance) {
       );
 
       await client.query("COMMIT");
+
+      // Real mode: forward EIP-712 signed bet to FUDVault on-chain
+      const isRealMode = !isPaper && !isTestnet;
+      if (isRealMode && market.onchain_market_id != null && signature && wallet_address) {
+        try {
+          const { getUserNonce } = await import("../services/vaultService.js");
+          const nonce = await getUserNonce(wallet_address as `0x${string}`);
+          const txHash = await placeBetOnChain(
+            BigInt(market.onchain_market_id),
+            wallet_address as `0x${string}`,
+            side as "long" | "short",
+            amount,
+            nonce,
+            signature as `0x${string}`
+          );
+          // Store tx hash on position
+          await db.query(`UPDATE positions SET onchain_tx = $1 WHERE id = $2`, [txHash, position.id]);
+        } catch (e: any) {
+          console.error("[vault] On-chain bet failed:", e.message);
+          // DB bet already committed — on-chain is best-effort in MVP.
+          // The position exists in DB regardless; resolution handles both paths.
+        }
+      }
 
       // Fire-and-forget tier check for real bets
       if (!isPaper) checkAndUpgradeTier(user.userId).catch(() => {});

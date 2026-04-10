@@ -5,6 +5,21 @@ import { db } from "../db/client.js";
 import { getPriceForResolution as getPrice } from "../services/oracle.js";
 import { calcPayout, calcHouseFee } from "../lib/market.js";
 
+/** Fire-and-forget on-chain cancel for Real mode markets with an on-chain ID. */
+function cancelOnChainIfReal(market: any) {
+  if (!market.is_paper && !market.is_testnet && market.onchain_market_id != null) {
+    (async () => {
+      try {
+        const { cancelMarketOnChain } = await import("../services/vaultService.js");
+        const txHash = await cancelMarketOnChain(BigInt(market.onchain_market_id));
+        console.log(`[resolver] On-chain cancel: market ${market.onchain_market_id} TX: ${txHash}`);
+      } catch (err: any) {
+        console.error(`[resolver] On-chain cancel failed for market ${market.id}:`, err.message);
+      }
+    })();
+  }
+}
+
 /** Resolve a single market by ID. Safe to call multiple times (idempotent via FOR UPDATE). */
 export async function resolveMarket(marketId: string) {
   const client = await db.connect();
@@ -30,6 +45,7 @@ export async function resolveMarket(marketId: string) {
         await client.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [pos.amount, pos.user_id]);
       }
       await client.query("COMMIT");
+      cancelOnChainIfReal(market);
       console.log(`[resolver] Market ${market.id} (${market.symbol}) cancelled — no counterparty (L:$${longPool} S:$${shortPool})`);
       return;
     }
@@ -51,6 +67,7 @@ export async function resolveMarket(marketId: string) {
         );
       }
       await client.query("COMMIT");
+      cancelOnChainIfReal(market);
       console.log(`[resolver] Market ${market.id} (${market.symbol}) cancelled — oracle failure`);
       return;
     }
@@ -66,6 +83,7 @@ export async function resolveMarket(marketId: string) {
         await client.query(`UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [pos.amount, pos.user_id]);
       }
       await client.query("COMMIT");
+      cancelOnChainIfReal(market);
       console.log(`[resolver] Market ${market.id} (${market.symbol}) draw — price unchanged @ $${exitPrice}, refunded`);
       return;
     }
@@ -101,6 +119,19 @@ export async function resolveMarket(marketId: string) {
 
     await client.query("COMMIT");
     console.log(`[resolver] Market ${market.id} (${market.symbol}) resolved → ${winnerSide} wins. Fee: $${fee}`);
+
+    // Real mode: resolve on-chain via FUDVault contract
+    if (!market.is_paper && !market.is_testnet && market.onchain_market_id != null) {
+      (async () => {
+        try {
+          const { resolveMarketOnChain } = await import("../services/vaultService.js");
+          const txHash = await resolveMarketOnChain(BigInt(market.onchain_market_id), exitPrice);
+          console.log(`[resolver] On-chain resolve: market ${market.onchain_market_id} TX: ${txHash}`);
+        } catch (err: any) {
+          console.error(`[resolver] On-chain resolve failed for market ${market.id}:`, err.message);
+        }
+      })();
+    }
 
     // Testnet: pay winners on-chain via GEN transfer from treasury
     if (market.is_testnet) {

@@ -276,6 +276,12 @@ CREATE INDEX IF NOT EXISTS idx_escrow_contract ON escrow_bets(contract_address);
 -- v8: track whether the user has ever connected a wallet (for "Reconnect"
 -- vs "Add wallet" UX). Only flipped on; never reset (unless account delete).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS has_connected_wallet BOOLEAN NOT NULL DEFAULT false;
+
+-- v9: on-chain vault integration (FUDVault on Base Sepolia / Base mainnet)
+-- Links a DB market to its on-chain counterpart in the FUDVault contract.
+ALTER TABLE markets ADD COLUMN IF NOT EXISTS onchain_market_id BIGINT;
+-- Stores the tx hash of the on-chain bet for Real mode positions.
+ALTER TABLE positions ADD COLUMN IF NOT EXISTS onchain_tx TEXT;
 `;
 
 export async function runMigrations() {
