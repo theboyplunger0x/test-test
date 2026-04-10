@@ -17,6 +17,7 @@ import TradeModal from "@/trading/TradeModal";
 import SearchModal from "./SearchModal";
 import ReferralModal from "./ReferralModal";
 import WithdrawVaultModal from "./WithdrawVaultModal";
+import FundingModal from "./FundingModal";
 import LeaderboardView from "./LeaderboardView";
 import ProfileModal from "./ProfileModal";
 import ProfilePage from "./ProfilePage";
@@ -223,6 +224,7 @@ export default function FeedPage() {
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [settingsInitialView, setSettingsInitialView] = useState<"main" | "wallet">("main");
   const [withdrawVaultOpen, setWithdrawVaultOpen]   = useState(false);
+  const [fundingOpen, setFundingOpen]               = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
   const [chartModalInfo, setChartModalInfo]         = useState<TokenInfo | null>(null);
@@ -526,8 +528,7 @@ export default function FeedPage() {
     if (!user) { setAuthOpen(true); return; }
     const vaultBal = parseFloat(vault.vaultBalance || "0");
     if (vaultBal <= 0) {
-      setSettingsInitialView("wallet");
-      setSettingsOpen(true);
+      setFundingOpen(true);
       return;
     }
     setOpenMarketCoin(coin);
@@ -901,16 +902,7 @@ export default function FeedPage() {
               {/* Action button — routing lives here, button stays dumb. */}
               {/* User is guaranteed truthy here (parent {user ? ...} branch). */}
               <FundingCTA
-                onClick={() => {
-                  if (!walletAddr) {
-                    setPendingFundAfterConnect(false);
-                    setConnectWalletOpen(true);
-                  } else {
-                    // Open wallet drawer directly to vault deposit
-                    setSettingsInitialView("wallet");
-                    setSettingsOpen(true);
-                  }
-                }}
+                onClick={() => setFundingOpen(true)}
               />
 
               {/* Referral */}
@@ -1583,6 +1575,19 @@ export default function FeedPage() {
       <AnimatePresence>
         {referralOpen && <ReferralModal dk={dk} isLoggedIn={!!user} onClose={() => setReferralOpen(false)} onSignIn={() => setAuthOpen(true)}
           rewardBalance={vault.rewardBalance} onClaimOnChain={vault.claimRewardsOnChain} />}
+      </AnimatePresence>
+
+      {/* Funding Modal — send USDC to fund account */}
+      <AnimatePresence>
+        {fundingOpen && primaryWallet && (
+          <FundingModal
+            dk={dk}
+            onClose={() => setFundingOpen(false)}
+            mainWalletAddress={primaryWallet}
+            vaultBalance={vault.vaultBalance}
+            depositAddress={vault.config?.address ?? ""}
+          />
+        )}
       </AnimatePresence>
 
       {/* Withdraw Vault Modal — Real mode dedicated withdrawal */}
