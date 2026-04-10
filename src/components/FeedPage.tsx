@@ -770,13 +770,21 @@ export default function FeedPage() {
                 genBalance={genBalance}
               />
 
-              {/* Action button */}
+              {/* Action button — routing lives here, button stays dumb. */}
+              {/* User is guaranteed truthy here (parent {user ? ...} branch). */}
               <FundingCTA
-                tradingMode={tradingMode}
-                walletAddr={walletAddr}
-                onFund={() => wallet.fund()}
-                onConnect={() => setAuthOpen(true)}
-                onPaperCredits={() => setPaperCreditOpen(true)}
+                onClick={() => {
+                  if (paperMode) {
+                    setPaperCreditOpen(true);
+                  } else if (!walletAddr) {
+                    // Logged in but no wallet → ConnectWalletModal (commit 2).
+                    // For now route to auth modal as a stopgap; will replace next commit.
+                    setAuthOpen(true);
+                  } else {
+                    // Has wallet → Privy fund flow.
+                    wallet.fund();
+                  }
+                }}
               />
 
               {/* Referral */}
