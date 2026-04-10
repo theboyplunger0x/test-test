@@ -27,7 +27,15 @@ interface VaultConfig {
  * contract from their wallet (via Privy or MetaMask). This hook only
  * handles the read operations and bet signing.
  */
-export function useVault(walletAddr: string | null) {
+/**
+ * @param walletAddr — connected browser wallet (for signing txs)
+ * @param userWalletAddr — the user's linked wallet from DB (for reading balance)
+ *                         Falls back to walletAddr if not provided.
+ */
+export function useVault(walletAddr: string | null, userWalletAddr?: string | null) {
+  // For reading balances, prefer the user's linked wallet (consistent per account)
+  // For signing txs, use the connected browser wallet
+  const balanceAddr = userWalletAddr || walletAddr;
   const [config, setConfig] = useState<VaultConfig | null>(null);
   const [vaultBalance, setVaultBalance] = useState<string>("0");
   const [rewardBalance, setRewardBalance] = useState<string>("0");
@@ -38,17 +46,17 @@ export function useVault(walletAddr: string | null) {
     api.vaultConfig().then(setConfig).catch(() => {});
   }, []);
 
-  // Poll vault balance + reward balance when wallet is connected.
+  // Poll vault balance + reward balance using the user's linked wallet.
   useEffect(() => {
-    if (!walletAddr) { setVaultBalance("0"); setRewardBalance("0"); return; }
+    if (!balanceAddr) { setVaultBalance("0"); setRewardBalance("0"); return; }
     const load = () => {
-      api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
-      api.vaultRewards(walletAddr).then(r => setRewardBalance(r.rewards)).catch(() => {});
+      api.vaultBalance(balanceAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+      api.vaultRewards(balanceAddr).then(r => setRewardBalance(r.rewards)).catch(() => {});
     };
     load();
     const iv = setInterval(load, 15_000);
     return () => clearInterval(iv);
-  }, [walletAddr]);
+  }, [balanceAddr]);
 
   // Fetch nonce when wallet changes
   useEffect(() => {
@@ -275,10 +283,11 @@ export function useVault(walletAddr: string | null) {
   }, [walletAddr, config]);
 
   const refreshBalance = useCallback(() => {
-    if (!walletAddr) return;
-    api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
-    api.vaultRewards(walletAddr).then(r => setRewardBalance(r.rewards)).catch(() => {});
-  }, [walletAddr]);
+    const addr = balanceAddr;
+    if (!addr) return;
+    api.vaultBalance(addr).then(r => setVaultBalance(r.balance)).catch(() => {});
+    api.vaultRewards(addr).then(r => setRewardBalance(r.rewards)).catch(() => {});
+  }, [balanceAddr]);
 
   return {
     config,

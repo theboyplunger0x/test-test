@@ -44,22 +44,18 @@ export default function BalanceSummary({
     );
   }
 
-  // Real mode → on-chain vault balance
+  // Real mode → on-chain vault balance (always from user's linked wallet, not browser wallet)
   if (isReal) {
-    if (walletAddr) {
-      const displayBalance = vaultBalance ? parseFloat(vaultBalance) : 0;
-      return (
-        <div className="hidden sm:flex flex-col items-end gap-0.5">
-          <span className={labelCls}>{walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}</span>
-          <span className="text-[13px] font-black tabular-nums text-emerald-400">${displayBalance.toFixed(2)}</span>
-        </div>
-      );
-    }
-    // No wallet connected — don't show stale DB balance
+    const displayBalance = vaultBalance ? parseFloat(vaultBalance) : 0;
+    const hasBalance = displayBalance > 0 || walletAddr;
     return (
       <div className="hidden sm:flex flex-col items-end gap-0.5">
-        <span className={labelCls}>Balance</span>
-        <span className={`text-[13px] font-black tabular-nums ${dk ? "text-white/30" : "text-gray-400"}`}>—</span>
+        <span className={labelCls}>
+          {walletAddr ? `${walletAddr.slice(0, 6)}...${walletAddr.slice(-4)}` : "Balance"}
+        </span>
+        <span className={`text-[13px] font-black tabular-nums ${hasBalance ? "text-emerald-400" : (dk ? "text-white/30" : "text-gray-400")}`}>
+          {hasBalance ? `$${displayBalance.toFixed(2)}` : "—"}
+        </span>
       </div>
     );
   }

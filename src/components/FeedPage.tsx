@@ -133,11 +133,13 @@ function tierBadge(tier?: string, telegramUsername?: string) {
 }
 
 export default function FeedPage() {
+  const [user, setUser]                 = useState<User | null>(null);
   // Don't auto-detect MetaMask on mount — prevents wallet bleed between accounts.
-  // Wallet connects only when user explicitly links via ConnectWalletModal or AccountDrawer.
   const wallet = usePrivyWallet({ autoDetect: false });
   const { walletAddr, setWalletAddr, genBalance, privyAuthenticated } = wallet;
-  const vault = useVault(walletAddr);
+  // Balance reads from user's linked wallet in DB (consistent per account).
+  // Browser wallet only needed for signing txs.
+  const vault = useVault(walletAddr, user?.wallet_address);
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
   const prevLastBetAt                   = useRef<Record<string, number>>({});
@@ -159,7 +161,6 @@ export default function FeedPage() {
   const [selectedTf, setSelectedTf]     = useState<string>("1h");
   const { theme, setTheme, dk } = useAppTheme();
   const [tapeOpen, setTapeOpen]         = useState(false);
-  const [user, setUser]                 = useState<User | null>(null);
   const [authOpen, setAuthOpen]         = useState(false);
   const [depositOpen, setDepositOpen]   = useState(false);
   const [openMarketCoin, setOpenMarketCoin] = useState<Coin | null>(null);
