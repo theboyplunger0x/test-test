@@ -33,6 +33,7 @@ import BalanceSummary from "@/shell/BalanceSummary";
 import FundingCTA from "@/shell/FundingCTA";
 import HeaderSearch from "@/shell/HeaderSearch";
 import AccountDrawer from "@/account/AccountDrawer";
+import ConnectWalletModal from "@/account/ConnectWalletModal";
 import FollowingScreen from "@/screens/FollowingScreen";
 import DiscoverScreen from "@/screens/DiscoverScreen";
 import type { TokenInfo } from "@/lib/chartData";
@@ -183,6 +184,7 @@ export default function FeedPage() {
   const [paperCreditOpen, setPaperCreditOpen] = useState(false);
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
   const [paperCreditLoading, setPaperCreditLoading] = useState(false);
+  const [connectWalletOpen, setConnectWalletOpen]   = useState(false);
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
@@ -777,9 +779,8 @@ export default function FeedPage() {
                   if (paperMode) {
                     setPaperCreditOpen(true);
                   } else if (!walletAddr) {
-                    // Logged in but no wallet → ConnectWalletModal (commit 2).
-                    // For now route to auth modal as a stopgap; will replace next commit.
-                    setAuthOpen(true);
+                    // Logged in but no wallet → focused modal with embedded/external choice.
+                    setConnectWalletOpen(true);
                   } else {
                     // Has wallet → Privy fund flow.
                     wallet.fund();
@@ -1446,6 +1447,26 @@ export default function FeedPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Connect Wallet Modal — used when user is logged in but has no wallet. */}
+      <AnimatePresence>
+        {connectWalletOpen && (
+          <ConnectWalletModal
+            onClose={() => setConnectWalletOpen(false)}
+            dk={dk}
+            mode="add"
+            onUseEmbedded={() => {
+              setConnectWalletOpen(false);
+              wallet.loginEmbedded();
+            }}
+            onConnectExternal={() => {
+              setConnectWalletOpen(false);
+              wallet.connect().catch(() => {});
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {openMarketCoin && (
           <TradeModal dk={dk} coin={openMarketCoin} onClose={() => setOpenMarketCoin(null)} onSuccess={handleMarketCreated} paperMode={paperMode} isTestnet={isTestnet} walletAddress={walletAddr ?? undefined}

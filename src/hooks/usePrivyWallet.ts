@@ -16,7 +16,7 @@ import { connectWallet as connectMetaMask, getConnectedWallet, getGENBalance, on
 export function usePrivyWallet(opts: { autoDetect?: boolean } = {}) {
   const { autoDetect = false } = opts;
 
-  const { logout: privyLogout, authenticated: privyAuthenticated, user: privyUser, exportWallet: privyExportWallet, linkWallet: privyLinkWalletFn } = usePrivy();
+  const { login: privyLogin, logout: privyLogout, authenticated: privyAuthenticated, user: privyUser, exportWallet: privyExportWallet, linkWallet: privyLinkWalletFn } = usePrivy();
   const { wallets: privyWallets } = useWallets();
   const { fundWallet: privyFundWallet } = useFundWallet();
 
@@ -92,6 +92,21 @@ export function usePrivyWallet(opts: { autoDetect?: boolean } = {}) {
     privyLinkWalletFn();
   }, [privyLinkWalletFn]);
 
+  /**
+   * Trigger Privy login flow — opens the Privy modal where the user can pick
+   * email / social / wallet. On success, the embedded wallet is created (or
+   * recovered) and synced into `walletAddr` via the privyAuthenticated effect.
+   *
+   * Used by the "Use embedded wallet" CTA in ConnectWalletModal.
+   */
+  const loginEmbedded = useCallback(() => {
+    if (privyAuthenticated) {
+      // Already in Privy — embedded should be on its way; nothing to do.
+      return;
+    }
+    privyLogin();
+  }, [privyAuthenticated, privyLogin]);
+
   const logoutPrivy = useCallback(async () => {
     setWalletAddr(null);
     setGenBalance(0);
@@ -109,6 +124,7 @@ export function usePrivyWallet(opts: { autoDetect?: boolean } = {}) {
     fund,
     exportKey,
     linkAnother,
+    loginEmbedded,
     logoutPrivy,
   };
 }
