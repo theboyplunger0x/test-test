@@ -210,21 +210,15 @@ export async function marketRoutes(app: FastifyInstance) {
         `UPDATE markets SET ${poolCol} = ${poolCol} + $1 WHERE id = $2`, [amount, id]
       );
 
-      // Record position with is_paper/is_testnet matching the market
-      const { rows: [position] } = await client.query(
-        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message, faded_position_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [user.userId, id, side, amount, isPaper, isTestnet, message?.trim() || null, faded_position_id || null]
-      );
-
-      await client.query("COMMIT");
-
-      // Real mode: forward EIP-712 signed bet to FUDVault on-chain
-      const isRealMode = !isPaper && !isTestnet;
-      if (isRealMode && market.onchain_market_id != null && signature && wallet_address) {
+      // Real on-chain: execute bet on-chain BEFORE committing to DB.
+      // If on-chain fails (insufficient vault balance, invalid sig, etc.),
+      // rollback the entire DB transaction — no ghost bets.
+      let onchainTx: string | null = null;
+      if (isRealOnChain && signature && wallet_address) {
         try {
           const { getUserNonce } = await import("../services/vaultService.js");
           const nonce = await getUserNonce(wallet_address as `0x${string}`);
-          const txHash = await placeBetOnChain(
+          onchainTx = await placeBetOnChain(
             BigInt(market.onchain_market_id),
             wallet_address as `0x${string}`,
             side as "long" | "short",
@@ -232,13 +226,21 @@ export async function marketRoutes(app: FastifyInstance) {
             nonce,
             signature as `0x${string}`
           );
-          // Store tx hash on position
-          await db.query(`UPDATE positions SET onchain_tx = $1 WHERE id = $2`, [txHash, position.id]);
         } catch (e: any) {
-          console.error("[vault] On-chain bet failed:", e.shortMessage ?? e.message, e.details ?? "");
-          // DB bet already committed — on-chain is best-effort in MVP.
+          await client.query("ROLLBACK");
+          const reason = e.shortMessage ?? e.message ?? "On-chain bet failed";
+          console.error("[vault] On-chain bet failed:", reason, e.details ?? "");
+          return reply.status(400).send({ error: `On-chain bet failed: ${reason}` });
         }
       }
+
+      // Record position
+      const { rows: [position] } = await client.query(
+        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message, faded_position_id, onchain_tx) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [user.userId, id, side, amount, isPaper, isTestnet, message?.trim() || null, faded_position_id || null, onchainTx]
+      );
+
+      await client.query("COMMIT");
 
       // Fire-and-forget tier check for real bets
       if (!isPaper) checkAndUpgradeTier(user.userId).catch(() => {});
