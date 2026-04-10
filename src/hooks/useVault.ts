@@ -69,6 +69,8 @@ export function useVault(walletAddr: string | null) {
     const ethereum = (window as any).ethereum;
     if (!ethereum) return null;
 
+    await ensureBaseSepoliaChain(ethereum);
+
     const domain = {
       name: config.name,
       version: config.version,
@@ -129,11 +131,42 @@ export function useVault(walletAddr: string | null) {
 
   // USDC contract address on Base Sepolia
   const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+  // Base Sepolia chainId
+  const BASE_SEPOLIA_CHAIN_ID = 84532;
 
   // ERC-20 ABI fragments for approve + deposit + withdraw
   const ERC20_APPROVE_ABI = "function approve(address spender, uint256 amount) returns (bool)";
   const VAULT_DEPOSIT_ABI = "function deposit(uint256 amount)";
   const VAULT_WITHDRAW_ABI = "function withdraw(uint256 amount)";
+
+  /** Ensure the wallet is on Base Sepolia before sending a tx. */
+  async function ensureBaseSepoliaChain(ethereum: any) {
+    const chainIdHex = await ethereum.request({ method: "eth_chainId" });
+    const currentChain = parseInt(chainIdHex, 16);
+    if (currentChain === BASE_SEPOLIA_CHAIN_ID) return;
+    try {
+      await ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x" + BASE_SEPOLIA_CHAIN_ID.toString(16) }],
+      });
+    } catch (switchError: any) {
+      // Chain not added — add it
+      if (switchError.code === 4902) {
+        await ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: "0x" + BASE_SEPOLIA_CHAIN_ID.toString(16),
+            chainName: "Base Sepolia",
+            nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+            rpcUrls: ["https://sepolia.base.org"],
+            blockExplorerUrls: ["https://sepolia.basescan.org"],
+          }],
+        });
+      } else {
+        throw switchError;
+      }
+    }
+  }
 
   /**
    * Deposit USDC into the FUDVault contract.
@@ -144,6 +177,8 @@ export function useVault(walletAddr: string | null) {
     if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
     const ethereum = (window as any).ethereum;
     if (!ethereum) throw new Error("No wallet found");
+
+    await ensureBaseSepoliaChain(ethereum);
 
     const amountRaw = "0x" + BigInt(Math.round(amountUsdc * 1_000_000)).toString(16);
 
@@ -187,6 +222,8 @@ export function useVault(walletAddr: string | null) {
     if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
     const ethereum = (window as any).ethereum;
     if (!ethereum) throw new Error("No wallet found");
+
+    await ensureBaseSepoliaChain(ethereum);
 
     const amountRaw = "0x" + BigInt(Math.round(amountUsdc * 1_000_000)).toString(16);
 
