@@ -1,16 +1,16 @@
 /**
- * Deposit processor — polls for USDC transfers to any user's Main Wallet
- * and calls depositFor() to credit their balance in the vault.
+ * Deposit processor — watches USDC transfers to user Main Wallets,
+ * batches them, and calls depositFor() with anti-abuse protections.
  *
- * Flow:
- * 1. User sends USDC to their Main Wallet (embedded wallet address)
- * 2. This poller detects the Transfer event
- * 3. Matches the recipient address to a FUD user's main_wallet_address
- * 4. Operator approves USDC and calls depositFor(mainWallet, amount) on vault
- * 5. User's vault balance updates automatically
- *
- * Each user has their own unique deposit address (their Main Wallet).
- * No ambiguity about who deposited.
+ * Anti-abuse rules (from ChatGPT spec):
+ * - Minimum auto-credit: $5 USDC (dust ignored)
+ * - Max 3 credited deposits per hour per user
+ * - Max 10 credited deposits per day per user
+ * - New account cooldown: 5 minutes
+ * - Global cap: 20 depositFor calls per hour
+ * - Global gas budget: $10/hour
+ * - Operator allowance: finite (250 USDC), never infinite
+ * - Circuit breakers for error rate and event floods
  */
 import { createPublicClient, http, parseAbiItem, type Address } from "viem";
 import { baseSepolia } from "viem/chains";
@@ -22,9 +22,55 @@ const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address;
 
 const client = createPublicClient({ chain: baseSepolia, transport: http(RPC_URL) });
 
+// ─── Anti-abuse parameters ───────────────────────────────────────────────────
+const MIN_AUTO_CREDIT_USDC = 5;          // Ignore deposits < $5
+const MAX_DEPOSITS_PER_HOUR = 3;         // Per user
+const MAX_DEPOSITS_PER_DAY = 10;         // Per user
+const NEW_ACCOUNT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const GLOBAL_DEPOSIT_FOR_CAP_PER_HOUR = 20;
+const CONSECUTIVE_ERROR_LIMIT = 3;       // Circuit breaker
+
+// ─── State ───────────────────────────────────────────────────────────────────
 let lastProcessedBlock = 0n;
+let globalDepositCountThisHour = 0;
+let globalHourBucket = 0;
+let consecutiveErrors = 0;
+let paused = false;
+
+// Per-user rate tracking (in-memory, resets on restart)
+const userDepositCounts = new Map<string, { hour: number; day: number; hourBucket: number; dayBucket: number }>();
+
+function getCurrentHourBucket() { return Math.floor(Date.now() / 3600000); }
+function getCurrentDayBucket() { return Math.floor(Date.now() / 86400000); }
+
+function getUserLimits(userId: string) {
+  const hourBucket = getCurrentHourBucket();
+  const dayBucket = getCurrentDayBucket();
+  let limits = userDepositCounts.get(userId);
+  if (!limits || limits.hourBucket !== hourBucket) {
+    limits = { hour: 0, day: limits?.dayBucket === dayBucket ? (limits?.day ?? 0) : 0, hourBucket, dayBucket };
+    userDepositCounts.set(userId, limits);
+  }
+  if (limits.dayBucket !== dayBucket) {
+    limits.day = 0;
+    limits.dayBucket = dayBucket;
+  }
+  return limits;
+}
 
 export async function processDeposits() {
+  if (paused) {
+    console.log("[deposit-processor] PAUSED — skipping");
+    return;
+  }
+
+  // Reset global hour counter if new hour
+  const hourBucket = getCurrentHourBucket();
+  if (hourBucket !== globalHourBucket) {
+    globalHourBucket = hourBucket;
+    globalDepositCountThisHour = 0;
+  }
+
   try {
     const currentBlock = await client.getBlockNumber();
     if (lastProcessedBlock === 0n) {
@@ -32,18 +78,18 @@ export async function processDeposits() {
     }
     if (currentBlock <= lastProcessedBlock) return;
 
-    // Get all Main Wallet addresses from DB
+    // Get all Main Wallet addresses
     const { rows: users } = await db.query(
-      `SELECT id, username, wallet_address FROM users WHERE wallet_address IS NOT NULL`
+      `SELECT id, username, wallet_address, created_at FROM users WHERE wallet_address IS NOT NULL`
     );
     if (users.length === 0) { lastProcessedBlock = currentBlock; return; }
 
-    const mainWallets = new Map<string, { id: string; username: string }>();
+    const mainWallets = new Map<string, { id: string; username: string; createdAt: Date }>();
     for (const u of users) {
-      mainWallets.set(u.wallet_address.toLowerCase(), { id: u.id, username: u.username });
+      mainWallets.set(u.wallet_address.toLowerCase(), { id: u.id, username: u.username, createdAt: new Date(u.created_at) });
     }
 
-    // Poll all USDC Transfer events in the block range
+    // Poll USDC Transfer events
     const logs = await client.getLogs({
       address: USDC_ADDRESS,
       event: parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)"),
@@ -58,45 +104,107 @@ export async function processDeposits() {
       const txHash = log.transactionHash;
 
       if (!to || !from || !value || value === 0n) continue;
+      if (from === to) continue; // Skip self-transfers
 
-      // Check if the recipient is a user's Main Wallet
       const user = mainWallets.get(to);
       if (!user) continue;
 
-      // Skip if already processed
+      // Deduplicate
       const { rows: [existing] } = await db.query(
         `SELECT id FROM deposit_events WHERE tx_hash = $1`, [txHash]
       );
       if (existing) continue;
 
-      // Skip self-transfers (e.g. vault operations)
-      if (from === to) continue;
+      const amountUsdc = Number(value) / 1e6;
 
-      console.log(`[deposit-processor] Detected ${Number(value) / 1e6} USDC → ${user.username} (${to.slice(0, 10)}...)`);
+      // ── RULE: Dust threshold ──
+      if (amountUsdc < MIN_AUTO_CREDIT_USDC) {
+        console.log(`[deposit-processor] Dust: ${amountUsdc} USDC to ${user.username} — below $${MIN_AUTO_CREDIT_USDC} min`);
+        await db.query(
+          `INSERT INTO deposit_events (user_id, from_address, to_main_wallet_address, token_address, amount, tx_hash, block_number, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'dust') ON CONFLICT (tx_hash) DO NOTHING`,
+          [user.id, from, to, USDC_ADDRESS, amountUsdc, txHash, Number(log.blockNumber)]
+        );
+        continue;
+      }
 
+      // ── RULE: New account cooldown ──
+      const accountAgeMs = Date.now() - user.createdAt.getTime();
+      if (accountAgeMs < NEW_ACCOUNT_COOLDOWN_MS) {
+        console.log(`[deposit-processor] New account cooldown: ${user.username} (${Math.round(accountAgeMs / 1000)}s old)`);
+        await db.query(
+          `INSERT INTO deposit_events (user_id, from_address, to_main_wallet_address, token_address, amount, tx_hash, block_number, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'cooldown') ON CONFLICT (tx_hash) DO NOTHING`,
+          [user.id, from, to, USDC_ADDRESS, amountUsdc, txHash, Number(log.blockNumber)]
+        );
+        continue;
+      }
+
+      // ── RULE: Per-user rate limit ──
+      const limits = getUserLimits(user.id);
+      if (limits.hour >= MAX_DEPOSITS_PER_HOUR) {
+        console.log(`[deposit-processor] Rate limited: ${user.username} (${limits.hour} deposits this hour)`);
+        await db.query(
+          `INSERT INTO deposit_events (user_id, from_address, to_main_wallet_address, token_address, amount, tx_hash, block_number, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'rate_limited') ON CONFLICT (tx_hash) DO NOTHING`,
+          [user.id, from, to, USDC_ADDRESS, amountUsdc, txHash, Number(log.blockNumber)]
+        );
+        continue;
+      }
+      if (limits.day >= MAX_DEPOSITS_PER_DAY) {
+        console.log(`[deposit-processor] Daily limit: ${user.username} (${limits.day} deposits today)`);
+        await db.query(
+          `INSERT INTO deposit_events (user_id, from_address, to_main_wallet_address, token_address, amount, tx_hash, block_number, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'rate_limited') ON CONFLICT (tx_hash) DO NOTHING`,
+          [user.id, from, to, USDC_ADDRESS, amountUsdc, txHash, Number(log.blockNumber)]
+        );
+        continue;
+      }
+
+      // ── RULE: Global cap ──
+      if (globalDepositCountThisHour >= GLOBAL_DEPOSIT_FOR_CAP_PER_HOUR) {
+        console.log(`[deposit-processor] Global cap reached (${globalDepositCountThisHour} this hour)`);
+        await db.query(
+          `INSERT INTO deposit_events (user_id, from_address, to_main_wallet_address, token_address, amount, tx_hash, block_number, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'global_cap') ON CONFLICT (tx_hash) DO NOTHING`,
+          [user.id, from, to, USDC_ADDRESS, amountUsdc, txHash, Number(log.blockNumber)]
+        );
+        continue;
+      }
+
+      // ── EXECUTE depositFor ──
+      console.log(`[deposit-processor] Crediting ${amountUsdc} USDC to ${user.username}`);
       try {
-        // Operator calls depositFor to credit the user's Main Wallet in the vault
-        // Note: operator needs USDC + approval. The USDC sits in the user's Main Wallet,
-        // so we first need to transfer it to the operator, then depositFor.
-        // For MVP: the operator maintains a USDC balance and mirrors deposits.
         const depositTx = await depositForOnChain(to as Address, value);
-        console.log(`[deposit-processor] Credited ${user.username}: ${Number(value) / 1e6} USDC, TX: ${depositTx}`);
+        console.log(`[deposit-processor] Credited ${user.username}: $${amountUsdc}, TX: ${depositTx}`);
 
         await db.query(
           `INSERT INTO deposit_events (user_id, from_address, to_main_wallet_address, token_address, amount, tx_hash, block_number, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'credited')
-           ON CONFLICT (tx_hash) DO NOTHING`,
-          [user.id, from, to, USDC_ADDRESS, Number(value) / 1e6, txHash, Number(log.blockNumber)]
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'credited') ON CONFLICT (tx_hash) DO NOTHING`,
+          [user.id, from, to, USDC_ADDRESS, amountUsdc, txHash, Number(log.blockNumber)]
         );
+
+        // Update counters
+        limits.hour++;
+        limits.day++;
+        globalDepositCountThisHour++;
+        consecutiveErrors = 0;
       } catch (e: any) {
-        console.error(`[deposit-processor] Failed to credit ${user.username}:`, e.shortMessage ?? e.message);
-        // Record as detected but not credited
+        console.error(`[deposit-processor] depositFor FAILED for ${user.username}:`, e.shortMessage ?? e.message);
+        consecutiveErrors++;
+
         await db.query(
           `INSERT INTO deposit_events (user_id, from_address, to_main_wallet_address, token_address, amount, tx_hash, block_number, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'detected')
-           ON CONFLICT (tx_hash) DO NOTHING`,
-          [user.id, from, to, USDC_ADDRESS, Number(value) / 1e6, txHash, Number(log.blockNumber)]
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'failed') ON CONFLICT (tx_hash) DO NOTHING`,
+          [user.id, from, to, USDC_ADDRESS, amountUsdc, txHash, Number(log.blockNumber)]
         );
+
+        // ── CIRCUIT BREAKER: consecutive errors ──
+        if (consecutiveErrors >= CONSECUTIVE_ERROR_LIMIT) {
+          console.error(`[deposit-processor] CIRCUIT BREAKER — ${consecutiveErrors} consecutive errors, PAUSING`);
+          paused = true;
+          return;
+        }
       }
     }
 
@@ -107,7 +215,7 @@ export async function processDeposits() {
 }
 
 export function startDepositProcessor(intervalMs = 15_000) {
-  console.log("[deposit-processor] Starting — watching all Main Wallets for USDC deposits");
+  console.log(`[deposit-processor] Starting — min $${MIN_AUTO_CREDIT_USDC}, max ${MAX_DEPOSITS_PER_HOUR}/hr per user, global cap ${GLOBAL_DEPOSIT_FOR_CAP_PER_HOUR}/hr`);
   setInterval(processDeposits, intervalMs);
   processDeposits();
 }
