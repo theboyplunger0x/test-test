@@ -118,20 +118,22 @@ export default function AccountDrawer({
 
                     <div className={`border-b ${dk ? "border-white/8" : "border-gray-100"}`}>
 
-                      {/* Section: Trading Mode */}
-                      <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Trading Mode</p>
-                      <div className="px-5 pb-3">
-                        <div className={`flex rounded-xl border overflow-hidden ${dk ? "border-white/10" : "border-gray-200"}`}>
-                          {(["paper", "real", "testnet"] as const).map(m => (
-                            <button key={m} onClick={() => onTradingModeChange(m)}
-                              className={`flex-1 py-2 text-[11px] font-black transition-all capitalize ${
-                                tradingMode === m
-                                  ? m === "paper" ? "bg-yellow-400 text-black" : m === "real" ? "bg-emerald-500 text-white" : "bg-purple-500 text-white"
-                                  : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"
-                              }`}>
-                              {m === "paper" ? "Paper" : m === "real" ? "Real" : "Testnet"}
-                            </button>
-                          ))}
+                      {/* Section: Trading Mode — mobile only (desktop has header toggle) */}
+                      <div className="md:hidden">
+                        <p className={`text-[10px] font-black uppercase tracking-widest px-5 pt-4 pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Trading Mode</p>
+                        <div className="px-5 pb-3">
+                          <div className={`flex rounded-xl border overflow-hidden ${dk ? "border-white/10" : "border-gray-200"}`}>
+                            {(["paper", "real"] as const).map(m => (
+                              <button key={m} onClick={() => onTradingModeChange(m)}
+                                className={`flex-1 py-2 text-[11px] font-black transition-all ${
+                                  tradingMode === m
+                                    ? m === "paper" ? "bg-yellow-400 text-black" : "bg-emerald-500 text-white"
+                                    : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"
+                                }`}>
+                                {m === "paper" ? "Paper" : "Real"}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
 

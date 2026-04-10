@@ -206,17 +206,17 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
         <button onClick={onClose} className={`text-[18px] font-bold ${muted} hover:opacity-60 transition-opacity`}>←</button>
         <span className={`text-[15px] font-black ${strong} flex-1`}>{username}</span>
 
-        {/* Own profile: trading mode pill + settings gear */}
+        {/* Own profile: trading mode pill (Paper/Real only) + settings gear */}
         {isOwnProfile && tradingMode && onTradingModeChange && (
           <div className={`flex items-center rounded-xl border overflow-hidden text-[10px] font-black ${dk ? "border-white/10" : "border-gray-200"}`}>
-            {(["paper", "real", "testnet"] as const).map(m => (
+            {(["paper", "real"] as const).map(m => (
               <button key={m} onClick={() => onTradingModeChange(m)}
-                className={`px-2.5 py-1.5 transition-all capitalize ${
+                className={`px-2.5 py-1.5 transition-all ${
                   tradingMode === m
-                    ? m === "paper" ? "bg-yellow-400 text-black" : m === "real" ? "bg-emerald-500 text-white" : "bg-purple-500 text-white"
+                    ? m === "paper" ? "bg-yellow-400 text-black" : "bg-emerald-500 text-white"
                     : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"
                 }`}>
-                {m === "paper" ? "Paper" : m === "real" ? "Real" : "Testnet"}
+                {m === "paper" ? "Paper" : "Real"}
               </button>
             ))}
           </div>
