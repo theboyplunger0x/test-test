@@ -172,10 +172,9 @@ export default function AuthModal({
         localStorage.setItem("token", result.token);
         onSuccess(result as unknown as AuthResponse);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Login failed";
-        console.error("[auth-bootstrap]", msg, err);
-        alert(`Auth error: ${msg}`);
+        console.error("[auth-bootstrap]", err);
         privyLogout().catch(() => {});
+        onClose();
       }
     })();
   }, [privyReady, privyAuthenticated, privyUser, privyWallets]);

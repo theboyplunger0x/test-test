@@ -956,8 +956,9 @@ export default function FeedPage() {
             </>
           ) : (
             <motion.button whileTap={{ scale: 0.94 }} onClick={() => setAuthOpen(true)}
-              className="flex items-center gap-2 border text-[12px] font-black px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-white border-transparent transition-all">
-              Sign In
+              disabled={authOpen}
+              className={`flex items-center gap-2 border text-[12px] font-black px-4 py-2 rounded-xl border-transparent transition-all ${authOpen ? "bg-blue-500/50 text-white/50 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
+              {authOpen ? "Connecting..." : "Sign In"}
             </motion.button>
           )}
 
