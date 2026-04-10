@@ -201,6 +201,7 @@ export default function FeedPage() {
     }
   }, []);
   const [settingsOpen, setSettingsOpen]             = useState(false);
+  const [settingsInitialView, setSettingsInitialView] = useState<"main" | "wallet">("main");
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
   const [chartModalInfo, setChartModalInfo]         = useState<TokenInfo | null>(null);
@@ -486,7 +487,7 @@ export default function FeedPage() {
     const realBalance = isReal ? parseFloat(vault.vaultBalance || "0") : Number(user.balance_usd);
     if (!paperMode && realBalance <= 0) {
       if (isReal) {
-        // Open wallet drawer where the vault deposit UI lives
+        setSettingsInitialView("wallet");
         setSettingsOpen(true);
       } else {
         setDepositOpen(true);
@@ -871,7 +872,8 @@ export default function FeedPage() {
                     setPendingFundAfterConnect(false);
                     setConnectWalletOpen(true);
                   } else if (isReal) {
-                    // Real mode → open wallet drawer with vault deposit UI.
+                    // Real mode → open wallet drawer directly to vault deposit.
+                    setSettingsInitialView("wallet");
                     setSettingsOpen(true);
                   } else {
                     // Testnet → Privy fund flow.
@@ -937,7 +939,7 @@ export default function FeedPage() {
 
           {/* Settings (desktop only — mobile uses bottom nav Account tab) */}
           <motion.button whileTap={{ scale: 0.94 }}
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => { setSettingsInitialView("main"); setSettingsOpen(true); }}
             className={`hidden md:flex items-center justify-center w-9 h-9 transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
@@ -1539,6 +1541,7 @@ export default function FeedPage() {
       <AccountDrawer
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        initialView={settingsInitialView}
         dk={dk}
         user={user}
         wallet={wallet}
@@ -1581,7 +1584,7 @@ export default function FeedPage() {
                   ))}
                 </div>
                 {/* Settings gear */}
-                <button onClick={() => { setOrdersOpen(false); setSettingsOpen(true); }}
+                <button onClick={() => { setOrdersOpen(false); setSettingsInitialView("main"); setSettingsOpen(true); }}
                   className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>

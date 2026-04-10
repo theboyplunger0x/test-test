@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { User } from "@/lib/api";
 import type { usePrivyWallet } from "@/hooks/usePrivyWallet";
@@ -28,6 +28,8 @@ interface AccountDrawerProps {
   onVaultDeposit?: (amount: number) => Promise<void>;
   /** Withdraw USDC from FUDVault contract to wallet. */
   onVaultWithdraw?: (amount: number) => Promise<void>;
+  /** Open directly to wallet view instead of main. */
+  initialView?: "main" | "wallet";
 }
 
 /**
@@ -55,8 +57,13 @@ export default function AccountDrawer({
   vaultBalance,
   onVaultDeposit,
   onVaultWithdraw,
+  initialView = "main",
 }: AccountDrawerProps) {
-  const [accountView, setAccountView] = useState<"main" | "wallet">("main");
+  const [accountView, setAccountView] = useState<"main" | "wallet">(initialView);
+  // Sync view when drawer opens with a specific initialView
+  useEffect(() => {
+    if (open) setAccountView(initialView);
+  }, [open, initialView]);
   const [vaultAmt, setVaultAmt] = useState("");
   const [vaultLoading, setVaultLoading] = useState(false);
 
