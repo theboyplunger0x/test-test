@@ -16,6 +16,7 @@ import DepositModal from "./DepositModal";
 import TradeModal from "@/trading/TradeModal";
 import SearchModal from "./SearchModal";
 import ReferralModal from "./ReferralModal";
+import WithdrawVaultModal from "./WithdrawVaultModal";
 import LeaderboardView from "./LeaderboardView";
 import ProfileModal from "./ProfileModal";
 import ProfilePage from "./ProfilePage";
@@ -202,6 +203,7 @@ export default function FeedPage() {
   }, []);
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [settingsInitialView, setSettingsInitialView] = useState<"main" | "wallet">("main");
+  const [withdrawVaultOpen, setWithdrawVaultOpen]   = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
   const [chartModalInfo, setChartModalInfo]         = useState<TokenInfo | null>(null);
@@ -1538,6 +1540,21 @@ export default function FeedPage() {
           rewardBalance={vault.rewardBalance} onClaimOnChain={vault.claimRewardsOnChain} />}
       </AnimatePresence>
 
+      {/* Withdraw Vault Modal — Real mode dedicated withdrawal */}
+      <AnimatePresence>
+        {withdrawVaultOpen && walletAddr && (
+          <WithdrawVaultModal
+            dk={dk}
+            onClose={() => setWithdrawVaultOpen(false)}
+            vaultBalance={vault.vaultBalance}
+            rewardBalance={vault.rewardBalance}
+            walletAddr={walletAddr}
+            onWithdraw={async (amt) => { await vault.withdrawFromVault(amt); vault.refreshBalance(); }}
+            onClaimRewards={async () => { await vault.claimRewardsOnChain(); vault.refreshBalance(); }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Account drawer (with drill-down to Wallet) */}
       <AccountDrawer
         open={settingsOpen}
@@ -1598,7 +1615,7 @@ export default function FeedPage() {
                 <OrdersView dk={dk} balance={isReal ? vault.vaultBalance : user?.balance_usd} useExternalBalance={isReal} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
                   rewardBalance={vault.rewardBalance}
                   onClaimOnChain={vault.claimRewardsOnChain}
-                  onOpenWalletDrawer={() => { setOrdersOpen(false); setSettingsInitialView("wallet"); setSettingsOpen(true); }}
+                  onOpenWalletDrawer={() => setWithdrawVaultOpen(true)}
                   onViewToken={(symbol) => {
                     setOrdersOpen(false);
                     const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
