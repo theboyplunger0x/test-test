@@ -517,15 +517,10 @@ export default function FeedPage() {
 
   function handleOpenMarket(coin: Coin) {
     if (!user) { setAuthOpen(true); return; }
-    // In Real mode, check vault balance (on-chain), not DB balance
-    const realBalance = isReal ? parseFloat(vault.vaultBalance || "0") : Number(user.balance_usd);
-    if (!paperMode && realBalance <= 0) {
-      if (isReal) {
-        setSettingsInitialView("wallet");
-        setSettingsOpen(true);
-      } else {
-        setDepositOpen(true);
-      }
+    const vaultBal = parseFloat(vault.vaultBalance || "0");
+    if (vaultBal <= 0) {
+      setSettingsInitialView("wallet");
+      setSettingsOpen(true);
       return;
     }
     setOpenMarketCoin(coin);
@@ -882,9 +877,7 @@ export default function FeedPage() {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {/* Trading mode toggle — visible for everyone, even not logged in */}
-          <TradingModeToggle dk={dk} tradingMode={tradingMode} onChange={setTradingMode} />
-
+          {/* v1 mainnet: always Real mode, no toggle */}
           {user ? (
             <>
               {/* Balance / Wallet */}
@@ -902,18 +895,13 @@ export default function FeedPage() {
               {/* User is guaranteed truthy here (parent {user ? ...} branch). */}
               <FundingCTA
                 onClick={() => {
-                  if (paperMode) {
-                    setPaperCreditOpen(true);
-                  } else if (!walletAddr) {
+                  if (!walletAddr) {
                     setPendingFundAfterConnect(false);
                     setConnectWalletOpen(true);
-                  } else if (isReal) {
-                    // Real mode → open wallet drawer directly to vault deposit.
+                  } else {
+                    // Open wallet drawer directly to vault deposit
                     setSettingsInitialView("wallet");
                     setSettingsOpen(true);
-                  } else {
-                    // Testnet → Privy fund flow.
-                    wallet.fund();
                   }
                 }}
               />
@@ -1637,19 +1625,7 @@ export default function FeedPage() {
               className={`fixed right-0 top-0 h-full w-full md:w-[420px] border-l z-50 flex flex-col ${T.drawerBg}`}>
               <div className={`flex items-center gap-3 px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
                 <span className="text-[15px] font-black flex-1">Your Profile</span>
-                {/* Trading mode pill — mobile only (desktop has header toggle) */}
-                <div className={`md:hidden flex items-center rounded-lg border overflow-hidden text-[10px] font-black ${dk ? "border-white/10" : "border-gray-200"}`}>
-                  {(["paper", "real"] as const).map(m => (
-                    <button key={m} onClick={() => setTradingMode(m)}
-                      className={`px-2 py-1 transition-all ${
-                        tradingMode === m
-                          ? m === "paper" ? "bg-yellow-400 text-black" : "bg-emerald-500 text-white"
-                          : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"
-                      }`}>
-                      {m === "paper" ? "Paper" : "Real"}
-                    </button>
-                  ))}
-                </div>
+                {/* v1 mainnet: always Real mode */}
                 {/* Settings gear */}
                 <button onClick={() => { setOrdersOpen(false); setSettingsInitialView("main"); setSettingsOpen(true); }}
                   className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>

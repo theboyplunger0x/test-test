@@ -1,31 +1,17 @@
-import { useState, useEffect } from "react";
-
+/**
+ * Trading mode — v1 mainnet: always Real mode.
+ * Paper and Testnet modes removed for mainnet launch.
+ * Type kept for compatibility with existing components.
+ */
 export type TradingMode = "paper" | "real" | "testnet";
 
-const STORAGE_KEY = "fud_mode";
-
-/**
- * Global trading mode (paper / real / testnet) persisted in localStorage.
- *
- * Returns the current mode, setter, and boolean helpers.
- */
 export function useTradingMode() {
-  const [tradingMode, setTradingMode] = useState<TradingMode>(() => {
-    if (typeof window === "undefined") return "paper";
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "real" || saved === "testnet" || saved === "paper") return saved;
-    return "paper";
-  });
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, tradingMode);
-  }, [tradingMode]);
-
+  // v1 mainnet: always Real. No toggle, no paper, no testnet.
   return {
-    tradingMode,
-    setTradingMode,
-    paperMode: tradingMode === "paper",
-    isTestnet: tradingMode === "testnet",
-    isReal: tradingMode === "real",
+    tradingMode: "real" as TradingMode,
+    setTradingMode: (_mode: TradingMode) => {}, // no-op
+    paperMode: false,
+    isTestnet: false,
+    isReal: true,
   };
 }
