@@ -188,6 +188,10 @@ export default function FeedPage() {
   // Mode for ConnectWalletModal: "reconnect" if user has linked a wallet before
   // (server-side flag), "add" otherwise. Drives the modal copy and primary CTA.
   const connectWalletMode: ConnectWalletMode = user?.has_connected_wallet ? "reconnect" : "add";
+  // When the user picks an option in the ConnectWalletModal, we want to chain
+  // straight into the fund flow once the wallet shows up. This flag bridges
+  // the two async steps (connect → walletAddr arrives → fund).
+  const [pendingFundAfterConnect, setPendingFundAfterConnect] = useState(false);
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
@@ -281,6 +285,34 @@ export default function FeedPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletAddr, user?.has_connected_wallet]);
+
+  // Post-action chaining: once the wallet appears after a connect triggered
+  // from ConnectWalletModal, automatically open the fund flow so the user
+  // doesn't have to click Deposit a second time.
+  // Gated on `!paperMode` so that switching modes mid-flow can't accidentally
+  // pop a real fund modal once the wallet shows up.
+  useEffect(() => {
+    if (pendingFundAfterConnect && walletAddr && !paperMode) {
+      setPendingFundAfterConnect(false);
+      wallet.fund();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFundAfterConnect, walletAddr, paperMode]);
+
+  // Safety net: if the user abandons the connect flow (closes Privy modal,
+  // rejects MetaMask, etc.), clear the pending flag after 5 min so a later
+  // unrelated connect doesn't accidentally trigger a fund.
+  useEffect(() => {
+    if (!pendingFundAfterConnect) return;
+    const t = setTimeout(() => setPendingFundAfterConnect(false), 5 * 60 * 1000);
+    return () => clearTimeout(t);
+  }, [pendingFundAfterConnect]);
+
+  // Clear stale pending intent whenever the trading mode changes — switching
+  // modes invalidates the original intent ("I clicked Deposit in Real").
+  useEffect(() => {
+    setPendingFundAfterConnect(false);
+  }, [tradingMode]);
 
   // Poll unread notification count every 60s
   useEffect(() => {
@@ -795,6 +827,8 @@ export default function FeedPage() {
                     setPaperCreditOpen(true);
                   } else if (!walletAddr) {
                     // Logged in but no wallet → focused modal with embedded/external choice.
+                    // Reset any stale chain intent from a prior abandoned attempt.
+                    setPendingFundAfterConnect(false);
                     setConnectWalletOpen(true);
                   } else {
                     // Has wallet → Privy fund flow.
@@ -1472,11 +1506,13 @@ export default function FeedPage() {
             mode={connectWalletMode}
             onUseEmbedded={() => {
               setConnectWalletOpen(false);
+              setPendingFundAfterConnect(true);
               wallet.loginEmbedded();
             }}
             onConnectExternal={() => {
               setConnectWalletOpen(false);
-              wallet.connect().catch(() => {});
+              setPendingFundAfterConnect(true);
+              wallet.connect().catch(() => setPendingFundAfterConnect(false));
             }}
           />
         )}
