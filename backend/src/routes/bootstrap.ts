@@ -31,12 +31,28 @@ export async function bootstrapRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "privy_user_id required" });
     }
 
-    // 1. Check if user already exists
-    const { rows: [existing] } = await db.query(
-      `SELECT id, username, wallet_address, has_connected_wallet, referral_code, tier
+    // 1. Check if user already exists — by privy_user_id first, then by email
+    let { rows: [existing] } = await db.query(
+      `SELECT id, username, wallet_address, has_connected_wallet, referral_code, tier, privy_user_id
        FROM users WHERE privy_user_id = $1`,
       [privy_user_id]
     );
+
+    // If not found by privy_user_id, try by email (legacy user from old auth)
+    if (!existing && email) {
+      const { rows: [byEmail] } = await db.query(
+        `SELECT id, username, wallet_address, has_connected_wallet, referral_code, tier, privy_user_id
+         FROM users WHERE email = $1`,
+        [email.toLowerCase()]
+      );
+      if (byEmail) {
+        // Link the privy_user_id to the existing account
+        if (!byEmail.privy_user_id) {
+          await db.query(`UPDATE users SET privy_user_id = $1 WHERE id = $2`, [privy_user_id, byEmail.id]);
+        }
+        existing = byEmail;
+      }
+    }
 
     if (existing) {
       // Sync wallet if missing and we have one now
