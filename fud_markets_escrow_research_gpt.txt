@@ -1,0 +1,698 @@
+FUD.markets — Research y propuesta de escrow contract para prediction market
+==========================================================================
+
+Objetivo
+--------
+Armar un smart contract escrow para un prediction market crypto tipo parimutuel LONG/SHORT,
+priorizando código auditado o battle-tested en producción, y bajar eso a una propuesta
+práctica para shipping rápido en MVP.
+
+Resumen ejecutivo
+-----------------
+Conclusión principal: no apareció un contrato público que matchee 1:1 la spec pedida
+(single master contract, USDC ERC-20 only, parimutuel payouts, resolver permissioned,
+cancel/refund, fee a treasury, no upgradeability) y que además sea auditado y claramente
+battle-tested con volumen real.
+
+Sí aparecieron muy buenas bases para adaptar rápido:
+
+1. Azuro V2
+   - Mejor referencia de arquitectura tipo singleton/pool pattern
+   - Auditada y usada de verdad
+   - Más parecida a la arquitectura buscada
+
+2. Gnosis Conditional Tokens
+   - Base muy battle-tested para collateral + resolution
+   - Muy usada indirectamente vía Polymarket
+   - No sirve directo para payout parimutuel
+
+3. Polymarket (CTF Exchange + UMA adapter)
+   - Súper battle-tested
+   - Muy fuerte en settlement/oracle separation
+   - Pero es exchange / CLOB + CTF, no escrow parimutuel simple
+
+Recomendación final:
+No forkear un protocolo entero. Hacer un contrato nuevo, chico, no-upgradeable,
+inspirado principalmente en:
+- Azuro para market lifecycle / singleton pool / roles
+- Polymarket UMA adapter para resolver/oracle separation
+- OpenZeppelin para SafeERC20, ReentrancyGuard, permisos y seguridad operacional
+
+==========================================================================
+CANDIDATOS ENCONTRADOS
+==========================================================================
+
+1) Azuro V2
+-----------
+
+Repo:
+- Azuro-protocol/Azuro-v2-public
+- Contratos visibles: LP.sol, CoreBase.sol, PrematchCore.sol, Access.sol, Factory.sol
+
+Auditoría:
+- Azuro publica auditorías V2 con múltiples firmas:
+  g0 Group, Pessimistic, Pashov Audit Group, Codeshell, HYDN
+- Reportes públicos listados por Azuro docs / hub
+
+Licencia:
+- GPL-3.0
+
+Match con requerimientos:
+- No es parimutuel binario puro
+- Pero sí se parece bastante al patrón de “un contrato maestro / pool pattern”
+- Tiene roles, fee routing, lifecycle de market, separación de componentes
+- Lo que NO conviene copiar:
+  - upgrade paths
+  - beacons / factory compleja
+  - complejidad de sportsbook generalista
+
+Volumen / uso:
+- Señal fuerte de uso real
+- Se reportó más de USD 250M de betting volume desde su lanzamiento (según reportes públicos)
+
+Red flags:
+- Más complejo de lo necesario para FUD v1
+- GPL-3.0
+- Pensado para un protocolo generalista, no para un escrow LONG/SHORT minimalista
+
+Veredicto:
+- Mejor base conceptual para extraer patrones
+- No lo usaría como fork directo
+
+------------------------------------------------------------
+
+2) Gnosis Conditional Tokens Framework (CTF)
+--------------------------------------------
+
+Repo:
+- gnosis/conditional-tokens-contracts
+- Contrato central: ConditionalTokens.sol
+
+Auditoría:
+- El repo publica AuditReport-ConditionalTokens.md
+- Muy usado como base por Polymarket
+
+Licencia:
+- LGPL-3.0
+
+Match con requerimientos:
+- Excelente para:
+  - collateral ERC-20 locked
+  - separar resolución del trading
+  - lifecycle prepare -> resolve -> redeem
+- Mala base directa para:
+  - payout parimutuel tipo redistribución de loserPool
+  - single master binary escrow simple
+
+Volumen / uso:
+- Battle-tested indirectamente por uso masivo en Polymarket
+- Muy buena señal operativa
+
+Red flags:
+- Framework más pesado de lo necesario
+- Outcome tokens ERC1155
+- Solidity vieja en partes del repo
+- No match directo con la matemática parimutuel pedida
+
+Veredicto:
+- Excelente referencia de security model
+- Mala base directa para copiar tal cual
+
+------------------------------------------------------------
+
+3) Polymarket (CTF Exchange + UMA adapter)
+------------------------------------------
+
+Repos:
+- Polymarket/ctf-exchange
+- Polymarket/uma-ctf-adapter
+
+Auditoría:
+- ctf-exchange auditado por ChainSecurity
+- uma-ctf-adapter auditado por OpenZeppelin
+
+Licencia:
+- Señales públicas de MIT para partes del stack / forks asociados
+- Confirmar licencia exacta de cada repo antes de copiar código
+
+Match con requerimientos:
+- A favor:
+  - ERC-20 collateral
+  - settlement y resolution battle-tested
+  - separación muy limpia entre exchange y oracle adapter
+- En contra:
+  - usa CTF + CLOB
+  - no es parimutuel
+  - no resuelve el accounting simple LONG/SHORT que FUD necesita
+
+Volumen / uso:
+- Claramente battle-tested
+- TVL y volumen público muy fuertes
+
+Red flags:
+- Arquitectura demasiado compleja para el MVP
+- Si se intenta adaptar directo, se termina trayendo demasiado equipaje
+
+Veredicto:
+- Buenísima referencia para resolver/oracle separation y production patterns
+- Mala base para fork directo del escrow v1
+
+------------------------------------------------------------
+
+4) Limitless CTF Exchange
+-------------------------
+
+Repo:
+- limitless-labs-group/limitless-ctf-exchange
+
+Auditoría:
+- El repo declara auditoría de ChainSecurity
+
+Licencia:
+- MIT
+
+Match con requerimientos:
+- Parecido al stack Polymarket
+- Sigue sin ser parimutuel escrow simple
+
+Volumen / uso:
+- Mucho menos claro que Polymarket
+- Menor señal de uso real
+
+Red flags:
+- Poca evidencia pública de battle-testing comparable a Polymarket
+- No aporta ventajas claras frente al stack original
+
+Veredicto:
+- Descartable salvo que ya se decida ir full CTF exchange
+
+------------------------------------------------------------
+
+5) SX / SportX / SX.bet
+-----------------------
+
+Repo:
+- sx-bet/smart-contracts
+
+Auditoría:
+- README menciona auditorías públicas de Decenter (2020) y MixBytes (2021)
+
+Licencia:
+- GPL-3.0
+
+Match con requerimientos:
+- Infra de betting con volumen real
+- Pero más cerca de exchange/sportsbook que de escrow parimutuel binario simple
+
+Volumen / uso:
+- Buena señal de uso real
+- Cumulative volume reportado públicamente en cientos de millones
+
+Red flags:
+- Auditorías visibles algo viejas
+- Match imperfecto con el producto deseado
+
+Veredicto:
+- Interesante como referencia de betting infra real
+- No lo pondría delante de Azuro como base conceptual
+
+------------------------------------------------------------
+
+6) Overtime / Thales
+--------------------
+
+Repo:
+- thales-markets/contracts
+
+Auditoría:
+- No quedó una fuente pública limpia y atribuible para afirmar auditoría exacta de lo relevante
+
+Licencia:
+- MIT
+
+Match con requerimientos:
+- Tiene mercados rápidos y producción real
+- Pero la mecánica se acerca más a AMM / options-like / speed markets
+- No es parimutuel pool redistribution simple
+
+Volumen / uso:
+- Uso real, pero menos claro como base del payout engine buscado
+
+Red flags:
+- Mecánica equivocada para el producto
+- Repo grande
+- Auditoría exacta de lo utilizable no suficientemente clara
+
+Veredicto:
+- Útil para leer, no como base principal
+
+------------------------------------------------------------
+
+7) Augur v2
+-----------
+
+Repo:
+- AugurProject/augur
+
+Auditoría:
+- OpenZeppelin auditó Augur Core v2
+- También hubo auditorías históricas de otras firmas
+
+Licencia:
+- Mezcla de GPL y MIT según el monorepo
+
+Match con requerimientos:
+- Muy bajo
+- Protocolo enorme, histórico, viejo y complejo
+- Muchísimo más de lo necesario
+
+Volumen / uso:
+- Históricamente importante
+- Pero no la mejor base práctica para 2026 y menos para shipping en días
+
+Red flags:
+- Complejidad enorme
+- Stack viejo
+- Costo de adaptación alto
+
+Veredicto:
+- No lo usaría para este MVP
+
+------------------------------------------------------------
+
+8) OpenZeppelin Escrow / RefundEscrow / ConditionalEscrow
+---------------------------------------------------------
+
+Fuente:
+- Contratos / docs históricas de OpenZeppelin
+
+Auditoría:
+- OpenZeppelin Contracts es battle-tested como librería
+- Pero estas primitivas no son un template de prediction market
+
+Licencia:
+- Revisar la versión exacta del contrato si se reutiliza algo histórico
+
+Match con requerimientos:
+- Sirve para patrones de pull-payments / refunds
+- No resuelve:
+  - market registry
+  - parimutuel math
+  - resolver/oracle
+  - multi-market singleton accounting
+  - treasury fees
+
+Red flags:
+- Si se parte solo de esto, se termina escribiendo el 90% del producto igual
+
+Veredicto:
+- Usar como patrón, no como base del producto
+
+==========================================================================
+SOLANA / ANCHOR / MOVE
+==========================================================================
+
+Se encontraron ejemplos open-source de prediction markets en Solana / Anchor, pero no apareció
+uno que pueda defenderse con la misma confianza como “auditado o battle-tested con volumen real”
+al nivel de los mejores candidatos EVM.
+
+Conclusión práctica:
+- Para shipping rápido y seguro, EVM / Solidity es la ruta más clara
+- Solana puede venir después con un diseño dedicado, no forzado desde este MVP
+
+==========================================================================
+RECOMENDACIÓN FINAL
+==========================================================================
+
+La mejor decisión para FUD.markets v1 es:
+
+No forkear Polymarket, Augur, Thales ni CTF completos.
+Hacer un contrato nuevo, minimalista, no-upgradeable, con estas referencias:
+
+- Azuro:
+  arquitectura general de singleton/pool y market lifecycle
+- Polymarket UMA adapter:
+  separación limpia de resolución / oracle authority
+- OpenZeppelin:
+  seguridad ERC-20, reentrancy protection, roles/permisos
+- Gnosis CTF:
+  solo como referencia conceptual de collateral -> resolve -> redeem
+
+Resumen simple:
+- Azuro = mejor inspiración de arquitectura
+- Polymarket/Gnosis = mejor inspiración de security model y resolution flow
+- Contrato nuevo = mejor forma de llegar a tu spec en pocos días
+
+==========================================================================
+PROPUESTA EXACTA DE CONTRATO PARA FUD V1
+==========================================================================
+
+Nombre sugerido:
+- ParimutuelEscrow.sol
+
+Características:
+- Un solo contrato maestro
+- ERC-20 only (USDC / USDC.e)
+- Sin ETH nativo
+- Sin upgradability
+- Resolver permissioned
+- Fee configurable (default 5%)
+- Treasury configurable
+- Cancel / refund manual
+- Claim pull-based
+- Sin leverage
+- Sin liquidations
+- Sin funding rates
+- Sin order book
+- Sin AMM
+- Sin ERC1155 positions
+
+------------------------------------------------------------
+Enums
+------------------------------------------------------------
+
+enum Side { NONE, LONG, SHORT }
+enum Status { NONE, OPEN, RESOLVED, CANCELED }
+
+------------------------------------------------------------
+Storage principal
+------------------------------------------------------------
+
+struct Market {
+    uint64 closesAt;
+    Status status;
+    Side winner;
+    uint128 longPool;
+    uint128 shortPool;
+    uint128 feeAmount;
+    uint128 payoutPool;
+    int256 exitPrice;
+}
+
+struct Position {
+    uint128 longAmount;
+    uint128 shortAmount;
+    bool claimed;
+}
+
+mapping(bytes32 => Market) public markets;
+mapping(bytes32 => mapping(address => Position)) public positions;
+
+IERC20 public immutable collateral;
+address public treasury;
+address public resolver;
+uint16 public feeBps;
+uint256 public accruedTreasuryFees;
+
+------------------------------------------------------------
+Flujo funcional
+------------------------------------------------------------
+
+1) createMarket(bytes32 marketId, uint64 closesAt)
+- onlyOwner o onlyBackend
+- valida que el market no exista
+- valida closesAt > block.timestamp
+- registra market OPEN
+
+2) bet(bytes32 marketId, Side side, uint128 amount)
+- market OPEN
+- block.timestamp < closesAt
+- amount > 0
+- side = LONG o SHORT
+- user hizo approve() antes
+- safeTransferFrom(msg.sender, address(this), amount)
+- incrementa pool correcto
+- incrementa position del usuario
+
+3) resolve(bytes32 marketId, Side winner, int256 exitPrice)
+- onlyResolver
+- block.timestamp >= closesAt
+- status == OPEN
+- calcula:
+  - winnerPool
+  - loserPool
+  - feeAmount = loserPool * feeBps / 10_000
+  - payoutPool = loserPool - feeAmount
+- suma feeAmount a accruedTreasuryFees
+- fija winner, exitPrice y status = RESOLVED
+
+4) cancel(bytes32 marketId)
+- onlyResolver
+- status == OPEN
+- status = CANCELED
+
+5) claim(bytes32 marketId)
+- nonReentrant
+- !claimed
+- si market CANCELED:
+  payout = longAmount + shortAmount
+- si market RESOLVED:
+  toma solo el side ganador
+  payout = userStake + userStake * payoutPool / winnerPool
+- marca claimed = true
+- safeTransfer(msg.sender, payout)
+
+6) sweepFees(address to, uint256 amount)
+- onlyOwner
+- transfiere fees acumulados a treasury o destino autorizado
+
+==========================================================================
+MECÁNICA DE PAYOUT
+==========================================================================
+
+Tu fórmula deseada:
+
+amount + (loserPool * 0.95 / winnerPool) * amount
+
+Implementación equivalente más limpia:
+
+loserPool = (winner == LONG) ? shortPool : longPool
+winnerPool = (winner == LONG) ? longPool : shortPool
+
+feeAmount = loserPool * feeBps / 10_000
+payoutPool = loserPool - feeAmount
+
+bonus = userStake * payoutPool / winnerPool
+payout = userStake + bonus
+
+Ventaja:
+- feeAmount y payoutPool quedan congelados al resolver
+- si se cambia feeBps después, no afecta mercados viejos
+- eso simplifica auditoría y evita inconsistencias
+
+==========================================================================
+EDGE CASES IMPORTANTES
+==========================================================================
+
+1) Winner pool vacío
+--------------------
+Si resolve() marca LONG pero longPool == 0, no hay ganadores.
+
+Recomendación:
+- revertir resolve() si winnerPool == 0
+- usar cancel() en ese caso
+
+2) Resolver malicioso / bug de backend
+--------------------------------------
+Para v1:
+- owner puede cambiar resolver
+- owner puede pausear
+- resolver puede cancel()
+- MarketResolved debe emitir exitPrice y datos suficientes para auditoría offchain
+
+3) ERC-20 no estándar
+---------------------
+Usar SafeERC20 siempre.
+
+4) Dust por rounding
+--------------------
+Va a existir por división entera.
+
+Recomendación simple para v1:
+- dejar dust residual en el contrato
+- opcionalmente barrerlo más adelante con lógica muy conservadora
+- no complicar demasiado el MVP por esto
+
+5) Doble claim
+--------------
+Cada posición debe poder reclamar una sola vez.
+Flag claimed obligatorio.
+
+==========================================================================
+EVENTOS SUGERIDOS
+==========================================================================
+
+event MarketCreated(bytes32 indexed marketId, uint64 closesAt);
+event BetPlaced(bytes32 indexed marketId, address indexed user, Side side, uint256 amount);
+event MarketResolved(
+    bytes32 indexed marketId,
+    Side winner,
+    int256 exitPrice,
+    uint256 winnerPool,
+    uint256 loserPool,
+    uint256 feeAmount
+);
+event MarketCanceled(bytes32 indexed marketId);
+event Claimed(bytes32 indexed marketId, address indexed user, uint256 payout);
+event ResolverUpdated(address indexed oldResolver, address indexed newResolver);
+event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+event FeeUpdated(uint16 oldFeeBps, uint16 newFeeBps);
+
+==========================================================================
+PERMISOS Y ROLES
+==========================================================================
+
+Roles mínimos:
+- owner
+- resolver
+
+Owner:
+- createMarket
+- setResolver
+- setTreasury
+- setFeeBps
+- pause
+- unpause
+- sweepFees
+
+Resolver:
+- resolve
+- cancel
+
+Por qué:
+- Tu MVP hoy resuelve de forma permissioned
+- La separación owner / resolver deja abierta la puerta para después enchufar
+  un adapter con backend signer, UMA, Pyth, etc.
+
+==========================================================================
+LO QUE NO METERÍA EN V1
+==========================================================================
+
+- upgradeability
+- proxys
+- signature-based betting
+- multi-collateral
+- secondary market
+- ERC1155 positions
+- merkle claims
+- per-market custom fee
+- dispute windows onchain complejas
+- challenge game onchain
+- oracle decentralization prematura
+
+Todo eso aleja del objetivo de shipping rápido.
+
+==========================================================================
+API PÚBLICA SUGERIDA
+==========================================================================
+
+function createMarket(bytes32 marketId, uint64 closesAt) external;
+function bet(bytes32 marketId, Side side, uint128 amount) external;
+function resolve(bytes32 marketId, Side winner, int256 exitPrice) external;
+function cancel(bytes32 marketId) external;
+function claim(bytes32 marketId) external;
+
+function setResolver(address newResolver) external;
+function setTreasury(address newTreasury) external;
+function setFeeBps(uint16 newFeeBps) external;
+function sweepFees(address to, uint256 amount) external;
+
+function getUserStake(bytes32 marketId, address user) external view returns (uint256 longAmt, uint256 shortAmt);
+function previewClaim(bytes32 marketId, address user) external view returns (uint256 payout);
+
+==========================================================================
+INVARIANTS / TESTS QUE SÍ O SÍ HAY QUE HACER
+==========================================================================
+
+1. No se puede apostar después de closesAt
+2. No se puede resolver antes de closesAt
+3. No se puede resolver dos veces
+4. No se puede cancelar dos veces
+5. No se puede resolver un market cancelado
+6. No se puede cancelar un market resuelto
+7. Cada user solo puede claim una vez
+8. En cancel, cada user recupera exactamente su stake
+9. En resolve, el total pagado a ganadores + treasury fee nunca supera los fondos del market
+10. Si winnerPool == 0, resolve debe fallar o el market debe cancelarse
+11. feeBps no puede ser absurdo (ej. cap razonable)
+12. safeTransfer / safeTransferFrom deben funcionar con USDC real
+13. Reentrancy en claim no debe ser posible
+
+==========================================================================
+STACK TÉCNICO RECOMENDADO
+==========================================================================
+
+Para el MVP:
+- Solidity ^0.8.24
+- Foundry
+- OpenZeppelin:
+  - SafeERC20
+  - ReentrancyGuard
+  - Ownable2Step
+  - Pausable
+- Base Sepolia primero
+- USDC mock en tests
+- luego USDC real en testnet/mainnet según chain
+- resolver inicialmente:
+  - EOA controlada por backend
+  o
+  - signer backend vía servidor que dispara tx
+- sin upgradeability
+- sin proxy
+- sin multicollateral
+
+==========================================================================
+RANKING FINAL
+==========================================================================
+
+Mejor inspiración para arquitectura:
+1. Azuro V2
+
+Mejor inspiración para settlement / resolution battle-tested:
+2. Polymarket + Gnosis CTF
+
+Mejor decisión de implementación:
+3. Contrato nuevo minimalista
+
+No usaría como base principal:
+- Augur
+- Overtime / Thales
+- OpenZeppelin Escrow solo
+- CTF completo si el objetivo es shipping rápido del producto exacto
+
+==========================================================================
+CONCLUSIÓN FINAL
+==========================================================================
+
+Si la consigna es:
+“no necesito el mejor contrato del mundo; necesito el mejor contrato auditado que podamos adaptar en un par de días”
+
+la respuesta honesta es:
+
+No hay un template público perfecto que matchee exactamente FUD.markets v1.
+Lo más inteligente es:
+- escribir un contrato nuevo chico
+- inspirado en patrones de Azuro, Polymarket y OpenZeppelin
+- con surface area mínima
+- sin upgradeability
+- con payout parimutuel fijo
+- con roles claros
+- con accounting congelado al resolver
+- con tests serios en Foundry
+
+Ese camino maximiza:
+- velocidad de shipping
+- claridad para auditar
+- cercanía real con tu producto
+- menor riesgo de meter complejidad innecesaria
+
+==========================================================================
+NOTA
+==========================================================================
+
+Si querés, el siguiente paso natural es convertir este documento en:
+1. spec técnica más formal
+2. contrato Solidity MVP
+3. suite de tests Foundry
+4. checklist de auditoría interna antes de deploy
+

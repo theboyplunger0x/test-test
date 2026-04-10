@@ -1,0 +1,669 @@
+FUD.markets — Rediseño de auth, wallet y onboarding para v1 mainnet
+====================================================================
+
+Decisión final
+--------------
+
+Para v1 mainnet, el modelo recomendado es:
+
+- Auth único con Privy para usuarios nuevos
+- Métodos de acceso: Google, Email, Wallet
+- Sin username/password
+- Sin elegir username al inicio
+- Wallet embedded por defecto para usuarios que entren con Google/email
+- Wallet externa como primary wallet si el usuario entra con MetaMask/Coinbase/WalletConnect
+- Username opcional después del primer uso
+- Referral aplicado en el bootstrap del usuario interno
+- Onboarding: auth → funding wallet → deposit to vault → trade
+- Sin paper mode para esta versión
+- Sin flujo de legacy users
+
+
+1. Auth model recomendado
+-------------------------
+
+Usar Privy como único sistema de autenticación para usuarios nuevos.
+
+Métodos visibles en el modal:
+
+1. Continue with Google
+2. Continue with Email
+3. Continue with Wallet
+
+Dentro de Wallet:
+
+- MetaMask
+- Coinbase Wallet
+- WalletConnect
+
+No mostrar:
+
+- username
+- password
+- create account
+- login/register toggle
+- choose username al inicio
+
+Objetivo:
+- reducir fricción
+- evitar el sistema híbrido frágil actual
+- unificar identidad y wallet desde el primer minuto
+
+
+2. Username
+-----------
+
+No pedir username al inicio.
+
+Modelo recomendado:
+
+- crear el usuario interno apenas termina el login con Privy
+- asignar un username interno temporal, por ejemplo: fud_8h3k2
+- marcar que no tiene username custom todavía
+- ofrecer elegir username más adelante, desde perfil o después del primer trade
+
+Conclusión:
+- username opcional
+- no bloqueante
+- editable después
+
+
+3. Wallet model
+---------------
+
+Regla principal:
+
+La primary wallet de FUD debe ser la address que controla el balance on-chain en el vault.
+
+### Si entra con Google o Email
+- Privy crea embedded wallet
+- esa embedded wallet pasa a ser la primary wallet
+
+### Si entra con wallet externa
+- la external wallet pasa a ser la primary wallet
+
+### Regla adicional
+Aunque el usuario luego conecte otras wallets, no cambiar automáticamente la primary wallet.
+
+Motivo:
+- tu vault depende de la address
+- cambiarla automáticamente rompería balance, firma, historial y soporte
+
+
+4. Embedded vs external wallet
+------------------------------
+
+Para v1:
+
+- Embedded wallet = opción por defecto
+- External wallet = opción avanzada para usuarios crypto-native
+
+No mostrar una pantalla inicial para elegir tipo de wallet.
+La elección debe caer naturalmente del método de login:
+
+- login social/email → embedded
+- login wallet → external
+
+Esto simplifica mucho la UX mobile-first.
+
+
+5. Funding de embedded wallet
+-----------------------------
+
+Si la embedded wallet está vacía, el flujo ideal es:
+
+1. Fund wallet
+2. Deposit to FUD Vault
+3. Trade
+
+No mezclar funding wallet con deposit al vault en una sola abstracción.
+
+Pantalla recomendada: Add funds
+
+Opciones:
+
+### Opción 1 — Transfer USDC
+Mostrar:
+- wallet address
+- red: Base
+- token: USDC
+
+Botones:
+- Copy address
+- Open wallet app
+- View on BaseScan
+
+### Opción 2 — Buy USDC
+Solo si ya está realmente lista e integrada sin riesgo para launch.
+
+### Opción 3 — Connect another wallet
+Sirve para mover fondos desde una wallet externa hacia la embedded.
+
+Para v1:
+- priorizar “Transfer USDC”
+- sumar onramp/card solo si ya está sólido
+
+Secuencia recomendada:
+- primero entra dinero a la wallet
+- después el usuario hace deposit al FUDVault
+
+
+6. Referral flow
+----------------
+
+El referral ya no debe depender del viejo /auth/register.
+
+Nuevo modelo:
+
+### Entrada
+Si llega una URL con:
+
+https://fud.markets/?ref=ABC123
+
+el frontend debe:
+
+- leer el query param ref
+- validarlo de forma básica
+- guardarlo en localStorage o cookie
+
+Ejemplo:
+localStorage.setItem("pending_referral_code", "ABC123")
+
+También conviene guardar:
+localStorage.setItem("pending_referral_seen_at", new Date().toISOString())
+
+### Luego del auth con Privy
+Antes de llamar al backend para crear o bootstrapear usuario:
+
+- leer pending_referral_code
+- incluirlo en POST /api/users/bootstrap
+
+### Regla backend
+El backend:
+
+- busca user por privy_user_id
+- si el user no existe, crea el user y aplica referral si el código es válido
+- si el user ya existe, no aplica referral
+
+### Importante
+El referral:
+- se consume una sola vez
+- solo se aplica en la creación inicial del user interno
+- no se puede sobrescribir después
+
+### Limpieza en frontend
+Si el referral se aplicó correctamente:
+- borrar pending_referral_code
+- borrar pending_referral_seen_at
+
+
+7. Onboarding recomendado
+-------------------------
+
+No usar paper mode en v1 mainnet.
+
+Flujo recomendado:
+
+1. Auth
+2. Bootstrap user interno
+3. Funding wallet
+4. Deposit to vault
+5. Trade
+6. Username opcional después
+
+Este es el flujo correcto para una app de prediction markets real-money en Base con USDC.
+
+No recomendado para esta semana:
+- Auth → elegir username → deposit → trade
+- Auth → paper mode → deposit después
+- Auth → paper gratis → upgrade a real mode
+
+
+8. Auth modal recomendado
+-------------------------
+
+Usar el modal nativo de Privy con branding FUD.
+
+### Copy sugerido
+
+Título:
+Welcome to FUD
+
+Subtítulo:
+Trade prediction markets on Base with USDC.
+
+### Orden de opciones
+1. Continue with Google
+2. Continue with Email
+3. Continue with Wallet
+
+### Footer
+- By continuing, you agree to the Terms.
+- Confirm you’re in a supported region.
+
+No usar modal custom para launch de esta semana.
+Prioridad:
+- confiabilidad
+- edge cases resueltos
+- mejor compatibilidad mobile
+
+
+9. Pantallas recomendadas
+-------------------------
+
+### 1. Auth modal
+Minimalista, sin fricción.
+
+### 2. Post-auth / Welcome
+Texto:
+Your wallet is ready.
+Deposit USDC on Base to start trading.
+
+Botones:
+- Add funds
+- Skip for now
+
+### 3. Funding wallet
+Tabs o bloques:
+- Transfer
+- Buy
+- Connected wallet
+
+### 4. Vault deposit
+Mostrar:
+- Wallet balance
+- Vault balance
+- Input monto
+- Max
+- Deposit
+
+### 5. First trade CTA
+Cuando vault_balance > 0:
+- Start trading
+
+### 6. Username prompt posterior
+No bloqueante.
+Mostrar después del primer trade o desde perfil:
+Choose your public username
+
+
+10. Flujo exacto del usuario nuevo
+----------------------------------
+
+Caso A — Entra con Google o Email
+
+### Paso 1
+El usuario abre el modal y se autentica con Privy.
+
+### Paso 2
+Privy devuelve:
+- privy_user_id
+- linked_accounts
+- embedded wallet creada
+- sesión autenticada
+
+### Paso 3
+Frontend llama a:
+
+POST /api/users/bootstrap
+
+Ejemplo de body:
+
+{
+  "privy_user_id": "did:privy:123",
+  "auth_method": "google",
+  "email": "user@example.com",
+  "wallets": [
+    {
+      "address": "0xabc...",
+      "type": "embedded",
+      "chain_type": "evm",
+      "is_embedded": true
+    }
+  ],
+  "referral_code": "CODE123"
+}
+
+### Paso 4
+Backend:
+- busca user por privy_user_id
+- si no existe:
+  - crea user
+  - setea primary_wallet_address = embedded wallet
+  - aplica referral si corresponde
+  - genera referral_code propio
+  - genera username interno temporal
+- si existe:
+  - devuelve user existente
+
+### Paso 5
+Frontend recibe algo así:
+
+{
+  "user": {
+    "id": "usr_123",
+    "privy_user_id": "did:privy:123",
+    "primary_wallet_address": "0xabc...",
+    "username": "fud_8h3k2",
+    "has_custom_username": false,
+    "referral_applied": true
+  },
+  "onboarding": {
+    "wallet_funded": false,
+    "vault_balance_usdc": "0",
+    "needs_deposit": true
+  }
+}
+
+### Paso 6
+Redirigir a pantalla:
+Fund your wallet
+
+CTAs:
+- Transfer USDC
+- Buy USDC
+- I already have funds
+
+### Paso 7
+Cuando se detecta USDC en wallet:
+mostrar CTA:
+Deposit to FUD Vault
+
+### Paso 8
+Después del primer depósito exitoso:
+redirigir a mercado o a “Make your first trade”
+
+
+Caso B — Entra con MetaMask/Coinbase/WalletConnect
+
+Mismo flujo, con esta diferencia:
+
+- primary_wallet_address = external wallet
+- no hace falta usar embedded como primary
+
+Pantalla post-login:
+- si la wallet ya tiene USDC en Base: Deposit to Vault
+- si no tiene: Fund your wallet
+
+
+11. Data model recomendado
+--------------------------
+
+Tabla users:
+
+- id
+- privy_user_id text unique null
+- email text null
+- username text unique null
+- username_normalized text unique null
+- has_custom_username boolean default false
+- primary_wallet_address text null
+- auth_source text not null            -- 'privy'
+- signup_method text null              -- 'google' | 'email' | 'wallet'
+- signup_wallet_type text null         -- 'embedded' | 'external'
+- referral_code text unique not null
+- referred_by_user_id uuid null
+- created_at
+- updated_at
+
+Tabla user_wallets:
+
+- id
+- user_id
+- address text unique
+- wallet_type text not null            -- 'embedded' | 'external'
+- provider text null                   -- 'privy' | 'metamask' | 'coinbase' | 'walletconnect'
+- chain_type text not null default 'evm'
+- is_primary boolean default false
+- is_active boolean default true
+- created_at
+- updated_at
+
+Tabla user_identities:
+
+- id
+- user_id
+- identity_type text not null          -- 'privy' | 'email' | 'google' | 'wallet'
+- identity_value text not null
+- is_verified boolean default false
+- created_at
+
+Tabla referral_events:
+
+- id
+- user_id
+- code_seen text
+- code_applied text
+- referrer_user_id uuid null
+- status text not null                 -- 'seen' | 'applied' | 'rejected_existing_user' | 'invalid'
+- source_url text null
+- created_at
+
+
+12. Endpoints backend
+---------------------
+
+### 1. Bootstrap user
+POST /api/users/bootstrap
+
+Body ejemplo:
+
+{
+  "privy_user_id": "did:privy:123",
+  "auth_method": "google",
+  "email": "user@example.com",
+  "wallets": [
+    {
+      "address": "0xabc...",
+      "type": "embedded",
+      "provider": "privy",
+      "is_embedded": true
+    }
+  ],
+  "referral_code": "ABC123"
+}
+
+Lógica:
+1. buscar user por privy_user_id
+2. si existe:
+   - sync wallets nuevas si faltan
+   - devolver user
+3. si no existe:
+   - elegir primary wallet
+   - crear user
+   - insertar wallets
+   - aplicar referral si válido
+   - devolver onboarding state
+
+### 2. Update profile
+PATCH /api/users/profile
+
+Body:
+{
+  "username": "nacho"
+}
+
+Regla:
+- username opcional
+- validación y unicidad
+- editable después
+
+### 3. Get onboarding state
+GET /api/users/me/onboarding
+
+Response ejemplo:
+
+{
+  "wallet_address": "0xabc...",
+  "wallet_usdc_balance": "25.14",
+  "vault_usdc_balance": "0",
+  "can_trade": false,
+  "needs_funding": false,
+  "needs_vault_deposit": true,
+  "has_custom_username": false
+}
+
+
+13. Regla de primary wallet
+---------------------------
+
+### En signup nuevo
+- si hay wallet externa conectada en el login inicial:
+  - esa wallet = primary
+- si no:
+  - embedded wallet = primary
+
+### Después
+No cambiar primary_wallet_address automáticamente aunque el user conecte otra wallet.
+
+### Motivo
+Porque el vault y balances ya dependen de address.
+Cambiar la primary automáticamente rompería:
+- balances
+- historial
+- firma EIP-712
+- retiros
+- soporte
+
+
+14. EIP-712 y firma
+-------------------
+
+La wallet que firma las bets debe ser siempre la wallet cuyo balance vive en el vault.
+
+Regla:
+- si el usuario tiene varias wallets vinculadas, solo una puede ser la trading wallet
+
+Recomendación:
+guardar explícitamente:
+
+- trading_wallet_address
+
+Para v1:
+- trading_wallet_address = primary_wallet_address
+
+
+15. Estado del frontend
+-----------------------
+
+Auth state:
+
+type AuthState = {
+  privyReady: boolean
+  authenticated: boolean
+  privyUserId?: string
+  authMethod?: "google" | "email" | "wallet"
+}
+
+User state:
+
+type UserState = {
+  userId?: string
+  username?: string
+  hasCustomUsername: boolean
+  primaryWalletAddress?: string
+  signupWalletType?: "embedded" | "external"
+  referralApplied: boolean
+}
+
+Onboarding state:
+
+type OnboardingState = {
+  walletUsdcBalance: string
+  vaultUsdcBalance: string
+  needsFunding: boolean
+  needsVaultDeposit: boolean
+  canTrade: boolean
+}
+
+
+16. Reglas de producto
+----------------------
+
+No hacer en v1:
+- no pedir username antes del valor
+- no soportar dos auth principales
+- no mezclar balance wallet y balance vault
+- no cambiar primary wallet automáticamente
+- no paper trading
+- no flujo de link wallet obligatorio para usuarios sociales
+
+Sí hacer en v1:
+- embedded por defecto
+- external para power users
+- referral aplicado en bootstrap
+- username opcional
+- auth modal súper corto
+- onboarding directo a funding y vault deposit
+
+
+17. Métricas recomendadas
+-------------------------
+
+Eventos mínimos:
+
+- auth_modal_opened
+- auth_method_selected
+- privy_auth_success
+- bootstrap_user_created
+- bootstrap_user_existing
+- referral_seen
+- referral_applied
+- wallet_funded
+- vault_deposit_started
+- vault_deposit_success
+- first_trade_success
+
+Funnel principal:
+
+landing → auth success → user bootstrap → wallet funded → vault deposit → first trade
+
+
+18. Plan de implementación esta semana
+--------------------------------------
+
+Día 1
+- esconder username/password del modal principal
+- configurar Privy modal con Google / Email / Wallet
+- crear /api/users/bootstrap
+
+Día 2
+- modelar user_wallets
+- definir primary wallet logic
+- guardar referral en bootstrap
+
+Día 3
+- pantalla post-auth
+- funding screen
+- vault deposit CTA
+
+Día 4
+- QA de casos edge
+- métricas
+- analytics del funnel
+
+Día 5
+- pulido mobile
+- hardening de errores
+- revisión final para mainnet
+
+
+19. Resumen ejecutivo
+---------------------
+
+Recomendación final para FUD.markets v1:
+
+- Privy-only para usuarios nuevos
+- Google / Email / Wallet como únicas entradas
+- embedded wallet por defecto
+- external wallet como opción avanzada
+- no pedir username al inicio
+- referral aplicado después del auth, en el bootstrap del usuario interno
+- funding wallet y deposit to vault como pasos separados
+- no paper mode
+- no legacy flow
+- auth modal nativo de Privy, minimalista, mobile-first
+
+En una sola línea:
+
+Privy-only + embedded wallet por defecto + external wallet opcional + username opcional después + depósito como primer CTA real + sin legacy users.

@@ -378,11 +378,11 @@ export default function AccountDrawer({
                     ) : (
                       <div className="space-y-3">
                         <p className={`text-[12px] ${dk ? "text-white/50" : "text-gray-500"}`}>
-                          No wallet connected. Connect MetaMask or login with Privy to create an embedded wallet automatically.
+                          Your FUD Wallet will be created automatically when you sign in.
                         </p>
-                        <button onClick={() => { wallet.connect().catch(() => {}); }}
+                        <button onClick={() => wallet.loginEmbedded()}
                           className="w-full px-3 py-2.5 rounded-lg text-[12px] font-black bg-purple-500 hover:bg-purple-400 text-white transition-all">
-                          Connect Wallet
+                          Set up wallet
                         </button>
                       </div>
                     )}

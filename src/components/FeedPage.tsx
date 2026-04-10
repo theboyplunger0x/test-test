@@ -12,7 +12,6 @@ import LiveTicker from "./LiveTicker";
 import OrdersView from "./OrdersView";
 import CoinDetail from "./CoinDetail";
 import AuthModal from "./AuthModal";
-import DepositModal from "./DepositModal";
 import TradeModal from "@/trading/TradeModal";
 import SearchModal from "./SearchModal";
 import ReferralModal from "./ReferralModal";
@@ -33,7 +32,6 @@ import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useVault } from "@/hooks/useVault";
 import BottomNav from "@/shell/BottomNav";
-import TradingModeToggle from "@/shell/TradingModeToggle";
 import BalanceSummary from "@/shell/BalanceSummary";
 import FundingCTA from "@/shell/FundingCTA";
 import HeaderSearch from "@/shell/HeaderSearch";
@@ -136,8 +134,8 @@ function tierBadge(tier?: string, telegramUsername?: string) {
 export default function FeedPage() {
   const [user, setUser]                 = useState<User | null>(null);
   // Don't auto-detect MetaMask on mount — prevents wallet bleed between accounts.
-  const wallet = usePrivyWallet({ autoDetect: false });
-  const { walletAddr, setWalletAddr, genBalance, privyAuthenticated } = wallet;
+  const wallet = usePrivyWallet();
+  const { walletAddr, setWalletAddr, privyAuthenticated } = wallet;
   // Balance reads from user's Main Wallet in DB.
   // Signing uses Privy embedded wallet (no MetaMask popup needed).
   const vault = useVault(walletAddr, user?.wallet_address, wallet.getEmbeddedProvider);
@@ -179,7 +177,6 @@ export default function FeedPage() {
   const [authOpen, setAuthOpen]         = useState(false);
   // True from Sign In click until user is set — prevents "Sign In" flashing back
   const [authLoading, setAuthLoading]   = useState(false);
-  const [depositOpen, setDepositOpen]   = useState(false);
   const [openMarketCoin, setOpenMarketCoin] = useState<Coin | null>(null);
   const [caSearchOpen, setCASearchOpen]     = useState(false);
   const [referralOpen, setReferralOpen]     = useState(false);
@@ -200,9 +197,6 @@ export default function FeedPage() {
 
   // Wallet state & effects managed inside usePrivyWallet hook.
   const [liveCoins, setLiveCoins]           = useState<Coin[]>(STATIC_COINS);
-  const [paperCreditOpen, setPaperCreditOpen] = useState(false);
-  const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
-  const [paperCreditLoading, setPaperCreditLoading] = useState(false);
   const [connectWalletOpen, setConnectWalletOpen]   = useState(false);
   // Mode for ConnectWalletModal: "reconnect" if user has linked a wallet before
   // (server-side flag), "add" otherwise. Drives the modal copy and primary CTA.
@@ -513,9 +507,6 @@ export default function FeedPage() {
     wallet.logoutPrivy();
   }
 
-  function handleDeposited(newBalance: string) {
-    if (user) setUser({ ...user, balance_usd: newBalance });
-  }
 
   function handleMarketCreated(market: Market) {
     setMarkets(prev => [market, ...prev]);
@@ -895,7 +886,7 @@ export default function FeedPage() {
                 paperBalance={Number(user.paper_balance_usd ?? 0)}
                 realBalance={Number(user.balance_usd)}
                 walletAddr={walletAddr}
-                genBalance={genBalance}
+                genBalance={0}
                 vaultBalance={vault.vaultBalance}
               />
 
@@ -1460,67 +1451,6 @@ export default function FeedPage() {
       <AnimatePresence>
         {authOpen    && <AuthModal dk={dk} onSuccess={handleAuthSuccess} onClose={() => { setAuthOpen(false); setAuthLoading(false); }} />}
       </AnimatePresence>
-      <AnimatePresence>
-        {depositOpen && <DepositModal dk={dk} onClose={() => setDepositOpen(false)} onDeposited={handleDeposited} />}
-      </AnimatePresence>
-
-      {/* Paper Credit Modal */}
-      <AnimatePresence>
-        {paperCreditOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setPaperCreditOpen(false)}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96 }} transition={{ type: "spring", stiffness: 340, damping: 28 }}
-              className={`relative w-[320px] rounded-2xl border p-6 shadow-2xl z-10 ${dk ? "bg-[#111] border-white/10" : "bg-white border-gray-200"}`}>
-              <button onClick={() => setPaperCreditOpen(false)}
-                className={`absolute top-4 right-4 text-[18px] font-bold transition-colors ${dk ? "text-white/20 hover:text-white/50" : "text-gray-300 hover:text-gray-600"}`}>✕</button>
-              <div className="mb-5">
-                <span className="text-[16px] font-black">Add Paper Money</span>
-                <p className={`text-[11px] mt-0.5 ${dk ? "text-white/40" : "text-gray-500"}`}>
-                  Simulated balance for testing. Max $10,000 total.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[100, 500, 1000, 5000].map(a => (
-                    <button key={a} onClick={() => setPaperCreditAmt(String(a))}
-                      className={`py-2 rounded-xl text-[11px] font-black transition-all ${
-                        paperCreditAmt === String(a)
-                          ? "bg-yellow-400 text-black"
-                          : dk ? "bg-white/6 text-white/50 hover:bg-white/12" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}>${a >= 1000 ? `${a/1000}k` : a}</button>
-                  ))}
-                </div>
-                <div className="relative">
-                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
-                  <input type="number" value={paperCreditAmt} onChange={e => setPaperCreditAmt(e.target.value)} min={1} max={10000}
-                    className={`w-full pl-6 pr-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${
-                      dk ? "bg-white/6 border border-white/10 text-white placeholder:text-white/20 focus:border-white/30" : "bg-gray-50 border border-gray-200 text-gray-900 focus:border-gray-400"
-                    }`} />
-                </div>
-                <button
-                  disabled={paperCreditLoading || !paperCreditAmt || Number(paperCreditAmt) <= 0}
-                  onClick={async () => {
-                    setPaperCreditLoading(true);
-                    try {
-                      const res = await api.paperCredit(Number(paperCreditAmt));
-                      setUser(u => u ? { ...u, paper_balance_usd: res.paper_balance_usd } : null);
-                      setPaperCreditOpen(false);
-                      setPaperCreditAmt("100");
-                    } catch (err: any) { alert(err.message); }
-                    finally { setPaperCreditLoading(false); }
-                  }}
-                  className="w-full py-3 rounded-xl bg-yellow-400 text-black text-[13px] font-black hover:bg-yellow-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                  {paperCreditLoading ? "Adding…" : `Add $${paperCreditAmt || "0"} paper`}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* Connect Wallet Modal — used when user is logged in but has no wallet. */}
       <AnimatePresence>
         {connectWalletOpen && (
@@ -1536,7 +1466,7 @@ export default function FeedPage() {
             onConnectExternal={() => {
               setConnectWalletOpen(false);
               setPendingFundAfterConnect(true);
-              wallet.connect().catch(() => setPendingFundAfterConnect(false));
+              wallet.loginEmbedded();
             }}
           />
         )}

@@ -1,0 +1,422 @@
+FUD.markets — Anti-abuse spec for deposit processor
+=================================================
+
+Original prompt
+---------------
+
+Necesito protecciones anti-abuse para mi deposit processor en
+FUD.markets. El sistema funciona así:
+
+FLUJO ACTUAL
+1. Cada user tiene una Main Wallet (embedded de Privy)
+2. User envía USDC a su Main Wallet desde cualquier lado
+3. Backend polls USDC Transfer events cada 15s
+4. Cuando detecta transfer a una Main Wallet, el operator llama
+   depositFor(mainWallet, amount) en el vault contract
+5. El OPERATOR paga el gas de ese depositFor()
+6. El operator necesita tener USDC aprobado al vault para llamar
+   depositFor()
+
+RIESGOS QUE VEO
+
+1. Spam de micro-deposits: alguien envía 1000 transfers de $0.001
+   a una Main Wallet. El operator gasta gas en cada depositFor()
+   pero recibe casi nada. Gas drain del protocolo.
+
+2. Operator wallet compromised: si alguien obtiene la private key
+   del operator, puede drenar todo el USDC aprobado al vault
+   llamando depositFor a su propia wallet.
+
+3. Self-deposit loop: user deposita, retira, deposita, retira...
+   cada ciclo consume gas del protocolo.
+
+4. Fake Main Wallet: alguien crea muchas cuentas FUD para generar
+   muchas Main Wallets y luego spamea micro-deposits a todas.
+
+PREGUNTAS
+
+1. ¿Cuál debería ser el mínimo de deposit? ¿$1? ¿$5?
+2. ¿Rate limit por user? ¿Max X deposits por hora/día?
+3. ¿Rate limit global para el operator? ¿Max gas spend por hora?
+4. ¿Cómo limitar el riesgo del operator USDC approval? ¿Aprobar
+   por batch en vez de infinito?
+5. ¿Cooldown entre withdraw y re-deposit para evitar loops?
+6. ¿Limit de cuentas por Privy identity para evitar Sybil?
+7. ¿Qué monitoreo/alertas implementar?
+8. ¿Hay algo que Polymarket hace para prevenir esto?
+
+Dame parámetros concretos y reglas que pueda implementar ya.
+No busco una solución perfecta, busco protecciones mínimas
+razonables para launch.
+
+
+Recommended launch spec
+-----------------------
+
+Objetivo:
+- evitar gas drain por micro-deposits
+- evitar loops de deposit/withdraw
+- acotar blast radius si comprometen operator
+- mantener auto-credit simple
+
+### Parámetros de launch
+
+- token soportado para auto-credit: USDC solamente
+- auto-credit mínimo: 5.00 USDC
+- dust threshold: todo depósito < 5.00 USDC
+- batch window por wallet: 5 minutos
+- batch trigger anticipado: acumulado >= 20.00 USDC
+- máximo de fondeos auto-creditados por cuenta:
+  - 3 por hora
+  - 10 por día
+- máximo de retiros por cuenta:
+  - 2 por hora
+  - 5 por día
+- retiro mínimo: 10.00 USDC
+- cooldown después de withdraw:
+  - 10 minutos para permitir otro withdraw
+- cooldown de cuenta nueva:
+  - no auto-credit instantáneo para cuentas creadas hace menos de 5 minutos
+- global cap de depositFor:
+  - 20 por hora
+- gas budget global inicial:
+  - 10 USD por hora
+- operator allowance al vault:
+  - 250 USDC inicial
+  - nunca infinito
+- hot operator balance:
+  - bajo
+- treasury:
+  - separada del operator hot wallet
+
+### Regla clave
+Nunca disparar depositFor por cada Transfer detectido.
+
+Siempre:
+- acumular
+- validar
+- batchear
+- acreditar solo si supera mínimo y pasa rate limits
+
+Deposit processor states
+------------------------
+
+### Estados por evento detectado
+
+- detected
+- pending_dust
+- pending_batch
+- rate_limited
+- paused
+- credited
+- failed
+- ignored
+
+### Estados por cuenta
+
+- active
+- cooling_down
+- rate_limited
+- manual_review
+
+### Estados globales
+
+- normal
+- degraded
+- paused
+
+Backend tables
+--------------
+
+### deposit_events
+
+- id
+- user_id
+- main_wallet_address
+- from_address
+- token_address
+- amount_usdc
+- tx_hash
+- log_index
+- block_number
+- detected_at
+- status
+- batch_id nullable
+- reason nullable
+
+### deposit_batches
+
+- id
+- user_id
+- main_wallet_address
+- total_amount_usdc
+- event_count
+- window_started_at
+- window_closed_at
+- status
+- deposit_for_tx_hash nullable
+- gas_used nullable
+- created_at
+- updated_at
+
+### user_rate_limits
+
+- user_id
+- deposits_credited_last_hour
+- deposits_credited_today
+- withdrawals_last_hour
+- withdrawals_today
+- last_withdraw_at nullable
+- last_deposit_credit_at nullable
+- account_created_at
+- status
+
+### operator_limits
+
+- hour_bucket
+- deposit_for_count
+- gas_spend_usd
+- status
+
+### security_alerts
+
+- id
+- type
+- severity
+- payload_json
+- created_at
+- acknowledged_at nullable
+
+Processing rules
+----------------
+
+### Rule 1 — Ignore unsupported token
+Si el Transfer no es USDC:
+- status = ignored
+
+### Rule 2 — Deduplicate
+Clave única:
+- tx_hash + log_index
+
+Si ya existe:
+- ignorar
+
+### Rule 3 — Match only known Main Wallets
+Si el destino no es una Main Wallet registrada:
+- ignored
+
+### Rule 4 — Dust handling
+Si amount < 5.00 USDC:
+- status = pending_dust
+- acumular en dust bucket de esa Main Wallet
+- no llamar depositFor
+
+### Rule 5 — Batch handling
+Si amount >= 5.00 USDC:
+- agregar a batch abierto de esa Main Wallet
+- status = pending_batch
+
+### Rule 6 — Batch trigger
+Procesar batch si se cumple cualquiera:
+- pasaron 5 minutos desde window_started_at
+- acumulado >= 20.00 USDC
+
+### Rule 7 — Per-user funding cap
+Antes de llamar depositFor, validar:
+- credited deposits last hour < 3
+- credited deposits today < 10
+
+Si no:
+- status = rate_limited
+- mover batch a manual_review o esperar siguiente ventana
+
+### Rule 8 — New account cooldown
+Si la cuenta tiene menos de 5 minutos:
+- no auto-credit todavía
+- mantener batch en pending_batch hasta que venza cooldown
+
+### Rule 9 — Global operator cap
+Antes de llamar depositFor, validar:
+- deposit_for_count current hour < 20
+- gas_spend_usd current hour < 10
+
+Si no:
+- global status = degraded o paused
+- dejar batches en cola
+
+### Rule 10 — Post-withdraw anti-loop
+Si last_withdraw_at fue hace menos de 10 minutos:
+- permitir detectar depósitos
+- no prohibir depósito
+- pero marcar cuenta en cooling_down para retiros
+- no permitir withdraw adicional hasta que termine cooldown
+
+### Rule 11 — Operator approval cap
+No usar approve infinito.
+Manejo:
+- operator allowance target = 250 USDC
+- si allowance disponible < umbral operativo, recargar
+- refill explícito y monitoreado
+- treasury separada
+
+### Rule 12 — Manual review triggers
+Mandar a manual_review si:
+- más de 3 depósitos dust en 10 minutos para una cuenta
+- más de 10 depósitos detectados en 1 hora para una cuenta
+- cuenta nueva con patrón raro
+- from_address nueva + comportamiento fragmentado
+- gas budget global casi agotado
+- error repetido de depositFor
+
+Pseudocode
+----------
+
+```python
+def process_transfer_event(event):
+    if event.token != USDC:
+        mark(event, "ignored")
+        return
+
+    if is_duplicate(event.tx_hash, event.log_index):
+        return
+
+    user = find_user_by_main_wallet(event.to_address)
+    if not user:
+        mark(event, "ignored")
+        return
+
+    create_deposit_event(event, user)
+
+    if event.amount < Decimal("5.00"):
+        add_to_dust_bucket(user, event)
+        mark(event, "pending_dust")
+        return
+
+    batch = get_or_create_open_batch(user)
+
+    add_event_to_batch(batch, event)
+    mark(event, "pending_batch")
+
+    if not should_trigger_batch(batch):
+        return
+
+    if account_age_minutes(user) < 5:
+        return
+
+    if user.deposits_credited_last_hour >= 3:
+        mark_batch(batch, "rate_limited")
+        return
+
+    if user.deposits_credited_today >= 10:
+        mark_batch(batch, "rate_limited")
+        return
+
+    if operator.deposit_for_count_current_hour >= 20:
+        pause_global_processing("operator_count_cap")
+        return
+
+    if operator.gas_spend_usd_current_hour >= Decimal("10.00"):
+        pause_global_processing("gas_budget_cap")
+        return
+
+    tx = call_deposit_for(user.main_wallet_address, batch.total_amount_usdc)
+
+    mark_batch(batch, "credited", tx_hash=tx.hash)
+    increment_user_deposit_counters(user)
+    increment_operator_counters(tx)
+```
+
+Monitoring and alerts
+---------------------
+
+Crear alertas para:
+
+- > 10 depósitos dust en 10 minutos globalmente
+- > 3 depósitos dust en 10 minutos para una cuenta
+- > 10 cuentas nuevas con depósito en 15 minutos
+- > 3 fallos seguidos de depositFor
+- gas spend > 8 USD en la hora
+- operator allowance refill fuera de horario esperado
+- operator allowance cae por debajo de umbral
+- diferencia entre depósitos detectados y acreditados
+- batch queue creciendo demasiado
+- muchas cuentas nuevas con un solo fondeo pequeño
+
+Circuit breakers
+----------------
+
+### Circuit breaker 1 — Gas budget
+Si gas_spend_usd >= 10 por hora:
+- global status = paused
+- seguir detectando eventos
+- no ejecutar depositFor nuevos
+
+### Circuit breaker 2 — Error rate
+Si 3 depositFor seguidos fallan:
+- paused
+- alerta crítica
+
+### Circuit breaker 3 — Event flood
+Si > 100 transfer events elegibles en 15 min:
+- degraded
+- procesar solo batches >= 20 USDC
+- lo demás queda en cola
+
+Operator security
+-----------------
+
+### Wallet separation
+- operator hot wallet solo para ejecución
+- treasury separada
+- nunca guardar gran saldo en operator hot
+
+### Approval policy
+- approve finito
+- top-up pequeño
+- logs de cada refill
+- opcional: multisig para treasury
+
+### Key handling
+- private key en KMS/HSM o proveedor seguro
+- rotación periódica
+- nunca en variables inseguras o servidores sin hardening
+
+What not to do
+--------------
+
+- no depositFor por cada micro-transfer
+- no approve infinito al vault
+- no auto-credit sin rate limits
+- no dejar retiros ilimitados inmediatos
+- no confiar solo en polling sin dedupe
+
+Launch defaults
+---------------
+
+Usar esto de arranque:
+
+- deposit_min_auto_credit = 5 USDC
+- batch_trigger_amount = 20 USDC
+- batch_window_minutes = 5
+- max_credited_deposits_per_hour_per_user = 3
+- max_credited_deposits_per_day_per_user = 10
+- max_withdrawals_per_hour_per_user = 2
+- max_withdrawals_per_day_per_user = 5
+- withdraw_min = 10 USDC
+- withdraw_cooldown_minutes = 10
+- new_account_cooldown_minutes = 5
+- global_deposit_for_cap_per_hour = 20
+- global_gas_budget_usd_per_hour = 10
+- operator_allowance_cap = 250 USDC
+
+Short final recommendation
+--------------------------
+
+Para launch:
+- mínimo auto-credit de 5 USDC
+- batching sí o sí
+- máximo 3 fondeos acreditados por hora por cuenta
+- allowance finita del operator
+- gas budget global bajo
+- circuit breakers simples
+- alerts básicas

@@ -1,0 +1,1222 @@
+Necesito entender exactamente cómo funciona la wallet en Polymarket
+y traducirlo a mi sistema (FUD.markets con Privy).
+
+PREGUNTAS ESPECÍFICAS SOBRE POLYMARKET
+
+1. ¿Polymarket te crea SIEMPRE una wallet cuando te registrás?
+   ¿O solo si entrás con Google/Email?
+
+2. Si yo ya tengo MetaMask y entro con MetaMask en Polymarket,
+   ¿Polymarket usa MI wallet directamente? ¿O crea una proxy
+   wallet y me hace transferir?
+
+3. ¿La wallet que Polymarket te crea es exportable? ¿Puedo sacar
+   la private key?
+
+4. ¿Polymarket te deja cambiar de wallet después? ¿O una vez
+   creada es fija?
+
+5. ¿Cómo se fondea la wallet de Polymarket? ¿Transfer directo?
+   ¿Onramp con tarjeta? ¿Bridge?
+
+6. ¿El balance en Polymarket es de la wallet o de un vault/pool
+   interno?
+
+MI SISTEMA ACTUAL
+
+- Si el user entra con Google/Email → Privy crea embedded wallet
+  → esa es la primary wallet
+- Si entra con MetaMask → esa MetaMask address es la primary wallet
+- FUDVault.sol: el user deposita USDC → balance on-chain por address
+- Primary wallet guardada en DB, no se puede cambiar si hay fondos
+
+PROBLEMAS QUE TENGO
+
+1. Si el user entra con Google y Privy crea embedded wallet, ¿cómo
+   la fondea? La embedded está vacía. Opciones:
+   a) Transfer USDC desde MetaMask/otra wallet a la embedded address
+   b) Privy Onramp (compra USDC con tarjeta)
+   c) Bridge desde otra chain
+   ¿Cuál usa Polymarket?
+
+2. Si el user desconecta su wallet embedded (logout de Privy), el
+   "Reconnect" no funciona bien porque Privy ya está autenticado
+   pero la wallet no se re-sincroniza.
+
+3. ¿Debería forzar que SIEMPRE se cree una embedded wallet, incluso
+   si el user entra con MetaMask? Así hay una sola identidad de
+   wallet consistente.
+
+4. ¿O debería dejar que el user elija: embedded (Privy crea) vs
+   external (MetaMask/Rainbow/etc)?
+
+Contexto técnico: Privy SDK, Base network, USDC, FUDVault singleton
+con balances por address, EIP-712 signed bets.
+
+Dame la recomendación más simple y limpia para un launch esta semana.
+No quiero un sistema complejo de múltiples wallets. Quiero UNA wallet
+por cuenta que "just works".
+
+
+Respuesta
+---------
+
+La traducción más limpia de Polymarket a FUD es esta:
+
+Polymarket separa “cómo entrás” de “con qué wallet opera la cuenta”.
+Aunque entres con una wallet externa, su sistema gira alrededor de una
+wallet/proxy wallet de la cuenta para trading y balance. Para tu launch
+de esta semana, lo más simple es copiar ese principio: una sola trading
+wallet por cuenta, y que esa sea la embedded de Privy para todos los
+usuarios.
+
+Qué parece hacer Polymarket
+---------------------------
+
+1) ¿Te crea siempre una wallet?
+La documentación actual de Polymarket dice que si tenés una cuenta en
+Polymarket, tus fondos están en una proxy wallet visible en el perfil,
+y que si esa proxy wallet no existe, “se despliega en el primer login”.
+Sus instrucciones actuales de signup también muestran que hay signup con
+Google, email o crypto wallet, y el flujo con crypto wallet incluye un
+paso de Enable Trading. Eso, combinado con la documentación histórica
+de MetaMask, apunta a que Polymarket termina creando/activando una
+wallet de cuenta también para usuarios que entran con wallet externa,
+no solo para Google/email.
+
+2) Si entrás con MetaMask, ¿usa tu wallet directa o una proxy?
+La evidencia más fuerte es que Polymarket documenta que los fondos de la
+cuenta viven en una proxy wallet, y la guía histórica de MetaMask decía
+explícitamente “Generate your proxy wallet” después de conectar MetaMask.
+O sea: no parece usar tu MetaMask como wallet operativa principal de
+trading del producto, sino como mecanismo de acceso/firma para habilitar
+una wallet de cuenta.
+
+3) ¿Esa wallet es exportable?
+Sí. Polymarket dice en su help center que es non-custodial y que podés
+exportar tu private key en cualquier momento. Su artículo de export de
+key dice que esto aplica al signup por email y usa Magic para revelar la
+key.
+
+4) ¿Te deja cambiar de wallet?
+No encontré documentación oficial reciente de Polymarket que describa un
+flujo de “switch primary wallet” como feature de producto. Lo que sí
+muestran es recuperación/export de key y recuperación de activos enviados
+a la wallet de Polymarket. Mi lectura prudente es: su modelo visible
+públicamente no parece estar centrado en que el usuario cambie de
+trading wallet todo el tiempo, sino en que opere con la wallet/proxy de
+la cuenta.
+
+5) ¿Cómo se fondea?
+La guía actual de depósito de Polymarket dice: clic en Deposit → elegir
+método (por ejemplo Transfer Crypto) → elegir token y network → copiar
+deposit address → enviar fondos. La guía no presenta ese artículo como
+“depositá desde MetaMask obligatoriamente”, sino como depósito a una
+address de la cuenta. No vi en las fuentes abiertas una explicación
+oficial clara de si el onramp/card o bridge es el camino principal; lo
+que sí está clarísimo en help actual es transfer crypto a una address de
+depósito.
+
+6) ¿El balance es de la wallet o de un vault interno?
+Polymarket docs dicen que si tenés una cuenta en Polymarket, tus fondos
+están en una proxy wallet. Además, su ayuda de depósito dice que mandás
+fondos a una deposit address y después “aparecen en tu balance”. Eso se
+parece mucho más a un modelo de balance asociado a una wallet de cuenta
+que a “tu MetaMask conectada del browser es el balance”.
+
+Qué haría yo en FUD
+-------------------
+
+Tu constraint más importante es este:
+
+- FUDVault.sol guarda balance por address
+- querés UNA wallet por cuenta
+- no querés complejidad de múltiples wallets
+
+Con esas reglas, mi recomendación más simple y limpia es:
+
+Usá siempre una embedded wallet de Privy como única trading wallet de la
+cuenta, incluso si el usuario entra con MetaMask.
+
+Eso te da el comportamiento más parecido a Polymarket:
+múltiples formas de login, pero una sola wallet operativa de la cuenta.
+
+Cómo traducirlo a tu sistema
+----------------------------
+
+Nuevo modelo propuesto
+Para todo signup/login:
+
+- crear o recuperar una embedded wallet Privy
+- esa wallet = primary_wallet_address
+- esa wallet = trading_wallet_address
+- esa wallet = la que firma EIP-712 bets
+- MetaMask/Rabby/Coinbase solo son:
+  - método de acceso
+  - fuente de fondos
+  - opción avanzada futura
+
+Qué no haría
+No dejaría este split:
+
+- Google/email → embedded primary
+- MetaMask → external primary
+
+Eso te mete de vuelta en el problema que ya tenés: dos experiencias
+distintas, dos lógicas de funding, dos fuentes de verdad, más edge
+cases de reconexión.
+
+Respuestas directas a tus problemas
+-----------------------------------
+
+Problema 1: cómo fondear la embedded vacía
+La UX más simple es:
+
+Deposit to your FUD wallet
+- Transfer USDC on Base
+- Buy USDC
+- Send from MetaMask
+
+El camino mínimo viable debería ser:
+- mostrar la embedded address
+- network: Base
+- token: USDC
+- botón Copy address
+- botón Open MetaMask
+- texto “Send USDC on Base to your FUD wallet”
+
+Eso es consistente con el patrón de Polymarket de “copiá deposit address
+y transferí crypto”. Si además tenés onramp listo, lo sumás como segunda
+opción, no como dependencia.
+
+Problema 2: reconnect de embedded no re-sincroniza bien
+Eso refuerza la decisión de no tratar la wallet del browser como fuente
+de verdad. Tu app debería reconstruir siempre el estado desde:
+
+- sesión Privy autenticada
+- embedded wallet asociada al user
+- primary_wallet_address guardada en backend
+
+O sea, el reconnect de trading no debería depender de “si MetaMask está
+conectada ahora”. La trading wallet tiene que venir del usuario
+autenticado de Privy, no del browser wallet state.
+
+Problema 3: ¿forzar embedded siempre, incluso si entra con MetaMask?
+Sí. Esa es la recomendación principal.
+
+Motivo:
+- una sola wallet por cuenta
+- una sola lógica de balances
+- una sola lógica de firma
+- una sola UX de funding
+- una sola fuente de verdad en DB
+
+Problema 4: ¿dejar elegir embedded vs external?
+No.
+Eso suena flexible, pero en realidad te duplica decisiones y soporte:
+
+- cuál es la primary
+- cuál firma
+- cuál fondea
+- qué pasa si cambian wallet en browser
+- qué pasa si tienen fondos en una y perfil en otra
+
+La regla debería ser brutalmente simple:
+
+Cada cuenta FUD tiene una sola FUD wallet.
+Esa wallet es la embedded wallet de Privy.
+
+Flujo exacto que lanzaría
+-------------------------
+
+Si entra con Google o Email
+- Privy login
+- crear/recover embedded wallet
+- guardar esa address como primary_wallet_address
+- onboarding:
+  - Add funds
+  - Deposit to Vault
+  - Trade
+
+Si entra con MetaMask
+- usar MetaMask solo para autenticarse / linkear identidad
+- igual crear/recover embedded wallet
+- guardar embedded como primary_wallet_address
+- mostrar:
+  - “Your FUD wallet is ready”
+  - “Send USDC from MetaMask or another wallet”
+- bets firmadas por embedded
+
+Qué hacer con MetaMask
+----------------------
+
+No la trataría como wallet principal. La trataría como:
+
+- login option
+- funding source
+- advanced export destination in the future
+
+Y en UI la mostraría así:
+
+FUD Wallet
+0x...
+Used for deposits, balances, and trades.
+
+MetaMask detected
+0x...
+Use it to send funds to your FUD wallet.
+
+No mostraría “wallet mismatch”.
+
+La decisión más simple y limpia
+-------------------------------
+
+Polymarket-style para FUD = many login methods, one account wallet.
+
+En tu caso, esa one account wallet debería ser:
+Privy embedded wallet, siempre.
+
+Checklist final
+---------------
+
+- eliminar el concepto de external wallet como primary en v1
+- crear/reusar embedded wallet para todos los usuarios
+- guardar siempre esa address en DB
+- firmar siempre EIP-712 con esa embedded wallet
+- funding siempre hacia esa embedded address
+- MetaMask solo como login/funding helper
+- no permitir “switch wallet” en v1
+
+Recomendación final, sin matices
+--------------------------------
+
+Para lanzar: una cuenta = una embedded wallet Privy = una trading
+wallet = una primary wallet. Incluso si el usuario entra con MetaMask.
+No dejes elegir. No uses MetaMask como primary. Usala solo para login y
+para mandar fondos a la FUD wallet.
+
+
+Usuario
+-------
+
+dale
+
+
+Respuesta
+---------
+
+Perfecto. Te lo bajo a spec operativo para que lo puedas implementar
+con la menor complejidad posible.
+
+Principio rector
+----------------
+
+Regla única
+Una cuenta FUD = una wallet de FUD = una embedded wallet de Privy
+
+Siempre.
+
+No importa si el usuario entra con:
+- Google
+- Email
+- MetaMask
+- WalletConnect
+
+La wallet operativa de la cuenta es siempre la misma:
+- primary_wallet_address = embedded wallet
+- trading_wallet_address = embedded wallet
+
+La wallet externa nunca es primary en v1.
+
+Qué resuelve esto
+-----------------
+
+Elimina de raíz estos problemas:
+
+- no hay dos modelos de cuenta
+- no hay “mismatch” entre wallet del browser y wallet de trading
+- no hay dudas sobre quién firma
+- no hay dudas sobre dónde fondear
+- no hay switch de primary wallet
+- no hay casos raros por MetaMask conectada con otra address
+
+Modelo final de wallet
+----------------------
+
+Wallets posibles
+En v1 distinguí solo dos conceptos:
+
+1. FUD Wallet
+Es la embedded wallet de Privy.
+Siempre existe.
+Siempre es la wallet operativa.
+
+Usos:
+- recibir fondos
+- depositar al vault
+- firmar bets EIP-712
+- retirar fondos
+- mostrar balance principal
+
+2. External wallet
+MetaMask / WalletConnect / Coinbase / Rainbow, etc.
+
+En v1 sirve solo para:
+- login
+- mandar fondos a la FUD Wallet
+- futura exportación o interoperabilidad
+
+No sirve para:
+- ser primary wallet
+- firmar bets en v1
+- tener balance de trading en FUD
+
+Flujo exacto por tipo de login
+------------------------------
+
+Caso A — Login con Google
+Paso 1
+Usuario toca:
+- Continue with Google
+
+Paso 2
+Privy autentica.
+
+Paso 3
+Privy crea o recupera embedded wallet.
+
+Paso 4
+Frontend llama a backend:
+
+POST /api/users/bootstrap
+
+Body:
+
+{
+  "privy_user_id": "did:privy:123",
+  "auth_method": "google",
+  "email": "user@example.com",
+  "embedded_wallet_address": "0xFUD123...",
+  "referral_code": "ABC123"
+}
+
+Paso 5
+Backend:
+- busca user por privy_user_id
+- si no existe, crea user
+- guarda:
+  - primary_wallet_address = embedded_wallet_address
+  - trading_wallet_address = embedded_wallet_address
+  - wallet_model = embedded_only
+- aplica referral si corresponde
+
+Paso 6
+UI:
+Your FUD wallet is ready
+
+CTA:
+- Add funds
+
+Caso B — Login con Email
+Exactamente igual que Google.
+
+Caso C — Login con MetaMask
+Importante:
+Aunque entre con MetaMask:
+- no usar MetaMask como primary
+- no usar MetaMask como trading wallet
+- igual crear o recuperar embedded wallet
+
+Paso 1
+Usuario toca:
+- Continue with Wallet
+- elige MetaMask
+
+Paso 2
+Privy autentica usando la wallet externa.
+
+Paso 3
+Privy crea o recupera embedded wallet de la cuenta.
+
+Paso 4
+Frontend llama a backend:
+
+{
+  "privy_user_id": "did:privy:456",
+  "auth_method": "wallet",
+  "external_wallet_address": "0xMETA456...",
+  "embedded_wallet_address": "0xFUD789...",
+  "referral_code": "ABC123"
+}
+
+Paso 5
+Backend guarda:
+- primary_wallet_address = embedded_wallet_address
+- trading_wallet_address = embedded_wallet_address
+
+Opcional:
+- registrar external wallet en tabla secundaria, solo informativa
+
+Paso 6
+UI:
+Your FUD wallet is ready
+Use MetaMask to fund your FUD wallet.
+
+CTA:
+- Copy FUD wallet address
+- Open MetaMask
+
+Regla de firma
+--------------
+
+Regla absoluta
+Todas las firmas EIP-712 se hacen con la FUD Wallet.
+
+Nunca con MetaMask.
+
+Entonces:
+
+- signer_address = trading_wallet_address
+- trading_wallet_address = embedded wallet
+
+Beneficios
+- una sola lógica
+- sin popup de MetaMask
+- mejor mobile UX
+- menos errores de address equivocada
+- firma siempre consistente con el balance del vault
+
+Regla de funding
+----------------
+
+Regla absoluta
+Siempre se fondea la FUD Wallet
+Nunca la wallet del browser como paso del producto.
+
+Orden correcto
+1. El usuario manda USDC a la FUD Wallet
+2. Desde la FUD Wallet hace deposit() al FUDVault
+3. Con balance en vault, tradea
+
+Funding UX
+----------
+
+Pantalla: Add funds
+
+Header
+Add funds to your FUD wallet
+
+Wallet card
+FUD Wallet
+0xFUD123...
+Network: Base
+Token: USDC
+
+Acciones
+- Copy address
+- Show QR
+- View on BaseScan
+
+Opciones
+1. Transfer USDC
+Texto:
+Send USDC on Base to your FUD wallet.
+
+2. Send from MetaMask
+Texto:
+Move USDC from your MetaMask wallet into your FUD wallet.
+
+Botones:
+- Copy address
+- Open MetaMask
+
+3. Buy USDC
+Solo si el onramp ya está listo y confiable.
+
+Pantallas exactas
+-----------------
+
+1. Auth modal
+Título
+Welcome to FUD
+
+Subtítulo
+Trade prediction markets on Base with USDC.
+
+Botones
+1. Continue with Google
+2. Continue with Email
+3. Continue with Wallet
+
+Nada más.
+
+2. Post-login screen
+Título
+Your FUD wallet is ready
+
+Body
+This wallet is used for deposits, balances, and trades.
+
+Card
+FUD Wallet
+0xFUD123...
+Embedded wallet
+
+Si detectás MetaMask
+Mostrar info neutra:
+
+MetaMask detected
+0xMETA456...
+Use it to fund your FUD wallet.
+
+CTA principal
+Add funds
+
+CTA secundario
+Not now
+
+3. Funding screen
+Título
+Add funds
+
+Subtítulo
+Send USDC on Base to your FUD wallet to start trading.
+
+Secciones
+- Transfer USDC
+- Send from MetaMask
+- Buy USDC
+
+4. Deposit to Vault
+Condición:
+- FUD Wallet tiene USDC
+- vault balance = 0
+
+Título
+Deposit to start trading
+
+Body
+Move USDC from your FUD wallet into FUD Vault.
+
+Balances
+- FUD Wallet balance: 25.00 USDC
+- FUD Vault balance: 0.00 USDC
+
+CTA
+Deposit to Vault
+
+5. Ready to trade
+Condición:
+- vault balance > 0
+
+Título
+You’re ready to trade
+
+Body
+Your balance is available in FUD Vault.
+
+CTA
+Start trading
+
+Qué mostrar si detectás MetaMask
+--------------------------------
+
+Mostrar
+Información neutra.
+
+Ejemplo:
+
+MetaMask detected
+Use MetaMask to send funds to your FUD wallet.
+
+No mostrar
+- wallet mismatch
+- wrong wallet
+- switch wallet
+- connected wallet doesn’t match
+
+En v1, no hay mismatch posible, porque MetaMask no define la trading
+wallet.
+
+Data model mínimo
+-----------------
+
+Tabla users
+Campos clave:
+
+id uuid primary key
+privy_user_id text unique not null
+email text null
+primary_wallet_address text not null
+trading_wallet_address text not null
+wallet_model text not null default 'embedded_only'
+signup_method text not null
+referral_code text unique not null
+referred_by_user_id uuid null
+created_at timestamptz not null
+updated_at timestamptz not null
+
+Tabla user_wallets
+Opcional pero recomendable:
+
+id uuid primary key
+user_id uuid not null
+address text not null unique
+wallet_type text not null -- 'embedded' | 'external'
+provider text null -- 'privy' | 'metamask' | 'walletconnect'
+is_trading_wallet boolean not null default false
+created_at timestamptz not null
+updated_at timestamptz not null
+
+Regla
+Siempre debe existir:
+- una wallet embedded
+- is_trading_wallet = true en esa embedded
+
+Las external pueden existir como metadata, no como wallet operativa.
+
+Endpoints backend
+-----------------
+
+1. Bootstrap user
+POST /api/users/bootstrap
+
+Request
+{
+  "privy_user_id": "did:privy:123",
+  "auth_method": "google",
+  "email": "user@example.com",
+  "embedded_wallet_address": "0xFUD123...",
+  "external_wallet_address": null,
+  "referral_code": "ABC123"
+}
+
+Lógica
+1. buscar por privy_user_id
+2. si existe:
+   - devolver user
+3. si no existe:
+   - crear user
+   - primary_wallet_address = embedded_wallet_address
+   - trading_wallet_address = embedded_wallet_address
+   - insertar embedded wallet en user_wallets
+   - si vino external wallet, guardarla como secundaria
+   - aplicar referral si válido
+
+2. Get wallet state
+GET /api/users/me/wallet
+
+Response
+{
+  "fud_wallet_address": "0xFUD123...",
+  "wallet_type": "embedded",
+  "wallet_usdc_balance": "12.50",
+  "vault_usdc_balance": "0.00",
+  "can_trade": false,
+  "needs_funding": false,
+  "needs_vault_deposit": true,
+  "detected_external_wallets": [
+    {
+      "provider": "metamask",
+      "address": "0xMETA456..."
+    }
+  ]
+}
+
+3. Get onboarding state
+GET /api/users/me/onboarding
+
+Response
+{
+  "step": "fund_wallet",
+  "fud_wallet_address": "0xFUD123...",
+  "wallet_usdc_balance": "0.00",
+  "vault_usdc_balance": "0.00"
+}
+
+Valores posibles de step:
+- fund_wallet
+- deposit_to_vault
+- ready_to_trade
+
+Estado del frontend
+-------------------
+
+Auth state
+type AuthState = {
+  authenticated: boolean
+  privyUserId?: string
+  authMethod?: "google" | "email" | "wallet"
+}
+
+Wallet state
+type WalletState = {
+  fudWalletAddress?: string
+  fudWalletType: "embedded"
+  detectedExternalWallets: Array<{
+    provider: "metamask" | "walletconnect" | "coinbase"
+    address: string
+  }>
+  walletUsdcBalance: string
+  vaultUsdcBalance: string
+}
+
+Onboarding state
+type OnboardingStep =
+  | "fund_wallet"
+  | "deposit_to_vault"
+  | "ready_to_trade"
+
+Lógica de UI
+------------
+
+Banner / info bar
+
+Mostrar esto
+const showMetamaskDetectedInfo =
+  wallet.fudWalletType === "embedded" &&
+  wallet.detectedExternalWallets.some(w => w.provider === "metamask")
+
+Nunca mostrar
+const showWalletMismatch = false
+
+En v1 directamente lo eliminaría.
+
+Qué hacer con “reconnect”
+-------------------------
+
+Tu bug de reconnect existe porque hoy seguramente mezclás:
+- estado de auth de Privy
+- estado de wallet del browser
+- estado de wallet de trading
+
+Separalos.
+
+Fuente de verdad
+El reconnect de la wallet de trading debe depender solo de:
+- sesión Privy activa
+- embedded wallet disponible
+- user bootstrapado
+
+No de:
+- si MetaMask está instalada
+- si MetaMask está conectada
+- si cambió la address del browser
+
+Regla operativa
+Cuando la app carga:
+1. verificar sesión Privy
+2. recuperar user backend
+3. recuperar embedded wallet Privy
+4. comparar embedded wallet con primary_wallet_address
+5. operar
+
+Si MetaMask desaparece, no pasa nada.
+
+Qué no hacer
+------------
+
+- no permitir elegir wallet al crear cuenta
+- no permitir switch de primary wallet
+- no usar external wallet como trading wallet
+- no mostrar mismatch por browser wallet
+- no mezclar funding con deposit al vault
+- no construir un sistema multi-wallet real
+
+Qué sí hacer
+------------
+
+- una embedded wallet por cuenta
+- embedded siempre como primary
+- embedded siempre como signer
+- funding siempre hacia embedded
+- deposit al vault desde embedded
+- MetaMask solo como helper de login/funding
+- UI súper clara con “FUD Wallet”
+
+Copy exacto recomendado
+-----------------------
+
+Post-login
+Your FUD wallet is ready
+This wallet is used for deposits, balances, and trades.
+
+MetaMask detected
+Use it to send funds to your FUD wallet.
+
+Funding
+Add funds to your FUD wallet
+Send USDC on Base to start trading.
+
+Deposit
+Deposit to FUD Vault
+Move funds from your FUD wallet into the vault to place trades.
+
+First trade
+You’re ready to trade
+
+Resumen ejecutivo
+-----------------
+
+Arquitectura final v1
+- una cuenta
+- una embedded wallet Privy
+- una primary wallet
+- una trading wallet
+- una lógica de firma
+- una lógica de funding
+
+Regla más importante
+MetaMask puede participar del acceso y del funding, pero no del core
+operativo de la cuenta.
+
+Decisión concreta
+Para launch:
+forzá embedded wallet siempre, incluso si el user entra con MetaMask.
+
+Usuario
+-------
+
+OK, igual lo del launch para esta semana es una forma de decir, no es
+que tipo tenemos que hacer algo simple para lanzar esta semana. Prefiero
+hacer las cosas bien, ¿se entiende? Si se sigue pareciendo más allá de
+eso, la dirección en donde estamos yendo correcta, está bien, respóndeme
+sí y listo.
+
+Respuesta
+---------
+
+Sí.
+
+Usuario
+-------
+
+Y una respuesta muy simple también que necesito es, o sea, Embedded
+Wallet es primary siempre y tipo para fondearla, lo podés hacer de otra
+wallet tuya, digamos, formato cripto. O sea, es así de simple todo
+responder eso. Entonces no hay connect wallet externa. Siempre tipo
+embedded, primary. Y aunque te conectes, ponele que te conectas con una
+wallet en vez de un mail o otra cosa, ¿qué pasa? Respondeme simple.
+
+Respuesta
+---------
+
+Sí, así de simple:
+
+- La Embedded Wallet es siempre la primary.
+- Siempre se fondea esa wallet.
+- La podés fondear desde otra wallet tuya mandándole USDC o el token que
+  corresponda en la red correcta.
+
+Si el user entra con Google o email:
+- se crea o recupera su Embedded Wallet
+- esa es su wallet de FUD
+
+Si el user entra con una wallet externa:
+- esa wallet externa sirve para login
+- pero igual FUD usa su Embedded Wallet como primary
+- la externa no pasa a ser la wallet principal de trading
+
+O sea:
+
+una cuenta = una Embedded Wallet = esa es la wallet que usa FUD
+
+Y si querés meterle fondos, se los mandás desde MetaMask, otra wallet,
+bridge, onramp, etc.
+
+Usuario
+-------
+
+Pasa que haciendo eso, la embedded wallet tendría que tener ETH. ¿Qué
+pasa si no tiene?
+
+Respuesta
+---------
+
+Sí: si la embedded wallet va a mover fondos o hacer deposit() al vault
+en Base, necesita gas en ETH de Base.
+
+Entonces el modelo completo no es solo:
+
+- mandarle USDC a la embedded
+
+También es:
+
+- mandarle un poco de ETH en Base para gas
+
+En la práctica, tenés estas opciones:
+
+Opción 1 — El user fondea ambas cosas
+Le mostrás:
+- deposit address
+- “Mandá USDC”
+- “Mandá un poco de ETH en Base para gas”
+
+Funciona, pero mete fricción.
+
+Opción 2 — Vos subsidiás el gas
+La embedded wallet sigue siendo la primary, pero FUD le pone un poco de
+ETH en Base cuando hace falta.
+
+Este es el camino más prolijo para UX.
+
+Ejemplo:
+- el user manda USDC a la embedded
+- FUD detecta que tiene 0 ETH
+- FUD le manda un poquito de ETH en Base
+- el user ya puede hacer deposit() al vault sin entender nada de gas
+
+Opción 3 — Gasless / relayer
+Si rediseñás el flow, podrías hacer que cierto paso lo ejecute un
+relayer y no la wallet directamente.
+Pero con tu modelo actual de FUDVault.sol y balance por address, lo
+normal es que alguna address pague gas igual.
+
+La respuesta simple
+Sí, necesita ETH para gas.
+Si no tiene, no va a poder mover USDC ni depositar al vault por sí sola.
+
+La recomendación práctica
+Si querés que el sistema “just works”:
+
+- embedded wallet siempre primary
+- el user le manda USDC
+- FUD le subsidia un poco de ETH en Base cuando haga falta
+
+Así evitás explicarle al user:
+- qué es gas
+- por qué tiene USDC pero no puede depositar
+- por qué necesita dos assets
+
+Esa es la parte importante.
+
+Usuario
+-------
+
+Pero vos me estás dando una solución creativa y yo no quiero una
+solución creativa. Yo quiero que me digas, o sea, ¿qué hace Polymarket?
+¿Cómo soluciona esto Polymarket o Kalshi o cualquiera? De vuelta, no
+había una superaplicación, había una respuesta corta.
+
+Respuesta
+---------
+
+Sí: Polymarket lo resuelve haciendo que el usuario opere con una
+wallet/proxy wallet de la cuenta y, para esos usuarios, usa
+relayer/gasless, o sea el usuario no necesita tener gas en esa wallet
+para tradear. Sus docs dicen que los fondos de una cuenta de Polymarket
+están en una proxy wallet, que esa proxy wallet se despliega en el
+primer login, y que los usuarios de proxy wallet pueden usar el gasless
+relayer de Polymarket.
+
+La respuesta corta a tu duda es:
+
+- Polymarket: wallet/proxy wallet propia de la cuenta + relayer/gasless
+  para operaciones de trading. El usuario deposita a una address de
+  depósito y el balance aparece en su cuenta.
+- Kalshi: no es el modelo comparable acá, porque es principalmente
+  fiat-native y su flujo base no gira alrededor de una embedded wallet
+  onchain para tradear como Polymarket.
+
+Entonces, si querés copiar el patrón de Polymarket, la idea correcta es:
+
+una wallet de cuenta + el usuario la fondea desde donde quiera + el
+sistema resuelve el gas/ejecución sin pedirle que entienda ETH para gas.
+
+Usuario
+-------
+
+OK, yo pensé que Polymarket era descentralizado. ¿Sigue siendo
+descentralizado? O sea, bueno, hay un fondeo en una cuenta que te da el
+balance, tipo esos créditos, porque el balance al fin y al cabo son
+créditos, es uno a uno con el dólar.
+
+Respuesta
+---------
+
+Sí, sigue siendo “descentralizado” en un sentido parcial, no absoluto.
+
+Polymarket mismo describe su sistema como “hybrid-decentralized”: el
+matching de órdenes ocurre offchain en su CLOB, pero la liquidación
+ocurre onchain vía contrato, las órdenes son EIP-712 signed, y el
+operador no puede ejecutar trades no autorizados. Además, lo describen
+como non-custodial.
+
+La forma simple de pensarlo es:
+
+- No es “todo pasa 100% onchain desde tu MetaMask”.
+- Sí es un sistema donde tu cuenta opera con una wallet/proxy wallet
+  propia de la cuenta, y Polymarket usa infraestructura centralizada
+  para UX, matching y relayer/gasless. Sus docs también dicen que los
+  fondos de la cuenta están en una proxy wallet y que esa proxy wallet
+  se despliega en el primer login.
+
+Sobre tu frase de “créditos”:
+- si el balance está asociado a una wallet/proxy wallet de tu cuenta, no
+  es simplemente una base de datos interna tipo puntos arbitrarios;
+- pero a nivel UX sí se siente como un saldo de cuenta, porque vos
+  depositás y después ves un balance utilizable dentro del producto.
+
+Entonces, la respuesta corta sería:
+
+Polymarket no es “descentralizado puro”; es híbrido.
+Tiene partes centralizadas para que el producto funcione bien, pero la
+operativa de trading y settlement sigue apoyándose en firmas del usuario
+y contratos onchain.
+
+Y comparado con Kalshi:
+- Kalshi es más claramente un account balance regulado/centralizado de
+  exchange, no el mismo modelo wallet-first onchain de Polymarket.
+
+Traducido a FUD:
+podés seguir siendo suficientemente “crypto-native” aunque el usuario
+vea un saldo de cuenta, siempre que ese saldo esté respaldado por una
+wallet/address y reglas onchain, aunque la UX alrededor sea más
+centralizada.
+
+Usuario
+-------
+
+Es que por ahora, o sea, el usuario ve saldo, ve un balance en la
+cuenta, pero lo que estábamos haciendo es que se fondeaba desde una
+wallet. Ese balance se fondeaba desde una wallet, ¿se entiende? Y creo
+que por ahí la solución sería esa, como decir... y la pregunta es,
+¿sigue siendo privy funcional para todo esto? Porque ahora que lo
+pienso, o sea, hay todo un flujo que repensar. Tendría que ser más
+simple esto, pero el usuario que quiera conectar wallet tendría que
+poder hacerlo y conectar la wallet que quiera y que el balance sea
+independiente de la wallet que conecte, porque es el balance de la
+cuenta, ¿se entiende? Por otro lado, están los usuarios que se meten
+con... que crean una cuenta y Privy les crea una... una wallet. Se
+podría llamar Main Wallet, pero podría haber un pequeño proceso, tipo
+para desconect... o sea, desconectarla, avisar un mensaje que diga,
+cuidado, o que no sea un simple botón de desconectar, que sea un motor
+de eliminar wallet, tipo eliminar wallet de la cuenta. Y que diga,
+¿estás seguro? Un proceso así. ¿Estás seguro? Mirá que si no exportaste
+y no tenés la clave privada, no vas a poder acceder más a esta. y
+bueno, yponer sí, y ahí se te desconecta. Entonces, seguimos con el
+mismo flujo que teníamos que era el balance se fondeaba desde la cuenta,
+pero hay que corregir un error que tenía, que todos los balances estaban
+conectados a la wallet, no al usuario. Entonces, ¿qué pasaba? Cuando
+cambiaba la wallet dentro de la misma cuenta, cambiaba el balance
+también, porque el balance estaba conectado a la wallet y no al user,
+¿entendés? Y eso era un error fatal.
+
+Respuesta
+---------
+
+Sí, se entiende, y sí: Privy sigue siendo totalmente funcional para
+esto.
+
+El error fatal no era “usar Privy”.
+El error era este:
+
+ataste el balance a la wallet, cuando en realidad querés atarlo a la
+cuenta del usuario.
+
+Eso cambia toda la arquitectura.
+
+La forma correcta de pensarlo
+-----------------------------
+
+Tenés que separar 3 cosas:
+
+1. Cuenta del usuario
+Es la identidad real del user en FUD.
+
+2. Wallets vinculadas a esa cuenta
+Puede haber una embedded de Privy, una MetaMask, otra externa, etc.
+
+3. Balance de FUD
+Ese balance, si tu producto va hacia “saldo de cuenta”, debería
+pertenecer al user, no a una wallet específica.
+
+Entonces, sí: la dirección a la que estás yendo es correcta
+-----------------------------------------------------------
+
+La idea correcta sería:
+
+- el user tiene una cuenta FUD
+- esa cuenta puede tener una Main Wallet embebida de Privy
+- también puede conectar otras wallets
+- pero el balance pertenece a la cuenta
+- no cambia porque conecte otra wallet dentro de la misma cuenta
+
+Eso arregla exactamente el bug conceptual que describiste.
+
+Sobre la Main Wallet embebida
+-----------------------------
+
+También tiene sentido lo que decís:
+
+- la embedded puede llamarse Main Wallet
+- no debería haber un botoncito trivial de “disconnect”
+- debería haber un flujo más serio de Remove wallet from account
+- con warning fuerte antes de desvincularla
+
+Y ese warning tendría que decir algo del estilo:
+
+“Si no exportaste esta wallet o no guardaste su clave, podés perder
+acceso a esos fondos.”
+
+La consecuencia importante
+--------------------------
+
+Si vas por este modelo, entonces:
+
+- la wallet deja de ser la dueña del balance
+- la wallet pasa a ser una herramienta de acceso / firma / depósito /
+  retiro
+- la cuenta del usuario pasa a ser la dueña del balance lógico del
+  producto
+
+Dicho brutalmente simple
+------------------------
+
+Antes:
+- wallet = cuenta
+- cambiar wallet = cambiar balance
+
+Después:
+- cuenta = cuenta
+- wallet = método vinculado a la cuenta
+- cambiar wallet no cambia balance
+
+Y sí, Privy sirve para eso
+--------------------------
+
+Porque Privy no te obliga a pensar “una cuenta = una sola wallet fija”.
+Privy ya está pensado para manejar usuarios con múltiples métodos
+vinculados y wallets linked/unlinked dentro del mismo user object.
+
+La única advertencia importante
+-------------------------------
+
+Si hacés esto, entonces tu contrato actual, donde el balance vive por
+address, ya no representa bien tu modelo de producto.
+
+O sea:
+- tu modelo de app quiere balance por user
+- tu contrato hoy guarda balance por wallet
+
+Ahí está el desacople real.
+
+Entonces la respuesta de fondo es:
+
+sí, Privy sigue sirviendo; lo que probablemente hay que repensar no es
+Privy, sino el modelo de balance/vault.
+
+Respuesta corta final
+---------------------
+
+Sí.
+
+La dirección correcta es:
+
+- mantener Privy
+- permitir embedded + external wallets vinculadas a la misma cuenta
+- tratar la embedded como Main Wallet si querés
+- hacer “remove wallet” como flujo serio, no como botón simple
+- mover el balance conceptual de “wallet-based” a user/account-based
+
+Ese es el cambio importante.

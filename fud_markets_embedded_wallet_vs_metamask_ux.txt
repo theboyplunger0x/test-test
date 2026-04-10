@@ -1,0 +1,624 @@
+FUD.markets — UX recomendada para embedded wallet de Privy + MetaMask detectada
+===============================================================================
+
+Contexto
+--------
+
+Tengo un prediction market (FUD.markets) con Privy como auth. Cuando un user se registra con Google/Email, Privy crea una embedded wallet automáticamente. Esa wallet es la primary wallet del user.
+
+PROBLEMA: el user también tiene MetaMask instalado con otra wallet.
+Mi app detecta ambas:
+- Privy embedded wallet: 0x99e7... (primary, guardada en DB)
+- MetaMask wallet: 0x621E... (browser connected)
+
+Esto genera un banner "Connected wallet doesn't match your linked wallet" que confunde al user nuevo.
+
+
+Respuesta 1
+-----------
+
+Sí: para un user nuevo que entra con Google/Email, tu UX debería tratar a la embedded wallet de Privy como la wallet activa de trading y no mostrar un error por tener MetaMask instalada con otra address. Privy distingue entre wallets linked y connected; un usuario puede tener embedded y external al mismo tiempo, y eso no implica que haya un problema. Además, las embedded wallets de Privy pueden firmar EIP-712, y Privy las presenta como self-custodial con opción de exportar la key.
+
+Recomendación concreta
+----------------------
+
+### 1) Qué hacer con MetaMask en el caso normal
+Ignorala para el flujo principal.
+Si el user se registró con Google/Email y tu backend ya guardó la embedded como `primary_wallet_address`, entonces:
+
+- esa embedded wallet es la trading wallet
+- esa embedded wallet es la que firma bets
+- esa embedded wallet es la que recibe depósitos para luego fondear el vault
+- MetaMask puede existir, pero no debe “pisar” la wallet activa por default
+
+No muestres el banner “Connected wallet doesn't match your linked wallet” en onboarding. Ese banner comunica “hay un error”, cuando en realidad hay dos wallets distintas con roles distintos. Privy justamente documenta que puede haber wallets embedded y external simultáneamente.
+
+En vez de ese banner, mostraría algo como:
+
+Trading wallet: 0x99e7…
+MetaMask detected: 0x621E…
+Want to use MetaMask instead? Switch wallet
+
+Eso baja muchísimo la confusión.
+
+### 2) Si quiere usar MetaMask en vez de la embedded
+Sí, hacelo como un flujo explícito con un botón tipo:
+
+Use MetaMask as trading wallet instead
+
+Pero no como acción silenciosa. Tiene que ser una decisión consciente, porque tu vault y tus balances están atados a una address.
+
+Regla de producto:
+No cambies la `primary_wallet_address` automáticamente solo porque MetaMask está instalada o conectada.
+
+Flujo correcto para “switch”:
+1. El user toca “Use MetaMask instead”
+2. Le mostrás una explicación:
+   - “Your trading balance is tied to your current wallet address.”
+   - “If you switch, future deposits and trades will use your MetaMask wallet.”
+3. Si la embedded tiene:
+   - vault balance > 0, o
+   - posiciones abiertas o fondos que dependen de esa address,
+   entonces no permitas el switch instantáneo
+4. Pedile primero:
+   - withdraw del vault a la embedded
+   - cerrar lo que corresponda
+   - mover fondos a la nueva wallet si hace falta
+5. Recién después:
+   - cambiás `primary_wallet_address`
+   - marcás MetaMask como nueva trading wallet
+
+Regla simple para v1:
+- si no tiene fondos ni actividad: permitir switch inmediato
+- si ya tiene fondos/actividad: bloquear switch y mostrar pasos
+
+### 3) Cómo fondear la embedded
+Tu mejor UX para un user nuevo con Google + MetaMask instalada es:
+
+CTA principal:
+Add funds to your trading wallet
+
+Y adentro tres caminos:
+
+Transfer USDC
+Mostrás la embedded address, Base, USDC, y botones de copiar.
+
+Buy USDC
+Si ya tenés onramp bien integrado.
+
+Send from MetaMask
+Sí, esto lo facilitaría. No tenés que depender de que el user “entienda” que debe copiar una address y cambiar de app. Podés mostrar:
+
+- Trading wallet: `0x99e7...`
+- Network: Base
+- Token: USDC
+- Botón: Copy address
+- Botón: Open MetaMask
+- Texto corto: “Send USDC on Base from your MetaMask wallet to your trading wallet”
+
+Eso resuelve exactamente el caso que describís.
+
+### 4) Quién debería firmar los bets EIP-712
+Para ese user nuevo, la firma debería hacerla la embedded wallet.
+
+### Por qué es mejor UX
+- no depende de qué wallet de MetaMask esté seleccionada
+- no requiere popup externo
+- no rompe en mobile o en browsers sin extensión
+- mantiene consistente la address que firma con la address que tiene el balance en vault
+
+En tu modelo, la regla correcta debería ser:
+
+la wallet que firma bets = la trading wallet = la primary wallet
+
+Para un signup con Google/Email, eso significa embedded wallet por default.
+
+MetaMask solo debería firmar bets si el usuario hizo el flujo explícito de cambiar su trading wallet a la external.
+
+### 5) ¿La embedded persiste si desinstala MetaMask o cambia de browser?
+Sí, en general sí.
+
+O sea:
+- si desinstala MetaMask, no pierde la embedded
+- si cambia de browser, puede seguir entrando con Google/Email
+- si cambia de device, Privy puede reprovisionar la wallet al autenticarse
+- si querés más seguridad, activás recovery/MFA para nuevos dispositivos
+
+Además, Privy permite exportar la private key de la embedded y usar esa misma address en MetaMask si quiere.
+
+Eso te da una salida elegante:
+- onboarding fácil con embedded
+- soberanía avanzada después, si el user la quiere
+
+UX exacta que usaría
+--------------------
+
+### Después del login con Google
+Pantalla:
+
+Your trading wallet is ready
+This is the wallet used for deposits, balances, and trades.
+
+Trading wallet
+`0x99e7...`
+
+Debajo, si detectás MetaMask:
+MetaMask detected: `0x621E...`
+Use MetaMask instead
+
+Sin warning rojo. Sin “doesn’t match”.
+
+### En funding
+Botones:
+- Transfer USDC
+- Buy USDC
+- Send from MetaMask
+
+### En trading
+- siempre usar embedded para EIP-712
+- nunca preguntar con qué wallet quiere firmar cada vez
+- una sola trading wallet activa
+
+### En settings
+Sección:
+Wallets
+- Trading wallet: `0x99e7...` Embedded
+- Connected MetaMask: `0x621E...`
+- Action: Switch trading wallet
+- Action: Export embedded wallet
+
+Respuestas directas
+-------------------
+
+### 1. ¿Ignorar MetaMask cuando el user tiene embedded?
+Sí, para el flujo principal de un user nuevo.
+No la ignores técnicamente, pero sí ignorala como wallet activa de trading salvo que el user elija cambiar.
+
+### 2. ¿Cómo switchear la primary wallet?
+Con un botón explícito: “Use external wallet instead”.
+Y solo permitir cambio directo si no hay fondos/actividad. Si ya hay balance/posición ligada a la embedded, primero withdraw / vaciar / cerrar lo necesario.
+
+### 3. ¿Cómo fondear la embedded?
+Las tres buenas opciones son:
+- transferir USDC desde MetaMask a la embedded
+- usar onramp de Privy si ya está listo
+- facilitar el envío mostrando address, red y botones para copiar/abrir MetaMask
+
+### 4. ¿Quién firma los bets EIP-712?
+La embedded wallet, para el user que arrancó con Google/Email.
+
+### 5. ¿La embedded persiste sin MetaMask y en otro device?
+Sí, normalmente sí.
+
+Recomendación final en una línea
+--------------------------------
+
+Para un user nuevo que entra con Google y tiene MetaMask instalada: tratá la embedded wallet como única trading wallet, eliminá el banner de mismatch, facilitá “send from MetaMask” para fondearla, y ofrecé “switch to MetaMask” solo como acción avanzada y explícita.
+
+
+Respuesta 2
+-----------
+
+Va. Te lo bajo a spec de UI + estados + copy para ese caso exacto:
+
+Objetivo UX
+-----------
+
+Para un user que:
+- entra con Google/Email
+- Privy le crea una embedded wallet
+- tiene MetaMask instalada con otra address
+
+la app debe comunicar una sola idea:
+
+“Tu wallet de trading ya está lista.”
+
+No:
+- error
+- warning rojo
+- “mismatch”
+- “connected wallet doesn't match”
+
+Porque para ese user no hay ningún problema real.
+
+Regla de producto
+-----------------
+
+### Wallet activa
+Definí una sola fuente de verdad:
+
+- `trading_wallet_address`
+- `trading_wallet_type = embedded | external`
+
+Para este caso:
+- `trading_wallet_address = embedded wallet`
+- `trading_wallet_type = embedded`
+
+### Wallet detectada en browser
+MetaMask conectada o detectada no cambia nada por sí sola.
+
+- puede existir
+- puede mostrarse
+- no firma
+- no deposita al vault por default
+- no reemplaza la trading wallet automáticamente
+
+Estados de UI
+-------------
+
+## Estado 1 — Post-login inmediato
+Condición:
+- user recién autenticado con Google/Email
+- embedded wallet creada
+- MetaMask detectada con otra address
+- todavía sin fondos
+
+### Qué mostrar
+Título
+Your trading wallet is ready
+
+Body
+This wallet will be used for deposits, balances, and trades.
+
+Card principal
+Trading wallet
+`0x99e7...abcd`
+Embedded wallet
+
+Card secundaria
+MetaMask detected
+`0x621E...f912`
+
+Link secundario
+Use MetaMask instead
+
+CTA principal
+Add funds
+
+CTA secundario
+Not now
+
+### Qué NO mostrar
+- warning icon rojo
+- mismatch banner
+- “wrong wallet connected”
+- “please switch wallet”
+
+## Estado 2 — Funding screen
+Condición:
+- trading wallet = embedded
+- wallet balance = 0
+- MetaMask detectada
+
+### Qué mostrar
+Título
+Add funds to your trading wallet
+
+Subtexto
+Send USDC on Base to this wallet to start trading.
+
+Wallet card
+Trading wallet
+`0x99e7...abcd`
+Network: Base
+Token: USDC
+
+Acciones
+- Copy address
+- Show QR
+- Open BaseScan
+
+Opciones de funding
+1. Transfer USDC
+2. Buy USDC
+3. Send from MetaMask
+
+### Copy de “Send from MetaMask”
+Send from MetaMask
+Move USDC on Base from your MetaMask wallet into your trading wallet.
+
+Al tocarlo:
+- abrís un modal con la address destino ya visible
+- pasos simples
+- botón Copy address
+- botón Open MetaMask
+
+## Estado 3 — Embedded wallet fondeada, falta deposit al vault
+Condición:
+- embedded wallet tiene USDC
+- vault balance = 0
+
+### Qué mostrar
+Título
+Deposit to start trading
+
+Body
+Your trading wallet has funds. Deposit USDC into FUD Vault to place trades.
+
+Balances
+Wallet balance: 25.00 USDC
+Vault balance: 0.00 USDC
+
+CTA principal
+Deposit to Vault
+
+CTA secundario
+Add more funds
+
+## Estado 4 — Lista para tradear
+Condición:
+- vault balance > 0
+
+### Qué mostrar
+Título
+You’re ready to trade
+
+Balances
+Trading wallet: `0x99e7...abcd`
+Vault balance: 25.00 USDC
+
+CTA principal
+Start trading
+
+CTA secundario
+Manage wallet
+
+## Estado 5 — Settings / Wallet management
+Condición:
+- user ya onboarded
+- embedded = trading wallet
+- MetaMask vinculada/detectada
+
+### Qué mostrar
+Sección: Wallets
+
+Trading wallet
+`0x99e7...abcd`
+Embedded
+Used for deposits, balances, and bet signatures.
+
+Connected wallet
+`0x621E...f912`
+MetaMask
+
+Acciones
+- Use MetaMask as trading wallet
+- Export embedded wallet
+- Copy trading wallet address
+
+Flujo “Use MetaMask instead”
+----------------------------
+
+Esto tiene que ser una acción avanzada, no automática.
+
+## Caso A — Sin fondos ni actividad
+Condición:
+- wallet balance = 0
+- vault balance = 0
+- sin trades relevantes ligados a esa address
+
+### Modal
+Título
+Use MetaMask as your trading wallet?
+
+Body
+Your trading wallet controls your balances and signs your bets.
+Future deposits and trades will use your MetaMask wallet.
+
+Wallet actual
+Embedded wallet
+`0x99e7...abcd`
+
+Nueva wallet
+MetaMask
+`0x621E...f912`
+
+CTA principal
+Switch wallet
+
+CTA secundario
+Cancel
+
+### Resultado
+- `trading_wallet_address = 0x621E...`
+- `trading_wallet_type = external`
+
+## Caso B — Ya tiene fondos o actividad
+Condición:
+- wallet funded o vault balance > 0 o historial ligado a embedded
+
+### Modal
+Título
+You need to move funds before switching
+
+Body
+Your current trading balance is tied to your embedded wallet.
+To switch to MetaMask, first withdraw your funds and move them to the new wallet.
+
+Checklist
+1. Withdraw from FUD Vault
+2. Send funds to your MetaMask wallet
+3. Switch trading wallet
+
+CTA principal
+Manage funds
+
+CTA secundario
+Keep current wallet
+
+### Regla
+No permitir switch directo.
+
+Comportamiento de firma EIP-712
+-------------------------------
+
+## Regla UX
+El user nunca debería elegir manualmente “qué wallet firma” en el flujo normal.
+
+Siempre:
+- firma la `trading_wallet_address`
+- si `trading_wallet_type = embedded`, firma Privy embedded
+- si `trading_wallet_type = external`, firma MetaMask
+
+## Para este user nuevo
+Como entró con Google:
+- firma embedded
+- sin popup de MetaMask
+- sin preguntar nada extra
+
+### Microcopy opcional al primer trade
+Signing with your trading wallet
+Your embedded wallet will sign this bet securely.
+
+Lógica que elimina el banner confuso
+------------------------------------
+
+## Hoy probablemente tenés algo así
+Si:
+- wallet del browser conectada != wallet guardada en DB
+→ mostrar error
+
+## Cambialo por esto
+
+### Regla nueva
+Mostrar warning solo si:
+- `trading_wallet_type = external`
+- y la wallet externa activa del browser no coincide con la `trading_wallet_address`
+
+Ejemplo:
+- user eligió MetaMask como trading wallet
+- pero MetaMask está parada en otra address
+- ahí sí corresponde warning
+
+### No mostrar warning si:
+- `trading_wallet_type = embedded`
+- y además MetaMask está instalada o conectada con otra address
+
+Porque en ese caso MetaMask no es la wallet activa.
+
+Pseudológica simple
+-------------------
+
+```ts
+const tradingWallet = user.tradingWalletAddress
+const tradingWalletType = user.tradingWalletType // embedded | external
+const metamaskAddress = browserWallets.metamask?.address
+
+const shouldShowExternalMismatch =
+  tradingWalletType === "external" &&
+  !!metamaskAddress &&
+  metamaskAddress.toLowerCase() !== tradingWallet.toLowerCase()
+
+const shouldShowMetamaskDetectedInfo =
+  tradingWalletType === "embedded" &&
+  !!metamaskAddress &&
+  metamaskAddress.toLowerCase() !== tradingWallet.toLowerCase()
+```
+
+UX resultante
+-------------
+
+### `shouldShowExternalMismatch = true`
+Mostrar warning real:
+MetaMask is connected to a different wallet
+Switch MetaMask to continue trading.
+
+### `shouldShowMetamaskDetectedInfo = true`
+Mostrar info neutra:
+MetaMask detected
+Your trading wallet is still your embedded wallet.
+
+Copy exacto recomendado
+-----------------------
+
+## Banner informativo neutro
+MetaMask detected
+You’re currently trading with your FUD wallet. MetaMask is available if you want to switch later.
+
+Botón:
+Use MetaMask instead
+
+## Warning real
+Solo cuando la trading wallet ya es external.
+
+Wrong MetaMask wallet selected
+Please switch MetaMask to your trading wallet to continue.
+
+Botón:
+Open MetaMask
+
+## Funding modal desde MetaMask
+Send funds from MetaMask
+Send USDC on Base from your MetaMask wallet to your FUD trading wallet.
+
+Destino:
+`0x99e7...abcd`
+
+Botones:
+- Copy address
+- Open MetaMask
+
+Nota:
+Only send USDC on Base.
+
+## Primer trade
+Ready to place your first trade?
+Your embedded wallet will sign your order and your balance will be used from FUD Vault.
+
+Botón:
+Place trade
+
+Estructura de componentes
+-------------------------
+
+## `TradingWalletCard`
+Muestra:
+- address
+- type
+- status
+- copy button
+
+## `DetectedWalletCard`
+Muestra wallets detectadas pero no activas:
+- MetaMask
+- address
+- acción opcional para switch
+
+## `FundingOptions`
+Opciones:
+- transfer
+- buy
+- send from MetaMask
+
+## `SwitchTradingWalletModal`
+Dos variantes:
+- simple switch
+- blocked by funds/activity
+
+Reglas de UX resumidas
+----------------------
+
+## Mostrar
+- una sola trading wallet activa
+- MetaMask como opción detectada, no como error
+- switch explícito
+- funding simple hacia embedded
+
+## No mostrar
+- mismatch warning para users con embedded activa
+- selector ambiguo de wallet al firmar
+- MetaMask popup innecesario
+- lenguaje técnico tipo “linked wallet mismatch”
+
+Recomendación final exacta para FUD
+-----------------------------------
+
+Para un user nuevo que entra con Google y tiene MetaMask instalada:
+
+- la embedded wallet de Privy es la trading wallet
+- las bets se firman con la embedded
+- MetaMask solo aparece como wallet detectada
+- no mostrar error ni mismatch
+- mostrar CTA “Send from MetaMask” para fondear la embedded
+- ofrecer “Use MetaMask instead” solo en settings o en una acción secundaria
+- permitir switch inmediato solo si no hay fondos ni actividad

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, Market } from "@/lib/api";
 import { Coin, formatPrice } from "@/lib/mockData";
-import { sendGENToTreasury, connectWallet } from "@/lib/wallet";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "24h"];
 const QUICK_AMOUNTS = [10, 25, 50, 100];
@@ -73,58 +72,7 @@ export default function TradeModal({
     setLoading(true);
     setError("");
     try {
-      if (isTestnet) {
-        if (!coin.ca) throw new Error("On-chain testnet requires a token with a contract address. Search by CA.");
-        // Hybrid flow: backend deploys escrow first, then user sends GEN
-        let wallet = walletAddress;
-        if (!wallet) {
-          wallet = await connectWallet();
-          await api.linkWallet(wallet);
-        }
-
-        setError("Deploying escrow on GenLayer... ⏳");
-
-        // Step 1: Backend deploys the escrow contract FIRST
-        const result = await api.createEscrowBet({
-          symbol: coin.symbol,
-          chain: coin.chain,
-          timeframe: tf,
-          side,
-          amount,
-          ca: coin.ca,
-          tagline: tagline.trim(),
-        });
-
-        setError("Sign GEN transfer in MetaMask...");
-
-        // Step 2: User sends GEN to treasury (only after backend succeeded)
-        try {
-          await sendGENToTreasury({ walletAddress: wallet, amountGEN: amount });
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : "Transfer failed";
-          if (msg.includes("User rejected") || msg.includes("denied")) throw new Error("Transaction rejected — escrow created but not funded");
-          throw err;
-        }
-
-        setError("");
-
-        onSuccess({
-          id: result.contract_address,
-          symbol: result.symbol,
-          chain: coin.chain,
-          timeframe: result.timeframe,
-          entry_price: result.entry_price,
-          tagline: tagline.trim(),
-          long_pool: side === "long" ? String(amount) : "0",
-          short_pool: side === "short" ? String(amount) : "0",
-          status: "open",
-          closes_at: new Date(Date.now() + 60000).toISOString(),
-          opener_id: "",
-          created_at: new Date().toISOString(),
-          is_paper: false,
-          is_testnet: true,
-        });
-      } else if (mode === "call") {
+      if (mode === "call") {
         const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode && !isTestnet, coin.ca, isTestnet);
         if (onPlaceBet) {
           const err = await onPlaceBet(market.id, side, amount, market.onchain_market_id ?? undefined);

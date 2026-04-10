@@ -1,0 +1,1505 @@
+Bueno, entonces te paso un prompt más correcto a la visión, la arquitectura final y bueno, proponé.
+Necesito rediseñar la arquitectura de balance de FUD.markets.
+El cambio fundamental: el balance tiene que ser por CUENTA DE
+USUARIO, no por WALLET ADDRESS.
+
+PROBLEMA ACTUAL
+- FUDVault.sol tiene `balances[walletAddress]`
+- Si el user cambia de wallet, pierde acceso al balance
+- Si el user conecta otra wallet, ve otro balance
+- El balance debería pertenecer a la cuenta FUD, no a la wallet
+
+MODELO OBJETIVO
+- Una cuenta FUD = una identidad de usuario
+- Esa cuenta tiene UN balance (en USDC)
+- Wallets vinculadas son herramientas (deposit, withdraw, sign)
+  pero NO definen el balance
+- Cambiar de wallet no cambia el balance
+- El balance se fondea desde cualquier wallet que el user quiera
+
+CONTEXTO TÉCNICO
+- Privy para auth (Google / Email / Wallet)
+- Privy crea embedded wallets automáticamente
+- FUDVault.sol deployado en Base (singleton, balances por address)
+- EIP-712 signed bets con operator execution
+- Parimutuel pools
+- USDC como collateral
+
+DOS CAMINOS QUE VEO
+
+Camino A — Balance on-chain por userId
+Reescribir el contrato:
+- `balances[bytes32 userIdHash]` en vez de `balances[address]`
+- deposit: operator deposita on behalf of user
+- withdraw: operator withdraws to user's linked wallet
+- bets: operator ejecuta con userId, no address
+- Pros: balance on-chain, auditable, trustless
+- Contras: más custodial, operator controla todo, rewrite del contrato
+
+Camino B — Balance en DB, contrato como settlement
+- El balance "visible" vive en la DB (users.balance_usd)
+- Cuando el user deposita USDC a una deposit address, el backend
+  detecta y credita el balance en DB
+- Cuando betea, el backend deduce de DB balance (como paper mode)
+- Settlement on-chain: cuando el market se resuelve, el contrato
+  mueve USDC entre pools y el resultado se refleja en DB
+- Withdraw: backend envía USDC desde treasury a la wallet del user
+- Pros: simple, flexible, el balance no depende de la wallet
+- Contras: más centralizado, el backend es custodial de facto
+
+Camino C — Híbrido
+- Mantener el contrato actual
+- Pero el "balance visible" es el de la DB
+- Cuando el user deposita, el USDC va al vault contract y el
+  backend registra el balance en DB por userId
+- La wallet solo se necesita para firmar deposits/withdrawals
+- Bets son off-chain (DB) y se liquidan on-chain periódicamente
+- Pros: balance por cuenta, contrato existente, semi-decentralized
+- Contras: reconciliación compleja, dos fuentes de verdad
+
+PREGUNTAS
+
+1. ¿Qué modelo usa Polymarket realmente? ¿Balance on-chain por
+   proxy wallet? ¿O balance en DB con settlement on-chain?
+
+2. Para mi caso (Privy + embedded wallets + launch próximo),
+   ¿cuál de los 3 caminos es más práctico?
+
+3. Si voy por Camino B (DB balance), ¿sigue teniendo sentido
+   tener un vault contract? ¿O el contrato se convierte solo en
+   un escrow de settlement?
+
+4. ¿Cómo manejo el gas? Si la embedded wallet firma pero no
+   tiene ETH, ¿el operator/relayer paga gas? ¿Cómo implemento
+   eso con Privy?
+
+5. ¿El modelo "balance por cuenta en DB" es compatible con ser
+   "descentralizado" o "non-custodial"? ¿O ya sería custodial
+   de facto?
+
+6. ¿Cuál es la opción más simple que me permite:
+   - balance independiente de la wallet
+   - fondeo desde cualquier wallet
+   - UX sin gas para el user
+   - launch rápido sin rewrite del contrato
+   - mantener algo de descentralización
+
+Dame la recomendación más pragmática. No busco la solución
+perfecta, busco la que funcione bien para un prediction market
+crypto-native que quiere escalar.
+
+
+Respuesta
+---------
+
+La recomendación más pragmática no es A, B ni C puros.
+
+Es:
+
+Modelo D — una “account wallet” permanente por usuario, con balance onchain en esa wallet, y wallets vinculadas solo como acceso/funding.
+
+Eso es lo más parecido a Polymarket y, para FUD, es la mejor forma de lograr:
+
+- balance independiente de la wallet conectada en el browser
+- fondeo desde cualquier wallet
+- UX sin gas para el user
+- mantener bastante descentralización
+- evitar que el balance viva en DB como fuente principal
+
+Polymarket documenta que los fondos de una cuenta están en una proxy wallet, que esa wallet se despliega al primer login, que el sistema es hybrid-decentralized con matching offchain y settlement onchain, y que los usuarios de proxy wallet pueden usar su gasless relayer.
+
+1. Qué modelo usa Polymarket realmente
+Lo más cercano a la realidad es esto:
+
+- matching y UX offchain
+- órdenes firmadas con EIP-712
+- settlement onchain
+- fondos asociados a una wallet/proxy wallet de la cuenta
+- gas abstraído por relayer para usuarios de proxy wallet
+
+No se parece a “balance puramente en DB y después vemos”.
+Tampoco se parece a “tu MetaMask conectada del browser define tu balance”.
+Se parece a:
+
+tu cuenta tiene una wallet operativa propia, y el producto abstrae el resto.
+
+2. Para tu caso, cuál camino es más práctico
+Mi respuesta corta:
+No iría por A ni por B. Haría un C redefinido:
+- mantener onchain el ownership del balance
+- pero mover ese ownership a una wallet de cuenta estable
+- usar DB solo como cache, indexación, UX y reconciliación
+- no usar DB como source of truth del dinero
+
+Por qué no A
+Reescribir el contrato a `balances[userIdHash]` te mete en una refactor grande y además te obliga a redefinir depósitos, retiros, autorizaciones y recovery. Para launch de producto, es mucho costo arquitectónico con poco beneficio inmediato.
+
+Por qué no B
+`users.balance_usd` como verdad principal te da mucha flexibilidad, pero te vuelve custodial de facto: el backend pasa a controlar el saldo real y los retiros. Ahí ya no estás cerca de Polymarket; te acercás más a un exchange centralizado con una UI crypto.
+
+Qué haría
+Una embedded/proxy/account wallet por usuario, fija.
+Todas las demás wallets son solo:
+- login
+- funding
+- retiro destino
+- firma de autorizaciones si más adelante querés
+
+Y el balance real sigue atado a esa account wallet estable, no a la wallet que el usuario conectó hoy en el browser.
+
+Eso resuelve tu bug principal sin convertir todo en custodial.
+
+3. Si vas por DB balance, ¿sigue teniendo sentido un vault contract?
+Sí, pero cambia mucho su rol.
+
+Si hacés B puro:
+- el vault deja de ser el ledger principal del usuario
+- pasa a ser más bien escrow / treasury / settlement layer
+- la cuenta real del usuario vive en DB
+
+Eso técnicamente funciona, pero ya no es un sistema non-custodial en el sentido fuerte. El contrato no “posee” la lógica completa del saldo visible del user; la posee tu backend.
+
+Por eso no te recomiendo B como arquitectura principal.
+
+4. Cómo manejar gas
+Si usás una account wallet embebida y querés UX buena, el patrón correcto es el de Polymarket:
+
+- el usuario firma
+- tu operator/relayer paga el gas
+- la wallet del user no necesita ETH para las operaciones del producto
+
+Con Privy, esto encaja bien porque Privy sí te da la wallet y la firma EIP-712/typed data; el pago de gas y el relay no lo “resuelve Privy por arte de magia”, lo resolvés vos con tu operator/relayer.
+
+O sea:
+
+- Privy = identidad + embedded wallet + firma
+- tu relayer/operator = envío onchain + pago de gas
+
+5. DB balance por cuenta: ¿compatible con “descentralizado” o “non-custodial”?
+Si el balance real vive en DB:
+No del todo.
+Eso ya es bastante custodial de facto.
+
+Porque:
+- tu backend decide el saldo visible
+- tu backend decide retiros
+- tu backend reconcilia contra el contrato
+- si tu backend falla o miente, el usuario no tiene un camino simple de verificación onchain del balance real
+
+Si el balance real vive en una account wallet onchain
+Ahí sí podés seguir diciendo algo más cercano a:
+- crypto-native
+- hybrid-decentralized
+- parcialmente non-custodial
+
+Que es mucho más parecido a Polymarket.
+
+6. La opción más simple que cumple tus requisitos
+Tus requisitos eran:
+
+- balance independiente de la wallet
+- fondeo desde cualquier wallet
+- UX sin gas
+- launch rápido sin rewrite del contrato
+- mantener algo de descentralización
+
+La mejor respuesta es:
+
+Una account wallet permanente por usuario
+No la wallet conectada del browser.
+No el email.
+No la DB.
+
+Una wallet estable de cuenta, creada y gestionada vía Privy.
+
+Cómo se vería
+- el user entra con Google / Email / Wallet
+- Privy crea o recupera la FUD Main Wallet
+- esa wallet queda fija para la cuenta
+- el vault sigue guardando balance por address
+- pero ahora esa address es la address estable de la cuenta, no una wallet variable del navegador
+- cualquier wallet externa solo puede:
+  - fondear esa FUD Main Wallet
+  - usarse para login
+  - eventualmente ser destino de retiro
+
+Resultado
+- el balance ya no cambia cuando el user conecta otra wallet
+- no necesitás reescribir el vault a `userIdHash`
+- no necesitás hacer DB-balance como fuente principal
+- te mantenés cerca del patrón Polymarket
+
+Qué cambiaría en FUD exactamente
+Hoy
+`balances[walletAddress]`, donde `walletAddress` depende demasiado de la wallet del user.
+
+Mañana
+`balances[accountWalletAddress]`, donde:
+- `accountWalletAddress` es la embedded/proxy wallet estable del usuario
+- no cambia cuando el user conecta MetaMask o entra con Google
+
+Eso es suficiente para que el balance sea “por cuenta” a nivel producto, aunque siga siendo “por address” a nivel contrato.
+
+En una frase
+No cambies el balance de wallet-address a DB-user-balance todavía. Cambiá de “wallet variable del usuario” a “account wallet estable del usuario”.
+
+Eso es el punto medio correcto.
+
+Arquitectura recomendada
+- Onchain: balance real en FUDVault por `accountWalletAddress`
+- DB: espejo/cache para UX, analytics, leaderboard, historial, risk, etc.
+
+Wallets
+- Main Wallet / FUD Wallet: embedded wallet de Privy, estable
+- Linked wallets: MetaMask, Coinbase, WalletConnect, etc.
+- linked wallets no cambian el balance
+- linked wallets no son la source of truth
+
+Deposits
+- desde cualquier wallet o rampa
+- a la FUD Main Wallet o directo a un flujo controlado por el producto
+- luego operator/relayer ejecuta lo necesario hacia el vault
+
+Bets
+- EIP-712 signed
+- firma la Main Wallet o un esquema equivalente de autorización
+- operator ejecuta
+- relayer paga gas
+
+Withdrawals
+- salen desde el sistema hacia la wallet destino elegida por el usuario
+- con autorizaciones firmadas, límites, delays y controles de seguridad
+
+Entonces, dentro de A/B/C, cuál elegiría
+Si me obligás a elegir una letra:
+
+C, pero redefinido.
+
+No el C de “dos fuentes de verdad y reconciliación caótica”.
+
+Sí un C así:
+- contrato sigue existiendo y sigue importando
+- DB no inventa balances
+- DB refleja e indexa
+- la wallet estable de cuenta reemplaza la wallet variable del browser como dueño del balance
+
+Qué no haría
+No haría esto:
+- user conecta MetaMask A → saldo A
+- conecta wallet B → saldo B
+
+No haría esto tampoco:
+- backend guarda el saldo como verdad única y después manda plata desde treasury
+
+Ambos modelos escalan peor en confianza y UX.
+
+Recomendación final, brutalmente clara
+La mejor arquitectura para FUD es: una cuenta = una Main Wallet estable creada con Privy; el vault sigue llevando balance por address, pero esa address es la de la cuenta, no la de la wallet que el user conectó hoy. El backend indexa y mejora UX; el relayer paga gas; las wallets externas solo sirven para login, fondeo y retiro.
+
+
+Usuario
+-------
+
+dale
+
+
+Respuesta
+---------
+
+Va. Te lo bajo como diseño objetivo para FUD con la lógica correcta:
+
+Objetivo
+--------
+
+Que el user sienta y use esto así:
+
+- tiene una cuenta FUD
+- esa cuenta tiene una Main Wallet estable
+- esa Main Wallet tiene el balance real del producto
+- puede entrar con Google, email o una wallet externa
+- puede fondear desde cualquier wallet
+- cambiar la wallet conectada no cambia el balance
+- el user no necesita gas para usar el producto
+
+La clave es esta:
+
+no cambiás “balance por address” del contrato; cambiás cuál es la address dueña del balance.
+Ya no es “la wallet conectada hoy”.
+Ahora es “la Main Wallet estable de la cuenta”.
+
+1. Modelo conceptual final
+--------------------------
+
+Cuenta
+La cuenta FUD es la identidad del usuario.
+
+Campos conceptuales:
+- user_id
+- privy_user_id
+- main_wallet_address
+- status
+
+Main Wallet
+Es la wallet estable de la cuenta.
+
+Reglas:
+- siempre existe
+- no cambia por login method
+- es la address que posee el balance en FUDVault
+- es la address que autoriza operaciones del producto
+
+Linked Wallets
+Son wallets auxiliares.
+
+Sirven para:
+- login
+- fondeo
+- retiro destino
+- recovery / export futuro
+
+No sirven para:
+- definir el balance
+- cambiar el balance visible
+- ser source of truth del producto
+
+Balance
+El balance real sigue siendo onchain en el vault.
+
+Pero ahora pertenece a:
+- main_wallet_address
+
+No a:
+- la wallet externa conectada en browser
+- la última wallet usada para login
+
+2. Contrato: qué haría y qué no haría
+-------------------------------------
+
+Qué NO haría ahora
+No reescribiría todo a `balances[userIdHash]`.
+
+Eso te mete en:
+- custodia lógica del operator
+- más complejidad de autorizaciones
+- más superficie de bugs
+- más refactor del settlement
+
+Qué SÍ haría
+Mantenería `balances[address]`, pero con una regla nueva:
+
+esa `address` siempre es la Main Wallet de la cuenta.
+
+Entonces el cambio no es tanto el contrato base sino el modelo de integración.
+
+Contrato recomendado v1.5
+Podés tener algo así:
+
+```solidity
+mapping(address => uint256) public balances;
+```
+
+Y esa `address` debe ser siempre:
+- mainWalletAddress
+
+Operaciones mínimas
+El vault necesita soportar bien estas 4 cosas:
+
+depositFor
+Que alguien pueda depositar USDC acreditando a una Main Wallet.
+
+```solidity
+function depositFor(address account, uint256 amount) external;
+```
+
+Uso:
+- treasury / relayer / deposit processor
+- o incluso una wallet externa del user
+
+Resultado:
+- balances[account] += amount
+
+withdrawBySig
+Retiro autorizado por firma de la Main Wallet, ejecutado por operator.
+
+```solidity
+function withdrawBySig(
+    address account,
+    address to,
+    uint256 amount,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata signature
+) external;
+```
+
+Uso:
+- el user firma con su Main Wallet
+- el operator paga gas
+- el contrato manda USDC a `to`
+
+reserve / consume / release para bets
+Si querés seguir con signed bets + operator, necesitás separar balance libre de balance comprometido.
+
+Modelo conceptual:
+- availableBalance
+- reservedBalance
+
+O, más simple:
+- tu operator valida offchain que el user tenga saldo suficiente
+- onchain solo se refleja settlement final
+
+settlePayout / settleLoss
+Liquidación del market.
+
+3. Diseño de contrato recomendado
+---------------------------------
+
+Opción recomendada
+No usaría el vault actual exactamente igual si hoy exige que la misma wallet del user haga approve + deposit pagando gas.
+
+Le agregaría funciones orientadas a relayer/operator.
+
+Interfaz sugerida
+
+```solidity
+interface IFUDVault {
+    function depositFor(address account, uint256 amount) external;
+    function withdrawBySig(
+        address account,
+        address to,
+        uint256 amount,
+        uint256 nonce,
+        uint256 deadline,
+        bytes calldata signature
+    ) external;
+    function balanceOf(address account) external view returns (uint256);
+    function nonces(address account) external view returns (uint256);
+}
+```
+
+Qué gana esto
+- balance sigue onchain
+- cuenta sigue representada por una wallet estable
+- retiro no depende de que el user tenga ETH
+- podés relayerar operaciones
+
+4. Modelo de datos backend
+--------------------------
+
+Tabla users
+
+```sql
+id uuid primary key
+privy_user_id text unique not null
+email text null
+main_wallet_address text unique not null
+status text not null default 'active'
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+Tabla user_wallets
+
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+address text not null unique
+wallet_type text not null -- 'embedded' | 'external'
+provider text null -- 'privy' | 'metamask' | 'coinbase' | 'walletconnect'
+is_main boolean not null default false
+can_fund boolean not null default true
+can_withdraw_to boolean not null default true
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+Tabla vault_balances_cache
+Esto no es verdad principal. Es cache.
+
+```sql
+user_id uuid primary key references users(id)
+main_wallet_address text not null
+available_usdc numeric(38,6) not null default 0
+reserved_usdc numeric(38,6) not null default 0
+total_usdc numeric(38,6) not null default 0
+last_synced_block bigint null
+updated_at timestamptz not null
+```
+
+Tabla deposit_events
+
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+from_address text null
+to_main_wallet_address text not null
+token_address text not null
+amount numeric(38,6) not null
+tx_hash text unique not null
+block_number bigint not null
+status text not null -- 'detected' | 'credited' | 'failed'
+created_at timestamptz not null
+```
+
+Tabla withdraw_requests
+
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+from_main_wallet_address text not null
+to_address text not null
+amount numeric(38,6) not null
+nonce bigint not null
+deadline timestamptz not null
+signature text not null
+status text not null -- 'pending' | 'submitted' | 'confirmed' | 'failed'
+tx_hash text null
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+Tabla bet_orders
+
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+market_id uuid not null
+main_wallet_address text not null
+side text not null
+price numeric(10,4) not null
+shares numeric(38,18) not null
+max_cost_usdc numeric(38,6) not null
+signature text not null
+status text not null -- 'signed' | 'matched' | 'settled' | 'cancelled'
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+5. Bootstrap del usuario
+------------------------
+
+Regla
+Siempre que el user entra por Privy:
+
+1. autenticás user
+2. recuperás o creás embedded wallet
+3. esa embedded wallet pasa a ser:
+   - main_wallet_address
+4. guardás wallets externas como linked wallets, no como main
+
+Endpoint
+`POST /api/users/bootstrap`
+
+Request
+```json
+{
+  "privy_user_id": "did:privy:123",
+  "auth_method": "google",
+  "email": "user@example.com",
+  "embedded_wallet_address": "0xMAIN...",
+  "external_wallet_address": "0xMETA..."
+}
+```
+
+Lógica
+- si el user no existe:
+  - crear users
+  - crear user_wallets embedded con is_main = true
+  - si hay external, guardarla con is_main = false
+- si existe:
+  - asegurar que la embedded coincida con main_wallet_address
+  - upsert de linked wallets nuevas
+
+6. Flujo de depósito
+--------------------
+
+Hay dos versiones.
+
+Versión recomendada
+El user manda USDC directamente al vault acreditando a su Main Wallet.
+
+Eso requiere que el flujo onchain soporte depositFor(account, amount) o equivalente.
+
+Camino UX
+1. user entra
+2. ve su Main Wallet
+3. elige “Add funds”
+4. opciones:
+   - transferir USDC
+   - comprar USDC
+   - send from MetaMask
+5. cuando el producto detecta fondos o disponibilidad, ejecuta depósito acreditando a main_wallet_address
+
+Alternativa más simple operativamente
+El user manda USDC a una deposit address controlada por el sistema y el backend luego acredita onchain a la Main Wallet.
+
+Eso es más simple para UX pero más custodial. Yo lo evitaría salvo que realmente lo necesites.
+
+Mi recomendación
+Si podés, hacé esto:
+
+- funding externo → Main Wallet
+- operator/relayer → depositFor(main_wallet_address, amount)
+
+Así el saldo final vive donde tiene que vivir: en el vault, a nombre de la Main Wallet.
+
+7. Flujo de retiro
+------------------
+
+Objetivo
+Que el user no necesite ETH.
+
+Flujo
+1. user elige wallet destino
+2. backend arma payload EIP-712:
+   - account
+   - to
+   - amount
+   - nonce
+   - deadline
+3. user firma con Main Wallet embebida
+4. operator manda withdrawBySig(...)
+5. relayer/operator paga gas
+6. vault envía USDC a la wallet elegida
+
+Resultado
+- el balance sigue siendo de la cuenta
+- el user puede retirar a cualquier wallet vinculada o nueva
+- no necesita gas
+
+8. Flujo de bets
+----------------
+
+Regla
+Las bets las sigue firmando la Main Wallet.
+
+No:
+- MetaMask del browser
+- wallet externa actual
+- email identity sola
+
+Sí:
+- Main Wallet estable de la cuenta
+
+Flujo
+1. backend arma orden EIP-712
+2. user firma con Main Wallet
+3. operator recibe orden
+4. operator hace matching / ejecución
+5. onchain se liquida cuando corresponda
+6. DB refleja estado y UX
+
+Importante
+La DB no “inventa” el balance.
+La DB:
+- cachea
+- indexa
+- muestra
+- reserva offchain si hace falta
+
+Pero el dinero real sigue referido al vault.
+
+9. Gas model
+------------
+
+Respuesta simple
+El user firma. El operator paga gas.
+
+Cómo se implementa
+Privy te resuelve:
+- auth
+- embedded wallet
+- firmado EIP-712
+
+Tu infraestructura resuelve:
+- relayer
+- broadcaster
+- gas sponsorship
+- retries
+- nonce management del operator
+
+Regla operativa
+Para operaciones del producto:
+- deposit helper
+- withdraw
+- bet execution
+- settlement
+
+el gas lo paga:
+- operator
+- o una wallet/relayer de infraestructura
+
+No la Main Wallet del user.
+
+10. Qué mostrás en UI
+---------------------
+
+Wallet section
+Main Wallet
+0xMAIN...
+Used for balances, signatures, and withdrawals.
+
+Linked Wallets
+- MetaMask 0xMETA...
+- Coinbase 0xCOIN...
+
+Add funds
+Fund your account
+Send USDC from any wallet to your FUD account.
+
+Withdraw
+Withdraw to wallet
+Choose where to receive your USDC.
+
+Importante
+No mostrar:
+- wallet mismatch
+- tu balance cambió porque cambiaste de wallet
+- connect wallet para “ver saldo”
+
+El saldo es de la cuenta.
+
+11. Qué pasa si el user “desconecta” la embedded
+------------------------------------------------
+
+Acá conviene cambiar lenguaje.
+
+No usaría:
+- Disconnect wallet
+
+Usaría:
+- Remove Main Wallet from account
+
+Y lo bloquearía bastante.
+
+Regla recomendada
+No permitir remover la Main Wallet si:
+- hay balance
+- hay órdenes abiertas
+- no hay otra credencial fuerte de recuperación
+- no confirmó export/recovery
+
+Warning
+Removing your Main Wallet may permanently affect access to your account funds if you have not exported or secured it.
+
+12. Roadmap técnico recomendado
+-------------------------------
+
+Etapa 1
+Corregir modelo de app, sin rehacer todo.
+
+- establecer main_wallet_address
+- dejar de usar external wallet como source of truth
+- mostrar balance por user, leído del vault de main_wallet_address
+- linked wallets solo como metadata
+
+Etapa 2
+Agregar relayed withdrawals.
+
+- withdrawBySig
+- operator paga gas
+
+Etapa 3
+Agregar depositFor.
+
+- funding más limpio
+- menos dependencia del user para gas/approve
+
+Etapa 4
+Optimizar settlement y reservas.
+
+- available vs reserved
+- netting
+- batching
+- parimutuel accounting más robusto
+
+13. Decisión concreta
+---------------------
+
+Si querés una recomendación brutalmente práctica:
+
+Hacé esto
+- mantené Privy
+- mantené una Main Wallet embebida por cuenta
+- mantené balance onchain por address
+- hacé que esa address sea estable por cuenta
+- usá DB solo como cache y capa de producto
+- agregá retiros relayed por firma
+- agregá depósitos acreditables a la Main Wallet
+- tratá las demás wallets solo como funding / login / withdraw destinations
+
+No hagas esto
+- no pases el dinero real a DB como fuente principal
+- no dejes que la wallet conectada del browser defina el saldo
+- no mezcles identidad de cuenta con wallet de sesión
+- no rehagas todo a userIdHash salvo que estés listo para rediseñar custodialidad y permisos en serio
+
+14. Resumen final
+-----------------
+
+La arquitectura correcta para FUD no es:
+
+- balance por wallet variable
+- ni balance puramente en DB
+
+Es esta:
+
+balance onchain por una Main Wallet estable de la cuenta, con Privy como capa de identidad y wallet embebida, wallets externas como herramientas auxiliares, y operator/relayer pagando gas para una UX tipo Polymarket.
+
+
+Usuario
+-------
+
+lo vez servible lo del rfc tecnico, yo creo que con esto claude puede trabajar. que decis? responde si o no
+
+
+Respuesta
+---------
+
+Sí.
+
+
+Usuario
+-------
+
+bueno armalo
+
+
+RFC técnico
+===========
+
+# RFC — FUD.markets Account-Based Balance Architecture
+
+## Status
+Draft
+
+## Owner
+FUD.markets
+
+## Purpose
+Define the target architecture for FUD balances so that balances belong to the user account, not to whichever wallet the user connected most recently.
+
+## 1. Summary
+FUD currently ties balances to `walletAddress` inside `FUDVault.sol`.
+
+That creates a product-breaking issue:
+- if the user changes wallet, the balance appears to change
+- if the user connects another wallet, they see another balance
+- the balance behaves as if it belongs to the wallet session, not the user account
+
+The new architecture keeps the vault balance onchain by address, but changes which address represents the account.
+
+### Core decision
+Each FUD account will have a stable Main Wallet.
+
+That wallet will:
+- be created/recovered through Privy
+- remain the canonical wallet for the account
+- own the onchain balance in `FUDVault`
+- sign bets and withdrawals
+- remain stable regardless of login method
+
+All other wallets will be treated as linked wallets only.
+
+They may be used for:
+- login
+- funding
+- withdrawal destination
+- recovery/future interoperability
+
+They will not define the account balance.
+
+## 2. Problem Statement
+### Current state
+- `FUDVault.sol` stores `balances[address]`
+- login method may be Google / Email / external wallet
+- in some flows, the active wallet address becomes the effective balance owner
+- external browser wallet state leaks into core product logic
+
+### Product consequences
+- balance appears wallet-dependent
+- users can lose access to “their” balance when wallet context changes
+- connecting another wallet creates confusion
+- “wrong wallet connected” states become common
+- account identity and wallet identity are mixed
+
+### Root cause
+The issue is not Privy.
+
+The issue is that the system currently treats:
+- wallet = account
+instead of:
+- account = account
+- wallet = linked tool
+
+## 3. Goals
+### Primary goals
+- balance must be independent from the wallet currently connected in browser
+- user can fund from any wallet
+- changing linked wallet must not change visible balance
+- user should not need gas for core product flows
+- architecture should remain crypto-native
+- architecture should remain compatible with Privy
+- should avoid a fully custodial DB-ledger model as source of truth
+
+### Secondary goals
+- preserve as much of the current onchain model as possible
+- stay directionally close to Polymarket
+- support future linked-wallet UX
+- keep room for operator/relayer-based flows
+
+### Non-goals
+- fully redesigning settlement from scratch
+- introducing a pure custodial exchange model
+- replacing Privy
+- rebuilding the system around `userIdHash` balances immediately
+
+## 4. Architectural Decision
+### 4.1 Chosen model
+One FUD account = one stable Main Wallet = one canonical onchain balance owner
+
+The vault may continue to store:
+
+```solidity
+mapping(address => uint256) public balances;
+```
+
+But that address must always be:
+- `main_wallet_address`
+
+not:
+- the browser wallet currently connected
+- the last wallet used to log in
+- the wallet the user happened to choose in MetaMask today
+
+### Result
+At the product level, balance becomes “account-based”.
+
+At the contract level, balance remains “address-based”.
+
+The key is that the address is now a stable account wallet, not a variable session wallet.
+
+## 5. Why this model
+This model gives FUD the best tradeoff across:
+- account consistency
+- onchain auditability
+- low product complexity
+- compatibility with Privy
+- future scaling
+- resemblance to Polymarket’s proxy-wallet model
+
+### Why not pure DB balance
+A DB balance as source of truth would make the backend custodial de facto.
+
+That would mean:
+- backend decides real balance
+- backend decides withdrawals
+- onchain state becomes secondary
+- user cannot independently verify the balance model as easily
+
+This may be practical for some exchanges, but it is a worse fit for a crypto-native prediction market if it can be avoided.
+
+### Why not userIdHash-onchain immediately
+Moving all balances to `balances[userIdHash]` introduces a larger redesign:
+- new authorization model
+- new deposit/withdraw semantics
+- more operator responsibility
+- higher complexity
+- more risk during transition
+
+The stable Main Wallet approach solves the product issue with much lower complexity.
+
+## 6. Account and Wallet Model
+### 6.1 Account
+A FUD account is the primary identity in the product.
+
+Fields:
+- `user_id`
+- `privy_user_id`
+- `main_wallet_address`
+- `status`
+
+### 6.2 Main Wallet
+The Main Wallet is the stable wallet of the account.
+
+Properties:
+- always exists
+- created or recovered through Privy
+- canonical owner of the vault balance
+- canonical signer for product actions
+- stable regardless of login method
+
+### 6.3 Linked Wallets
+Linked wallets are additional wallets associated with the account.
+
+Examples:
+- MetaMask
+- WalletConnect
+- Coinbase Wallet
+- other future wallets
+
+Linked wallets may be used for:
+- login
+- funding
+- withdrawal destination
+- future recovery or export flows
+
+Linked wallets do not:
+- define the balance
+- override the main wallet
+- determine the currently visible account balance
+- become the canonical trading wallet in the base model
+
+## 7. Login and Bootstrap Rules
+### 7.1 Universal rule
+Regardless of how the user signs in:
+- Google
+- Email
+- external wallet
+
+the account must end up with the same structure:
+- one stable Main Wallet
+- optional linked wallets
+- one account-owned balance
+
+### 7.2 Google / Email login
+Flow:
+1. user authenticates with Privy
+2. Privy creates or recovers embedded wallet
+3. embedded wallet becomes `main_wallet_address`
+4. account is created or restored
+5. vault balance is read from `main_wallet_address`
+
+### 7.3 External wallet login
+Flow:
+1. user authenticates with external wallet through Privy
+2. Privy creates or recovers the embedded Main Wallet
+3. external wallet is stored as linked wallet only
+4. embedded Main Wallet remains canonical
+5. vault balance is read from Main Wallet only
+
+Important:
+External wallet login must not convert the external wallet into the primary balance owner.
+
+## 8. Source of Truth
+### 8.1 Money
+Source of truth for user funds:
+- `FUDVault` onchain balance of `main_wallet_address`
+
+### 8.2 Product/UI/cache
+DB is used for:
+- indexing
+- cache
+- analytics
+- faster UI reads
+- order history
+- market history
+- leaderboard
+- reserve tracking if needed
+- reconciliation tooling
+
+DB is not the source of truth for actual user funds.
+
+## 9. Contract Direction
+### 9.1 Keep address-based balances
+Maintain address-based vault balances in the short-to-medium term.
+
+This keeps compatibility with:
+- current contract model
+- current USDC vault pattern
+- existing operator execution approach
+
+### 9.2 Required contract evolution
+The vault should evolve toward operator/relayer-friendly methods.
+
+Recommended additions:
+
+#### depositFor
+```solidity
+function depositFor(address account, uint256 amount) external;
+```
+
+Purpose:
+- allow deposits to credit the Main Wallet address directly
+- reduce dependency on the user wallet paying gas
+- support relayer/operator flows
+
+#### withdrawBySig
+```solidity
+function withdrawBySig(
+    address account,
+    address to,
+    uint256 amount,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata signature
+) external;
+```
+
+Purpose:
+- user signs with Main Wallet
+- operator/relayer submits
+- operator pays gas
+- funds can be sent to any chosen destination wallet
+
+#### nonces / replay protection
+The contract must support nonce-based replay protection for all signed execution flows.
+
+## 10. Gas Model
+### 10.1 Product principle
+The user should sign, but not be required to hold ETH for core product actions.
+
+Target UX:
+- user signs order / withdrawal authorization
+- operator or relayer submits transaction
+- relayer/operator pays gas
+
+### 10.2 Role split
+Privy provides:
+- auth
+- embedded wallet
+- signing
+- account identity linkage
+
+FUD infrastructure provides:
+- operator
+- relayer
+- gas sponsorship
+- transaction submission
+- retries
+- nonce management
+- monitoring
+
+### 10.3 Outcome
+This gives:
+- gasless UX for users
+- consistent account wallet behavior
+- strong compatibility with prediction-market order flows
+
+## 11. Deposit Model
+### 11.1 Product goal
+Users must be able to fund their account from any wallet.
+
+### 11.2 Funding rule
+Funding source wallet may be:
+- MetaMask
+- Coinbase Wallet
+- another external wallet
+- onramp
+- bridge
+- any valid source
+
+But credited balance must end up under:
+- `main_wallet_address`
+
+### 11.3 Recommended deposit model
+Preferred direction:
+1. user selects “Add funds”
+2. system shows Main Wallet / account funding route
+3. system supports funding from any source
+4. deposit is ultimately credited to Main Wallet balance in vault
+
+Recommended implementation direction:
+Either:
+- fund Main Wallet directly and then deposit into vault
+or
+- use `depositFor(main_wallet_address, amount)` style flow through operator/processor
+
+Important product rule:
+Funding wallet and balance owner are different concepts.
+
+Any wallet may fund.
+Only Main Wallet owns balance.
+
+## 12. Withdrawal Model
+### 12.1 Product goal
+Users should be able to withdraw to any chosen wallet without needing gas.
+
+### 12.2 Flow
+1. user initiates withdrawal
+2. user selects destination wallet
+3. backend prepares EIP-712 payload
+4. Main Wallet signs authorization
+5. operator submits `withdrawBySig`
+6. relayer/operator pays gas
+7. USDC is sent to destination address
+
+### 12.3 Security requirements
+- nonce-based replay protection
+- deadline on signed payload
+- strict domain separation
+- optional risk checks / withdrawal holds / limits
+
+## 13. Bets and Order Signing
+### 13.1 Canonical signer
+All bets must be signed by the Main Wallet.
+
+Not by:
+- whichever browser wallet is connected
+- whichever wallet the user used to log in today
+- whichever wallet extension is available
+
+### 13.2 Execution model
+1. backend builds EIP-712 typed data
+2. Main Wallet signs
+3. operator receives signed order
+4. operator executes matching / market logic
+5. settlement occurs through the system design
+6. DB reflects indexed order state
+
+This keeps:
+- signing tied to stable account identity
+- execution offchain where appropriate
+- settlement onchain where required
+
+## 14. UI and Product Rules
+### 14.1 What the user should see
+The user should understand:
+- “I have a FUD account”
+- “This account has a Main Wallet”
+- “This account has a balance”
+- “I can fund it from any wallet”
+- “Linked wallets do not change my balance”
+
+### 14.2 What the user should not see
+Avoid:
+- wallet mismatch warnings tied to linked wallets
+- balance changing when a browser wallet changes
+- connect-wallet prompts just to view balance
+- any implication that browser wallet session defines the account balance
+
+### 14.3 Recommended UI language
+Main Wallet
+Used for balances, signatures, and account operations.
+
+Linked Wallet
+Can be used for login, funding, or receiving withdrawals.
+
+Add funds
+Fund your account from any wallet.
+
+Withdraw
+Choose where to receive funds.
+
+## 15. Remove Wallet / Main Wallet UX
+If the product later exposes wallet removal, this must be a serious account action, not a simple disconnect button.
+
+For Main Wallet:
+Use wording like:
+- Remove Main Wallet from account
+
+Not:
+- Disconnect wallet
+
+Before allowing removal, require:
+- no unsafe balance state
+- no unresolved recovery state
+- strong warning
+- export/recovery acknowledgment if relevant
+
+Example warning:
+Removing your Main Wallet may permanently affect access to your account if you have not exported or secured it.
+
+## 16. Backend Data Model
+users
+```sql
+id uuid primary key
+privy_user_id text unique not null
+email text null
+main_wallet_address text unique not null
+status text not null default 'active'
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+user_wallets
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+address text not null unique
+wallet_type text not null -- 'embedded' | 'external'
+provider text null -- 'privy' | 'metamask' | 'coinbase' | 'walletconnect'
+is_main boolean not null default false
+can_fund boolean not null default true
+can_withdraw_to boolean not null default true
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+vault_balances_cache
+```sql
+user_id uuid primary key references users(id)
+main_wallet_address text not null
+available_usdc numeric(38,6) not null default 0
+reserved_usdc numeric(38,6) not null default 0
+total_usdc numeric(38,6) not null default 0
+last_synced_block bigint null
+updated_at timestamptz not null
+```
+
+deposit_events
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+from_address text null
+to_main_wallet_address text not null
+token_address text not null
+amount numeric(38,6) not null
+tx_hash text unique not null
+block_number bigint not null
+status text not null -- 'detected' | 'credited' | 'failed'
+created_at timestamptz not null
+```
+
+withdraw_requests
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+from_main_wallet_address text not null
+to_address text not null
+amount numeric(38,6) not null
+nonce bigint not null
+deadline timestamptz not null
+signature text not null
+status text not null -- 'pending' | 'submitted' | 'confirmed' | 'failed'
+tx_hash text null
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+bet_orders
+```sql
+id uuid primary key
+user_id uuid not null references users(id)
+market_id uuid not null
+main_wallet_address text not null
+side text not null
+price numeric(10,4) not null
+shares numeric(38,18) not null
+max_cost_usdc numeric(38,6) not null
+signature text not null
+status text not null -- 'signed' | 'matched' | 'settled' | 'cancelled'
+created_at timestamptz not null
+updated_at timestamptz not null
+```
+
+## 17. API Direction
+POST /api/users/bootstrap
+Purpose:
+- create or restore account
+- ensure stable Main Wallet
+- link optional external wallet metadata
+
+Request example:
+```json
+{
+  "privy_user_id": "did:privy:123",
+  "auth_method": "google",
+  "email": "user@example.com",
+  "embedded_wallet_address": "0xMAIN...",
+  "external_wallet_address": "0xMETA..."
+}
+```
+
+Behavior:
+- if user does not exist, create it
+- set `main_wallet_address = embedded_wallet_address`
+- mark embedded wallet as main
+- if external wallet exists, store as linked wallet
+- never replace main wallet because external wallet was used for login
+
+GET /api/users/me/wallet
+Purpose:
+- return Main Wallet info
+- return cached balance
+- return linked wallets
+
+POST /api/withdrawals/request
+Purpose:
+- create signed withdrawal request flow
+
+GET /api/users/me/balance
+Purpose:
+- return account balance derived from Main Wallet
+
+## 18. Migration Strategy
+Phase 1
+Product migration:
+- stop using browser wallet as balance owner
+- introduce `main_wallet_address`
+- ensure all reads come from Main Wallet
+- treat external wallets as linked only
+
+Phase 2
+Execution migration:
+- add relayer-driven withdrawal flow
+- Main Wallet signs, operator submits
+
+Phase 3
+Deposit optimization:
+- add `depositFor`
+- improve friction around direct deposit handling
+
+Phase 4
+Balance sophistication:
+- split available vs reserved
+- improve reconciliation
+- optimize settlement batching
+
+## 19. Tradeoffs
+Benefits
+- solves wallet-switch balance problem
+- preserves onchain source of truth for funds
+- remains compatible with Privy
+- supports gasless user UX
+- supports funding from any wallet
+- close to Polymarket-style account wallet model
+- avoids full custodial DB-ledger design
+
+Costs
+- requires disciplined Main Wallet model
+- requires relayer/operator infrastructure
+- requires contract evolution for best UX
+- requires careful deposit/withdraw flow design
+- DB and onchain sync still need robust monitoring
+
+## 20. Rejected Alternatives
+A. Balance by userIdHash onchain
+Rejected for now because:
+- larger rewrite
+- more complex permissions
+- more operator authority
+- more migration risk
+
+B. Balance in DB as source of truth
+Rejected as primary model because:
+- custodial de facto
+- weaker crypto-native guarantees
+- less independently auditable
+- worse fit for desired architecture
+
+C. Browser wallet as current balance owner
+Rejected because:
+- breaks account consistency
+- creates fatal wallet-switch bugs
+- confuses users
+- makes balance session-dependent
+
+## 21. Final Recommendation
+FUD should adopt this architecture:
+
+One account = one stable Main Wallet created/recovered through Privy.
+That Main Wallet is the canonical owner of the onchain vault balance.
+External wallets are linked tools for login, funding, and withdrawals, but they do not define the balance.
+The backend indexes and enhances UX, while operator/relayer infrastructure pays gas and submits transactions.
+
+This gives FUD:
+- account-based balance at the product level
+- onchain balance at the contract level
+- gasless UX
+- wallet-independent funding
+- strong compatibility with Privy
+- a path that stays crypto-native without a full contract rewrite
+
+## 22. One-line version
+Do not move the real balance to DB. Do not let the browser wallet define the balance. Make the Main Wallet the stable owner of funds for the account.
