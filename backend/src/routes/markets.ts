@@ -175,9 +175,14 @@ export async function marketRoutes(app: FastifyInstance) {
       const isPaper        = !!market.is_paper;
       const isTestnet      = !!market.is_testnet;
 
+      const isRealOnChain = !isPaper && !isTestnet && market.onchain_market_id != null;
+
       let userRow: any;
-      if (isTestnet) {
-        // Testnet: GEN moves via MetaMask, don't check/deduct DB balance
+      if (isTestnet || isRealOnChain) {
+        // Testnet: GEN moves via MetaMask, don't check/deduct DB balance.
+        // Real on-chain: balance lives in FUDVault contract, not in DB.
+        // The EIP-712 signed bet will be validated on-chain — if the user
+        // doesn't have enough in the vault, the contract reverts.
         const { rows: [u] } = await client.query(
           `SELECT balance_usd, paper_balance_usd, testnet_balance_gen FROM users WHERE id = $1`, [user.userId]
         );
