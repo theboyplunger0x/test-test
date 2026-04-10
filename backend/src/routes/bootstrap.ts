@@ -74,7 +74,7 @@ export async function bootstrapRoutes(app: FastifyInstance) {
     }
 
     if (existing) {
-      // Sync wallet if missing and we have one now
+      // Sync Main Wallet if missing — always prefer embedded
       if (!existing.wallet_address && wallets?.length) {
         const primary = wallets.find(w => w.is_embedded) ?? wallets[0];
         const addr = primary.address.toLowerCase();
@@ -100,10 +100,10 @@ export async function bootstrapRoutes(app: FastifyInstance) {
       };
     }
 
-    // 2. New user — determine primary wallet
-    const primaryWallet = wallets?.length
-      ? (wallets.find(w => w.is_embedded) ?? wallets[0]).address.toLowerCase()
-      : null;
+    // 2. New user — ALWAYS use embedded wallet as Main Wallet.
+    // External wallets are stored as metadata only (for funding).
+    const embeddedWallet = wallets?.find(w => w.is_embedded);
+    const primaryWallet = embeddedWallet?.address?.toLowerCase() ?? null;
 
     // Check wallet uniqueness
     if (primaryWallet) {
