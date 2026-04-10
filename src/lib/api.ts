@@ -345,11 +345,22 @@ export const api = {
       body: JSON.stringify({ symbol, chain, timeframe, tagline, paper, testnet, ca }),
     }),
 
-  placeBet: (marketId: string, side: "long" | "short", amount: number, paper = false, message?: string, faded_position_id?: string) =>
+  placeBet: (marketId: string, side: "long" | "short", amount: number, paper = false, message?: string, faded_position_id?: string, signature?: string, wallet_address?: string) =>
     req<{ position: object; new_balance: string; new_paper_balance: string; new_testnet_balance?: string }>(`/markets/${marketId}/bet`, {
       method: "POST",
-      body: JSON.stringify({ side, amount, paper, message, faded_position_id: faded_position_id || undefined }),
+      body: JSON.stringify({ side, amount, paper, message, faded_position_id: faded_position_id || undefined, signature, wallet_address }),
     }),
+
+  // ─── Vault (on-chain) ────────────────────────────────────────────────────
+
+  vaultConfig: () =>
+    req<{ address: string; chainId: number; name: string; version: string }>("/vault/config"),
+
+  vaultBalance: (address: string) =>
+    req<{ address: string; balance: string }>(`/vault/balance/${address}`),
+
+  vaultNonce: (address: string) =>
+    req<{ address: string; nonce: string }>(`/vault/nonce/${address}`),
 
   getTokenFeed: (symbol: string) =>
     req<{ markets: any[]; positions: any[] }>(`/tokens/${symbol}/feed`),
