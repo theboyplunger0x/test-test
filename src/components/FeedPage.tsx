@@ -1586,6 +1586,8 @@ export default function FeedPage() {
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
                 <OrdersView dk={dk} balance={isReal ? vault.vaultBalance : user?.balance_usd} useExternalBalance={isReal} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
+                  rewardBalance={vault.rewardBalance}
+                  onClaimOnChain={vault.claimRewardsOnChain}
                   onViewToken={(symbol) => {
                     setOrdersOpen(false);
                     const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());

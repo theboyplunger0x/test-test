@@ -457,7 +457,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
   );
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken, paperMode = false, useExternalBalance = false }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void; paperMode?: boolean; /** When true, don't overwrite balance from /portfolio — parent controls it (e.g. vault on-chain balance). */ useExternalBalance?: boolean }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken, paperMode = false, useExternalBalance = false, rewardBalance, onClaimOnChain }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void; paperMode?: boolean; useExternalBalance?: boolean; /** On-chain reward balance (from useVault). */ rewardBalance?: string; /** Claim rewards on-chain — calls vault contract directly from user wallet. */ onClaimOnChain?: () => Promise<void>; }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -579,16 +579,27 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
   }
 
   async function handleClaim() {
-    if (claiming || claimDone || !referral || Number(referral.claimable_usd) <= 0) return;
+    const onChainRewards = parseFloat(rewardBalance || "0");
+    const offChainRewards = referral ? Number(referral.claimable_usd) : 0;
+    const totalClaimable = onChainRewards + offChainRewards;
+    if (claiming || claimDone || totalClaimable <= 0) return;
     setClaiming(true);
     try {
-      await api.claimRewards();
+      // Claim on-chain rewards first (from vault contract)
+      if (onChainRewards > 0 && onClaimOnChain) {
+        await onClaimOnChain();
+      }
+      // Claim off-chain rewards (legacy DB system)
+      if (offChainRewards > 0) {
+        await api.claimRewards();
+      }
       setClaimDone(true);
       const updated = await api.getReferral();
       setReferral(updated);
-      // also refresh balance
-      const data = await api.portfolio();
-      if (!useExternalBalance) setBalance(parseFloat(data.balance) || 0);
+      if (!useExternalBalance) {
+        const data = await api.portfolio();
+        setBalance(parseFloat(data.balance) || 0);
+      }
       setTimeout(() => setClaimDone(false), 3000);
     } catch {}
     setClaiming(false);
@@ -642,7 +653,9 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
         {/* Tier + Claim */}
         {referral && (() => {
-          const claimable = Number(referral.claimable_usd);
+          const offChain = Number(referral.claimable_usd);
+          const onChain = parseFloat(rewardBalance || "0");
+          const claimable = offChain + onChain;
           const hasRewards = claimable > 0;
           const tierLabel = referral.tier === "elite" ? "Elite" : referral.tier === "top" ? "Top" : referral.tier === "pro" ? "Pro" : "Basic";
           const rebate    = referral.tier === "elite" ? "25% fee rebate" : referral.tier === "top" ? "20% fee rebate" : referral.tier === "pro" ? "10% fee rebate" : "5% fee rebate";

@@ -247,6 +247,33 @@ export function useVault(walletAddr: string | null) {
     }, 5000);
   }, [walletAddr, config]);
 
+  /**
+   * Claim all accrued rewards from the vault contract to the user's wallet.
+   * This is a direct user tx (not operator-mediated).
+   */
+  const claimRewardsOnChain = useCallback(async () => {
+    if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) throw new Error("No wallet found");
+
+    await ensureBaseSepoliaChain(ethereum);
+
+    const vaultIface = new (await import("ethers")).Interface(["function claimRewards()"]);
+    const data = vaultIface.encodeFunctionData("claimRewards", []);
+    await ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{ from: walletAddr, to: config.address, data }],
+    });
+
+    // Refresh balances after claim
+    setTimeout(() => {
+      if (walletAddr) {
+        api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+        api.vaultRewards(walletAddr).then(r => setRewardBalance(r.rewards)).catch(() => {});
+      }
+    }, 5000);
+  }, [walletAddr, config]);
+
   const refreshBalance = useCallback(() => {
     if (!walletAddr) return;
     api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
@@ -261,6 +288,7 @@ export function useVault(walletAddr: string | null) {
     signBet,
     depositToVault,
     withdrawFromVault,
+    claimRewardsOnChain,
     refreshBalance,
   };
 }
