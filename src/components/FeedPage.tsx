@@ -1534,7 +1534,8 @@ export default function FeedPage() {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {referralOpen && <ReferralModal dk={dk} isLoggedIn={!!user} onClose={() => setReferralOpen(false)} onSignIn={() => setAuthOpen(true)} />}
+        {referralOpen && <ReferralModal dk={dk} isLoggedIn={!!user} onClose={() => setReferralOpen(false)} onSignIn={() => setAuthOpen(true)}
+          rewardBalance={vault.rewardBalance} onClaimOnChain={vault.claimRewardsOnChain} />}
       </AnimatePresence>
 
       {/* Account drawer (with drill-down to Wallet) */}

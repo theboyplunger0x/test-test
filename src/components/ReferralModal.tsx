@@ -54,11 +54,17 @@ export default function ReferralModal({
   onClose,
   isLoggedIn,
   onSignIn,
+  rewardBalance,
+  onClaimOnChain,
 }: {
   dk: boolean;
   onClose: () => void;
   isLoggedIn: boolean;
   onSignIn: () => void;
+  /** On-chain reward balance from vault (from useVault). */
+  rewardBalance?: string;
+  /** Claim on-chain rewards from vault contract. */
+  onClaimOnChain?: () => Promise<void>;
 }) {
   const [stats, setStats]     = useState<ReferralStats | null>(null);
   const [copied, setCopied]   = useState(false);
@@ -83,11 +89,16 @@ export default function ReferralModal({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const onChainRewards = parseFloat(rewardBalance || "0");
+  const offChainClaimable = stats ? Number(stats.claimable_usd) : 0;
+  const totalClaimable = onChainRewards + offChainClaimable;
+
   async function handleClaim() {
-    if (claiming || claimDone || !stats || Number(stats.claimable_usd) <= 0) return;
+    if (claiming || claimDone || totalClaimable <= 0) return;
     setClaiming(true);
     try {
-      await api.claimRewards();
+      if (onChainRewards > 0 && onClaimOnChain) await onClaimOnChain();
+      if (offChainClaimable > 0) await api.claimRewards();
       setClaimDone(true);
       const updated = await api.getReferral();
       setStats(updated);
@@ -210,10 +221,9 @@ export default function ReferralModal({
                   ))}
                 </div>
 
-                {/* Claim button — always visible */}
+                {/* Claim button — shows on-chain + off-chain combined */}
                 {(() => {
-                  const claimable = stats ? Number(stats.claimable_usd) : 0;
-                  const hasRewards = claimable > 0;
+                  const hasRewards = totalClaimable > 0;
                   return (
                     <div className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-all ${
                       hasRewards
@@ -223,7 +233,7 @@ export default function ReferralModal({
                       <div>
                         <p className={`text-[10px] font-black uppercase tracking-widest ${hasRewards ? (dk ? "text-emerald-400/70" : "text-emerald-600/70") : labelCls}`}>Pending rewards</p>
                         <p className={`text-[18px] font-black ${hasRewards ? (dk ? "text-emerald-400" : "text-emerald-600") : subCls}`}>
-                          {stats ? `$${claimable.toFixed(2)}` : "—"}
+                          ${totalClaimable.toFixed(2)}
                         </p>
                       </div>
                       <button onClick={handleClaim} disabled={claiming || !hasRewards}
