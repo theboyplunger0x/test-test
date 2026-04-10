@@ -485,6 +485,8 @@ export default function FeedPage() {
   function handleLogout() {
     localStorage.removeItem("token");
     setUser(null);
+    // Clear wallet state so it doesn't persist to the next account
+    wallet.setWalletAddr(null);
     wallet.logoutPrivy();
   }
 
