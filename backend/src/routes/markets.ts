@@ -177,12 +177,17 @@ export async function marketRoutes(app: FastifyInstance) {
 
       const isRealOnChain = !isPaper && !isTestnet && market.onchain_market_id != null;
 
+      // Real mode with on-chain market: signature is MANDATORY, not optional.
+      // Without a valid signature, the contract can't execute the bet.
+      if (isRealOnChain && (!signature || !wallet_address)) {
+        await client.query("ROLLBACK");
+        return reply.status(400).send({ error: "Real mode requires a signed bet. Please sign the transaction in your wallet." });
+      }
+
       let userRow: any;
       if (isTestnet || isRealOnChain) {
         // Testnet: GEN moves via MetaMask, don't check/deduct DB balance.
         // Real on-chain: balance lives in FUDVault contract, not in DB.
-        // The EIP-712 signed bet will be validated on-chain — if the user
-        // doesn't have enough in the vault, the contract reverts.
         const { rows: [u] } = await client.query(
           `SELECT balance_usd, paper_balance_usd, testnet_balance_gen FROM users WHERE id = $1`, [user.userId]
         );
