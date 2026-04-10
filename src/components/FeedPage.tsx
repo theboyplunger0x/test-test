@@ -133,7 +133,9 @@ function tierBadge(tier?: string, telegramUsername?: string) {
 }
 
 export default function FeedPage() {
-  const wallet = usePrivyWallet({ autoDetect: true });
+  // Don't auto-detect MetaMask on mount — prevents wallet bleed between accounts.
+  // Wallet connects only when user explicitly links via ConnectWalletModal or AccountDrawer.
+  const wallet = usePrivyWallet({ autoDetect: false });
   const { walletAddr, setWalletAddr, genBalance, privyAuthenticated } = wallet;
   const vault = useVault(walletAddr);
   const [markets, setMarkets]           = useState<Market[]>([]);
@@ -485,8 +487,9 @@ export default function FeedPage() {
   function handleLogout() {
     localStorage.removeItem("token");
     setUser(null);
-    // Clear wallet state so it doesn't persist to the next account
+    // Fully disconnect wallet + Privy so nothing persists to next account
     wallet.setWalletAddr(null);
+    wallet.disconnect().catch(() => {});
     wallet.logoutPrivy();
   }
 
