@@ -20,8 +20,8 @@ import NotificationsPanel from "./NotificationsPanel";
 import TokenProfilePage from "./TokenProfilePage";
 import ChartModal from "./ChartModal";
 import SpotView from "./SpotView";
-import CallCard, { type Call } from "./CallCard";
-import DebateCard, { type Debate } from "./DebateCard";
+import { type Call } from "./CallCard";
+import { type Debate } from "./DebateCard";
 import { api, User, AuthResponse, Market } from "@/lib/api";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
@@ -36,6 +36,7 @@ import ConnectWalletModal, { type ConnectWalletMode } from "@/account/ConnectWal
 import FollowingScreen from "@/screens/FollowingScreen";
 import DiscoverScreen from "@/screens/DiscoverScreen";
 import MarketsScreen from "@/screens/MarketsScreen";
+import CallsScreen from "@/screens/CallsScreen";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -1053,108 +1054,32 @@ export default function FeedPage() {
 
         {/* CALLS TAB — social-first feed of recent calls */}
         {!tokenProfileToken && mainTab === "calls" && (
-          <motion.div key="calls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex flex-col">
-            {/* Sub-filter: Fresh Calls | Hot Debates */}
-            <div className={`flex gap-1.5 px-4 md:px-5 py-2 border-b shrink-0 ${T.navBorder}`}>
-              {(["fresh", "debates"] as const).map(f => (
-                <button key={f} onClick={() => setCallsFilter(f)}
-                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${callsFilter === f ? T.filterActive : T.filterInactive}`}>
-                  {f === "fresh" ? "Fresh Calls" : `Hot Debates${debates.length > 0 ? ` (${debates.length})` : ""}`}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-4 md:px-5 py-4">
-              {callsFilter === "fresh" ? (
-                <>
-                  {callsLoading && calls.length === 0 ? (
-                    <div className={`flex items-center justify-center h-40 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                      <span className="text-[13px] font-bold">Loading calls…</span>
-                    </div>
-                  ) : calls.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {calls.map((c, i) => (
-                        <CallCard
-                          key={c.id}
-                          call={c}
-                          dk={dk}
-                          index={i}
-                          onViewProfile={(u) => setProfileUser(u)}
-                          onViewToken={(symbol, chain) => {
-                            const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
-                            handleCATradeResult(rich ?? {
-                              symbol, name: symbol, address: "",
-                              chainId: chain.toLowerCase(), chainLabel: chain,
-                              price: 0, change24h: 0, liquidity: 0,
-                              volume24h: 0, marketCap: 0, pairAddress: "",
-                            });
-                          }}
-                          onFade={async (call, side, amount) => {
-                            if (!user) { setAuthOpen(true); return null; }
-                            if (!call.market_id) return "Cannot fade — market not found.";
-                            if (call.status !== "open") return "This market is already closed.";
-                            return handleAdd(call.market_id, side, amount, undefined, call.id);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className={`flex flex-col items-center justify-center h-full gap-4 px-6`}>
-                      <span className="text-[40px]">📢</span>
-                      <div className="text-center">
-                        <p className={`text-[15px] font-black ${dk ? "text-white/70" : "text-gray-700"}`}>No calls yet</p>
-                        <p className={`text-[12px] font-bold mt-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                          Be the first to make a call. Open a market and share your thesis.
-                        </p>
-                      </div>
-                      <button onClick={() => setMainTab("trending")}
-                        className={`px-5 py-2.5 rounded-xl text-[12px] font-black tracking-wide transition-all ${dk ? "bg-white text-black hover:bg-white/90" : "bg-gray-900 text-white hover:bg-gray-700"}`}>
-                        Make a call →
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* HOT DEBATES */
-                debates.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {debates.map((d, i) => (
-                      <DebateCard
-                        key={d.market.id}
-                        debate={d}
-                        dk={dk}
-                        index={i}
-                        onViewProfile={(u) => setProfileUser(u)}
-                        onViewToken={(symbol, chain) => {
-                          const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
-                          handleCATradeResult(rich ?? {
-                            symbol, name: symbol, address: "",
-                            chainId: chain.toLowerCase(), chainLabel: chain,
-                            price: 0, change24h: 0, liquidity: 0,
-                            volume24h: 0, marketCap: 0, pairAddress: "",
-                          });
-                        }}
-                        onFade={(marketId, side) => {
-                          if (!user) { setAuthOpen(true); return; }
-                          handleAdd(marketId, side, 25);
-                        }}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className={`flex flex-col items-center justify-center h-full gap-4 px-6`}>
-                    <span className="text-[40px]">⚔️</span>
-                    <div className="text-center">
-                      <p className={`text-[15px] font-black ${dk ? "text-white/70" : "text-gray-700"}`}>No active debates</p>
-                      <p className={`text-[12px] font-bold mt-1 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                        Debates appear when both sides of a market have callers with strong positions.
-                      </p>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          </motion.div>
+          <CallsScreen
+            dk={dk}
+            calls={calls}
+            debates={debates}
+            callsLoading={callsLoading}
+            callsFilter={callsFilter}
+            setCallsFilter={setCallsFilter}
+            loggedIn={!!user}
+            onAuthRequired={() => setAuthOpen(true)}
+            onViewProfile={(u) => setProfileUser(u)}
+            onViewToken={(symbol, chain) => {
+              const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
+              handleCATradeResult(rich ?? {
+                symbol, name: symbol, address: "",
+                chainId: chain.toLowerCase(), chainLabel: chain,
+                price: 0, change24h: 0, liquidity: 0,
+                volume24h: 0, marketCap: 0, pairAddress: "",
+              });
+            }}
+            onMakeCall={() => setMainTab("trending")}
+            onFadeCall={async (call, side, amount) => {
+              if (!call.market_id) return "Cannot fade — market not found.";
+              return handleAdd(call.market_id, side, amount, undefined, call.id);
+            }}
+            onFadeDebate={(marketId, side) => handleAdd(marketId, side, 25)}
+          />
         )}
 
         {/* MARKETS TAB */}
