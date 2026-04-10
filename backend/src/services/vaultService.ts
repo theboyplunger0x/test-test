@@ -17,7 +17,7 @@ const abi = JSON.parse(readFileSync(join(__dirname, "../abi/FUDVault.json"), "ut
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const VAULT_ADDRESS = (process.env.FUDVAULT_ADDRESS ?? "0x9aACBa42a8D42e83135Be1a11a169AB106cb7096") as Address;
+const VAULT_ADDRESS = (process.env.FUDVAULT_ADDRESS ?? "0xD167F62834c175F33cD359785CE662B0a3298E88") as Address;
 const OPERATOR_KEY  = process.env.FUDVAULT_OPERATOR_KEY ?? process.env.DEPLOYER_PRIVATE_KEY;
 const RPC_URL       = process.env.BASE_SEPOLIA_RPC ?? "https://sepolia.base.org";
 const CHAIN         = baseSepolia; // swap to `base` for mainnet

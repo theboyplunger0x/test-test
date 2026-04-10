@@ -191,8 +191,7 @@ describe("FUDVault", function () {
     ).to.be.revertedWith("Insufficient reward reserve");
   });
 
-  it("claimRewards sends USDC to user wallet", async function () {
-    // Setup: resolve market to create reserve, then accrue
+  it("claimRewards moves rewards to vault balance (not wallet)", async function () {
     await vault.connect(alice).deposit(usd(100));
     await vault.connect(bob).deposit(usd(100));
     const closesAt = (await ethers.provider.getBlock("latest"))!.timestamp + 3600;
@@ -206,11 +205,13 @@ describe("FUDVault", function () {
     // Accrue $2 to alice
     await vault.connect(operator).accrueRewards([alice.address], [usd(2)], 0);
 
+    const balanceBefore = await vault.balances(alice.address);
     const walletBefore = await usdc.balanceOf(alice.address);
     await vault.connect(alice).claimRewards();
-    const walletAfter = await usdc.balanceOf(alice.address);
 
-    expect(walletAfter - walletBefore).to.equal(usd(2));
+    // Rewards go to vault balance, NOT to wallet
+    expect(await vault.balances(alice.address)).to.equal(balanceBefore + usd(2));
+    expect(await usdc.balanceOf(alice.address)).to.equal(walletBefore); // wallet unchanged
     expect(await vault.rewardBalances(alice.address)).to.equal(0);
   });
 

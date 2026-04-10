@@ -164,7 +164,7 @@ export default function WithdrawVaultModal({
               onClick={handleClaim}
               disabled={claimLoading}
               className="w-full py-3 rounded-xl text-[13px] font-black bg-emerald-500 hover:bg-emerald-400 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-              {claimLoading ? "Preparing claim..." : `Claim $${rewards.toFixed(2)} rewards`}
+              {claimLoading ? "Preparing claim..." : `Claim $${rewards.toFixed(2)} to balance`}
             </button>
           )}
 

@@ -136,14 +136,16 @@ contract FUDVault is Ownable, ReentrancyGuard, Pausable {
     // ─── User: Claim Rewards ──────────────────────────────────────────────────
 
     /**
-     * @notice Claim accrued rewards (cashback + referral) to caller's wallet.
-     *         Rewards are sent directly to the user's wallet, NOT to their vault balance.
+     * @notice Claim accrued rewards (cashback + referral) to caller's vault balance.
+     *         Rewards move from rewardBalances to balances — user can then withdraw
+     *         whenever they want via withdraw(). This avoids micro-claims going
+     *         directly to the wallet.
      */
     function claimRewards() external nonReentrant {
         uint256 amount = rewardBalances[msg.sender];
         require(amount > 0, "No rewards to claim");
         rewardBalances[msg.sender] = 0;
-        usdc.safeTransfer(msg.sender, amount);
+        balances[msg.sender] += amount;
         emit RewardsClaimed(msg.sender, amount);
     }
 
