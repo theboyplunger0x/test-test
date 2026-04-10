@@ -50,7 +50,7 @@ export default function AccountDrawer({
     setAccountView("main");
   };
 
-  const { walletAddr, privyAuthenticated } = wallet;
+  const { walletAddr, privyAuthenticated, isEmbeddedWallet } = wallet;
 
   return (
     <AnimatePresence>
@@ -225,11 +225,25 @@ export default function AccountDrawer({
                               className={`px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
                               Link another
                             </button>
-                            <button onClick={() => wallet.disconnect()}
-                              className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-all">
-                              Disconnect
-                            </button>
+                            {isEmbeddedWallet ? (
+                              // Embedded wallet is bound to the user's identity — you don't
+                              // "disconnect" it, you end the session. It returns on re-login.
+                              <button onClick={() => wallet.logoutPrivy()}
+                                className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-amber-500/20 hover:bg-amber-500/40 text-amber-400 transition-all">
+                                Sign out of wallet
+                              </button>
+                            ) : (
+                              <button onClick={() => wallet.disconnect()}
+                                className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-all">
+                                Disconnect
+                              </button>
+                            )}
                           </div>
+                          {isEmbeddedWallet && (
+                            <p className={`text-[10px] mt-2 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                              Your embedded wallet stays linked to your account. Sign back in any time to recover it.
+                            </p>
+                          )}
                         </div>
                       </>
                     ) : (

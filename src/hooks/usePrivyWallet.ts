@@ -23,6 +23,13 @@ export function usePrivyWallet(opts: { autoDetect?: boolean } = {}) {
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
   const [genBalance, setGenBalance] = useState<number>(0);
 
+  // True iff the active walletAddr corresponds to a Privy embedded wallet.
+  // External (MetaMask) wallets, including ones linked via Privy, are NOT
+  // embedded — they live in the user's browser/extension and can be revoked
+  // permission-by-permission.
+  const isEmbeddedWallet =
+    !!walletAddr && privyWallets.some(w => w.walletClientType === "privy" && w.address?.toLowerCase() === walletAddr.toLowerCase());
+
   // Auto-detect already connected MetaMask wallet (testnet mode legacy path)
   useEffect(() => {
     if (!autoDetect) return;
@@ -117,6 +124,7 @@ export function usePrivyWallet(opts: { autoDetect?: boolean } = {}) {
     walletAddr,
     setWalletAddr,
     genBalance,
+    isEmbeddedWallet,
     privyAuthenticated,
     privyUser,
     connect,
