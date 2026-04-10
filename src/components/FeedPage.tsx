@@ -628,7 +628,7 @@ export default function FeedPage() {
         return err instanceof Error ? err.message : "Failed to create market";
       }
     }
-    return handleAdd(market.id, side, amount);
+    return handleAdd(market.id, side, amount, undefined, undefined, market.onchain_market_id ?? undefined);
   }
 
   const totalAtStake = allChallenges.reduce((s, c) => s + c.shortPool + c.longPool, 0);
