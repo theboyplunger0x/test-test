@@ -11,6 +11,8 @@ import {
   getMarketOnChain,
   getUserBalance,
   getUserNonce,
+  getUserRewardBalance,
+  getRewardReserve,
   VAULT_CONFIG,
 } from "../services/vaultService.js";
 
@@ -39,6 +41,22 @@ export async function vaultRoutes(app: FastifyInstance) {
     }
     const nonce = await getUserNonce(address as `0x${string}`);
     return { address, nonce: nonce.toString() };
+  });
+
+  // GET /vault/rewards/:address — user's claimable reward balance
+  app.get("/vault/rewards/:address", async (req, reply) => {
+    const { address } = req.params as any;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return reply.status(400).send({ error: "Invalid address" });
+    }
+    const rewards = await getUserRewardBalance(address as `0x${string}`);
+    return { address, rewards };
+  });
+
+  // GET /vault/reserve — total reward reserve in the contract
+  app.get("/vault/reserve", async () => {
+    const reserve = await getRewardReserve();
+    return { reserve };
   });
 
   // GET /vault/market/:id — read on-chain market state

@@ -30,6 +30,7 @@ interface VaultConfig {
 export function useVault(walletAddr: string | null) {
   const [config, setConfig] = useState<VaultConfig | null>(null);
   const [vaultBalance, setVaultBalance] = useState<string>("0");
+  const [rewardBalance, setRewardBalance] = useState<string>("0");
   const [nonce, setNonce] = useState<string>("0");
 
   // Load vault config once
@@ -37,11 +38,13 @@ export function useVault(walletAddr: string | null) {
     api.vaultConfig().then(setConfig).catch(() => {});
   }, []);
 
-  // Poll vault balance when wallet is connected.
-  // Don't reset to "0" on error — keep the last known value to avoid flashing.
+  // Poll vault balance + reward balance when wallet is connected.
   useEffect(() => {
-    if (!walletAddr) { setVaultBalance("0"); return; }
-    const load = () => api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+    if (!walletAddr) { setVaultBalance("0"); setRewardBalance("0"); return; }
+    const load = () => {
+      api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+      api.vaultRewards(walletAddr).then(r => setRewardBalance(r.rewards)).catch(() => {});
+    };
     load();
     const iv = setInterval(load, 15_000);
     return () => clearInterval(iv);
@@ -245,12 +248,15 @@ export function useVault(walletAddr: string | null) {
   }, [walletAddr, config]);
 
   const refreshBalance = useCallback(() => {
-    if (walletAddr) api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+    if (!walletAddr) return;
+    api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+    api.vaultRewards(walletAddr).then(r => setRewardBalance(r.rewards)).catch(() => {});
   }, [walletAddr]);
 
   return {
     config,
     vaultBalance,
+    rewardBalance,
     nonce,
     signBet,
     depositToVault,

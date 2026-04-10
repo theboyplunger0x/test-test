@@ -120,15 +120,77 @@ export async function resolveMarket(marketId: string) {
     await client.query("COMMIT");
     console.log(`[resolver] Market ${market.id} (${market.symbol}) resolved → ${winnerSide} wins. Fee: $${fee}`);
 
-    // Real mode: resolve on-chain via FUDVault contract
+    // Real mode: resolve on-chain + accrue rewards from reserve
     if (!market.is_paper && !market.is_testnet && market.onchain_market_id != null) {
       (async () => {
         try {
-          const { resolveMarketOnChain } = await import("../services/vaultService.js");
+          const { resolveMarketOnChain, accrueRewardsOnChain } = await import("../services/vaultService.js");
+          const { parseUnits } = await import("viem");
+
+          // 1. Resolve market on-chain
           const txHash = await resolveMarketOnChain(BigInt(market.onchain_market_id), exitPrice);
           console.log(`[resolver] On-chain resolve: market ${market.onchain_market_id} TX: ${txHash}`);
+
+          // 2. Calculate cashback + referral rewards for all positions in this market
+          const { rows: positions } = await db.query(
+            `SELECT p.user_id, p.amount, p.side, u.wallet_address, u.tier, u.referred_by
+             FROM positions p JOIN users u ON p.user_id = u.id
+             WHERE p.market_id = $1`,
+            [market.id]
+          );
+
+          // Tier → cashback/referral rates (in BPS)
+          const CASHBACK_RATES: Record<string, number> = { basic: 0, pro: 1000, top: 2000, elite: 2500 };
+          const REFERRAL_RATES: Record<string, number> = { basic: 500, pro: 1000, top: 1500, elite: 2000 };
+
+          const rewardUsers: `0x${string}`[] = [];
+          const rewardAmounts: bigint[] = [];
+
+          for (const pos of positions) {
+            if (!pos.wallet_address) continue;
+            // Fee attributable to this position = position_amount / total_pool * total_fee
+            // Simplified: only losers generate fee, so only process losing positions
+            if (pos.side === winnerSide) continue; // winners don't generate fee
+            const posAmount = parseFloat(pos.amount);
+            const feeFromThisPos = posAmount * 0.05; // 5% fee
+            const rewardPoolFromPos = feeFromThisPos * 0.5; // 50% goes to reward reserve
+
+            // Cashback to the bettor
+            const tier = pos.tier || "basic";
+            const cashbackRate = CASHBACK_RATES[tier] ?? 0;
+            if (cashbackRate > 0) {
+              const cashback = rewardPoolFromPos * cashbackRate / 10000;
+              if (cashback > 0.001) { // min threshold
+                rewardUsers.push(pos.wallet_address as `0x${string}`);
+                rewardAmounts.push(parseUnits(cashback.toFixed(6), 6));
+              }
+            }
+
+            // Referral to the referrer
+            if (pos.referred_by) {
+              const { rows: [referrer] } = await db.query(
+                `SELECT wallet_address, tier FROM users WHERE id = $1`, [pos.referred_by]
+              );
+              if (referrer?.wallet_address) {
+                const refRate = REFERRAL_RATES[referrer.tier || "basic"] ?? 500;
+                const referralReward = rewardPoolFromPos * refRate / 10000;
+                if (referralReward > 0.001) {
+                  rewardUsers.push(referrer.wallet_address as `0x${string}`);
+                  rewardAmounts.push(parseUnits(referralReward.toFixed(6), 6));
+                }
+              }
+            }
+          }
+
+          // 3. Accrue rewards on-chain (batch)
+          if (rewardUsers.length > 0) {
+            const accrueTx = await accrueRewardsOnChain(
+              rewardUsers, rewardAmounts, BigInt(market.onchain_market_id)
+            );
+            console.log(`[resolver] Accrued ${rewardUsers.length} rewards on-chain TX: ${accrueTx}`);
+          }
         } catch (err: any) {
-          console.error(`[resolver] On-chain resolve failed for market ${market.id}:`, err.message);
+          console.error(`[resolver] On-chain resolve/rewards failed for market ${market.id}:`, err.shortMessage ?? err.message);
         }
       })();
     }

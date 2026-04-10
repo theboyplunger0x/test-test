@@ -363,6 +363,9 @@ export const api = {
   vaultNonce: (address: string) =>
     req<{ address: string; nonce: string }>(`/vault/nonce/${address}`),
 
+  vaultRewards: (address: string) =>
+    req<{ address: string; rewards: string }>(`/vault/rewards/${address}`),
+
   getTokenFeed: (symbol: string) =>
     req<{ markets: any[]; positions: any[] }>(`/tokens/${symbol}/feed`),
 

@@ -17,7 +17,7 @@ const abi = JSON.parse(readFileSync(join(__dirname, "../abi/FUDVault.json"), "ut
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const VAULT_ADDRESS = (process.env.FUDVAULT_ADDRESS ?? "0x9c448F486821821ACCEEb4750c3dbe67D8c03B56") as Address;
+const VAULT_ADDRESS = (process.env.FUDVAULT_ADDRESS ?? "0x9aACBa42a8D42e83135Be1a11a169AB106cb7096") as Address;
 const OPERATOR_KEY  = process.env.FUDVAULT_OPERATOR_KEY ?? process.env.DEPLOYER_PRIVATE_KEY;
 const RPC_URL       = process.env.BASE_SEPOLIA_RPC ?? "https://sepolia.base.org";
 const CHAIN         = baseSepolia; // swap to `base` for mainnet
@@ -181,6 +181,54 @@ export async function getUserNonce(userAddress: Address): Promise<bigint> {
     functionName: "nonces",
     args: [userAddress],
   }) as bigint;
+}
+
+/**
+ * Accrue rewards (cashback/referral) to users from the on-chain reward reserve.
+ * Called by the backend after calculating rewards off-chain post-resolution.
+ */
+export async function accrueRewardsOnChain(
+  users: Address[],
+  amounts: bigint[],
+  marketId: bigint
+): Promise<string> {
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: VAULT_ADDRESS,
+    abi,
+    functionName: "accrueRewards",
+    args: [users, amounts, marketId],
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/**
+ * Read a user's accrued (claimable) reward balance.
+ */
+export async function getUserRewardBalance(userAddress: Address): Promise<string> {
+  const { publicClient } = getClients();
+  const balance = await publicClient.readContract({
+    address: VAULT_ADDRESS,
+    abi,
+    functionName: "rewardBalances",
+    args: [userAddress],
+  }) as bigint;
+  return formatUnits(balance, USDC_DECIMALS);
+}
+
+/**
+ * Read the total reward reserve in the contract.
+ */
+export async function getRewardReserve(): Promise<string> {
+  const { publicClient } = getClients();
+  const reserve = await publicClient.readContract({
+    address: VAULT_ADDRESS,
+    abi,
+    functionName: "rewardReserve",
+    args: [],
+  }) as bigint;
+  return formatUnits(reserve, USDC_DECIMALS);
 }
 
 // ─── Constants (for frontend EIP-712 domain) ─────────────────────────────────
