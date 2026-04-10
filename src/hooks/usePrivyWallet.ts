@@ -120,6 +120,16 @@ export function usePrivyWallet(opts: { autoDetect?: boolean } = {}) {
     try { await privyLogout(); } catch {}
   }, [privyLogout]);
 
+  /**
+   * Get the Privy embedded wallet's ethereum provider for signing.
+   * Returns null if no embedded wallet exists.
+   */
+  const getEmbeddedProvider = useCallback(async () => {
+    const embedded = privyWallets.find(w => w.walletClientType === "privy");
+    if (!embedded) return null;
+    return await embedded.getEthereumProvider();
+  }, [privyWallets]);
+
   return {
     walletAddr,
     setWalletAddr,
@@ -134,5 +144,6 @@ export function usePrivyWallet(opts: { autoDetect?: boolean } = {}) {
     linkAnother,
     loginEmbedded,
     logoutPrivy,
+    getEmbeddedProvider,
   };
 }

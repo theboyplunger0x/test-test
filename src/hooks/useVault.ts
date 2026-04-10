@@ -29,11 +29,15 @@ interface VaultConfig {
  * handles the read operations and bet signing.
  */
 /**
- * @param walletAddr — connected browser wallet (for signing txs)
- * @param userWalletAddr — the user's linked wallet from DB (for reading balance)
- *                         Falls back to walletAddr if not provided.
+ * @param walletAddr — connected browser wallet (legacy, for deposit/withdraw direct txs)
+ * @param userWalletAddr — the user's Main Wallet from DB (for reading balance + signing)
+ * @param getEmbeddedProvider — function to get the Privy embedded wallet's ethereum provider
  */
-export function useVault(walletAddr: string | null, userWalletAddr?: string | null) {
+export function useVault(
+  walletAddr: string | null,
+  userWalletAddr?: string | null,
+  getEmbeddedProvider?: () => Promise<any> | null,
+) {
   // For reading balances, prefer the user's linked wallet (consistent per account)
   // For signing txs, use the connected browser wallet
   const balanceAddr = userWalletAddr || walletAddr;
@@ -72,17 +76,29 @@ export function useVault(walletAddr: string | null, userWalletAddr?: string | nu
    * The signed message is then sent to POST /markets/:id/bet along with
    * the `signature` and `wallet_address` fields.
    */
+  /**
+   * Sign a bet using EIP-712 via the user's Main Wallet.
+   * Prefers Privy embedded wallet provider (gasless, no popup).
+   * Falls back to window.ethereum (MetaMask) if embedded not available.
+   */
   const signBet = useCallback(async (
     marketId: number,
     side: "long" | "short",
     amountUsdc: number,
   ): Promise<string | null> => {
-    if (!walletAddr || !config) return null;
+    const signerAddr = balanceAddr; // Main Wallet address
+    if (!signerAddr || !config) return null;
 
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) return null;
-
-    await ensureBaseSepoliaChain(ethereum);
+    // Get the signing provider — prefer Privy embedded, fallback to MetaMask
+    let provider: any = null;
+    if (getEmbeddedProvider) {
+      try { provider = await getEmbeddedProvider(); } catch {}
+    }
+    if (!provider) {
+      provider = (window as any).ethereum;
+      if (provider) await ensureBaseSepoliaChain(provider);
+    }
+    if (!provider) return null;
 
     const domain = {
       name: config.name,
@@ -107,13 +123,12 @@ export function useVault(walletAddr: string | null, userWalletAddr?: string | nu
       ],
     };
 
-    // USDC has 6 decimals
     const amountRaw = BigInt(Math.round(amountUsdc * 1_000_000)).toString();
     const sideEnum = side === "long" ? 0 : 1;
 
     const message = {
       marketId: marketId.toString(),
-      user: walletAddr,
+      user: signerAddr,
       side: sideEnum.toString(),
       amount: amountRaw,
       nonce: nonce,
@@ -127,20 +142,17 @@ export function useVault(walletAddr: string | null, userWalletAddr?: string | nu
         message,
       });
 
-      const signature: string = await ethereum.request({
+      const signature: string = await provider.request({
         method: "eth_signTypedData_v4",
-        params: [walletAddr, msgParams],
+        params: [signerAddr, msgParams],
       });
 
-      // Increment local nonce optimistically
       setNonce(n => (BigInt(n) + BigInt(1)).toString());
-
       return signature;
     } catch {
-      // User rejected or wallet error
       return null;
     }
-  }, [walletAddr, config, nonce]);
+  }, [balanceAddr, config, nonce, getEmbeddedProvider]);
 
   // USDC contract address on Base Sepolia
   const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";

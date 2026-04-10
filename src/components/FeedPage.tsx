@@ -138,9 +138,9 @@ export default function FeedPage() {
   // Don't auto-detect MetaMask on mount — prevents wallet bleed between accounts.
   const wallet = usePrivyWallet({ autoDetect: false });
   const { walletAddr, setWalletAddr, genBalance, privyAuthenticated } = wallet;
-  // Balance reads from user's linked wallet in DB (consistent per account).
-  // Browser wallet only needed for signing txs.
-  const vault = useVault(walletAddr, user?.wallet_address);
+  // Balance reads from user's Main Wallet in DB.
+  // Signing uses Privy embedded wallet (no MetaMask popup needed).
+  const vault = useVault(walletAddr, user?.wallet_address, wallet.getEmbeddedProvider);
 
   // Wallet connection state for Real mode UX.
   // If the primary wallet is a Privy embedded wallet, MetaMask mismatch is irrelevant
