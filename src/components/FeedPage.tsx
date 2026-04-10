@@ -1515,6 +1515,8 @@ export default function FeedPage() {
         dk={dk}
         user={user}
         wallet={wallet}
+        tradingMode={tradingMode}
+        onTradingModeChange={setTradingMode}
         notificationsEnabled={notificationsEnabled}
         tradePresets={tradePresets}
         onTradePresetsChange={setTradePresets}
@@ -1597,7 +1599,10 @@ export default function FeedPage() {
           <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)}
             currentUser={user?.username} currentUserObj={user ?? undefined}
             onUserUpdate={(u) => setUser(u)} paperMode={paperMode}
-            onViewProfile={(u) => setProfilePageUser(u)} />
+            onViewProfile={(u) => setProfilePageUser(u)}
+            tradingMode={tradingMode}
+            onTradingModeChange={setTradingMode}
+            onOpenSettings={() => setSettingsOpen(true)} />
         )}
       </AnimatePresence>
 
@@ -1613,13 +1618,17 @@ export default function FeedPage() {
       <BottomNav
         dk={dk}
         mainTab={mainTab}
-        settingsOpen={settingsOpen}
+        accountActive={!!profilePageUser && profilePageUser === user?.username}
         onNavigate={(tab) => {
           setSettingsOpen(false);
+          setProfilePageUser(null);
           setMainTab(tab);
           setTokenProfileToken(null);
         }}
-        onOpenAccount={() => setSettingsOpen(true)}
+        onOpenAccount={() => {
+          if (user) setProfilePageUser(user.username);
+          else setAuthOpen(true);
+        }}
       />
     </div>
   );

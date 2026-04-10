@@ -5,7 +5,7 @@ import type { MainTab } from "@/lib/navTypes";
 interface BottomNavProps {
   dk:          boolean;
   mainTab:     MainTab;
-  settingsOpen: boolean;
+  accountActive: boolean;
   onNavigate:  (tab: MainTab) => void;
   onOpenAccount: () => void;
 }
@@ -22,16 +22,16 @@ const ITEMS: { key: MainTab | "account"; label: string; icon: string }[] = [
  * Mobile-only bottom navigation bar.
  *
  * 5 tabs pinned at the bottom, blurred background, hidden on desktop.
- * The "account" tab opens the Account drawer instead of navigating.
+ * The "account" tab opens the user's own ProfilePage.
  */
-export default function BottomNav({ dk, mainTab, settingsOpen, onNavigate, onOpenAccount }: BottomNavProps) {
+export default function BottomNav({ dk, mainTab, accountActive, onNavigate, onOpenAccount }: BottomNavProps) {
   return (
     <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-30 border-t ${dk ? "bg-[#0a0a0a]/95 border-white/8" : "bg-white/95 border-gray-200"} backdrop-blur-lg`}>
       <div className="flex items-stretch justify-around">
         {ITEMS.map((item) => {
           const isAccount = item.key === "account";
           const isActive = isAccount
-            ? settingsOpen
+            ? accountActive
             : (item.key === mainTab || (item.key === "markets" && (mainTab === "calls" || mainTab === "feed" || mainTab === "sweep")));
           return (
             <button key={item.label}
