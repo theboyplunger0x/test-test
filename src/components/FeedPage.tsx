@@ -1535,8 +1535,29 @@ export default function FeedPage() {
             <motion.div key="drawer" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className={`fixed right-0 top-0 h-full w-full md:w-[420px] border-l z-50 flex flex-col ${T.drawerBg}`}>
-              <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
-                <span className="text-[15px] font-black">Your Profile</span>
+              <div className={`flex items-center gap-3 px-5 py-4 border-b shrink-0 ${T.drawerHeader}`}>
+                <span className="text-[15px] font-black flex-1">Your Profile</span>
+                {/* Trading mode pill — mobile only (desktop has header toggle) */}
+                <div className={`md:hidden flex items-center rounded-lg border overflow-hidden text-[10px] font-black ${dk ? "border-white/10" : "border-gray-200"}`}>
+                  {(["paper", "real"] as const).map(m => (
+                    <button key={m} onClick={() => setTradingMode(m)}
+                      className={`px-2 py-1 transition-all ${
+                        tradingMode === m
+                          ? m === "paper" ? "bg-yellow-400 text-black" : "bg-emerald-500 text-white"
+                          : dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-700"
+                      }`}>
+                      {m === "paper" ? "Paper" : "Real"}
+                    </button>
+                  ))}
+                </div>
+                {/* Settings gear */}
+                <button onClick={() => { setOrdersOpen(false); setSettingsOpen(true); }}
+                  className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-600"}`}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                </button>
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
@@ -1599,10 +1620,7 @@ export default function FeedPage() {
           <ProfilePage username={profilePageUser} dk={dk} onClose={() => setProfilePageUser(null)}
             currentUser={user?.username} currentUserObj={user ?? undefined}
             onUserUpdate={(u) => setUser(u)} paperMode={paperMode}
-            onViewProfile={(u) => setProfilePageUser(u)}
-            tradingMode={tradingMode}
-            onTradingModeChange={setTradingMode}
-            onOpenSettings={() => setSettingsOpen(true)} />
+            onViewProfile={(u) => setProfilePageUser(u)} />
         )}
       </AnimatePresence>
 
@@ -1618,7 +1636,7 @@ export default function FeedPage() {
       <BottomNav
         dk={dk}
         mainTab={mainTab}
-        accountActive={!!profilePageUser && profilePageUser === user?.username}
+        accountActive={ordersOpen}
         onNavigate={(tab) => {
           setSettingsOpen(false);
           setProfilePageUser(null);
@@ -1626,7 +1644,7 @@ export default function FeedPage() {
           setTokenProfileToken(null);
         }}
         onOpenAccount={() => {
-          if (user) setProfilePageUser(user.username);
+          if (user) setOrdersOpen(true);
           else setAuthOpen(true);
         }}
       />
