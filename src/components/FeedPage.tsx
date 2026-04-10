@@ -19,7 +19,6 @@ import ProfilePage from "./ProfilePage";
 import NotificationsPanel from "./NotificationsPanel";
 import TokenProfilePage from "./TokenProfilePage";
 import ChartModal from "./ChartModal";
-import MarketsView from "./MarketsView";
 import SpotView from "./SpotView";
 import CallCard, { type Call } from "./CallCard";
 import DebateCard, { type Debate } from "./DebateCard";
@@ -36,6 +35,7 @@ import AccountDrawer from "@/account/AccountDrawer";
 import ConnectWalletModal, { type ConnectWalletMode } from "@/account/ConnectWalletModal";
 import FollowingScreen from "@/screens/FollowingScreen";
 import DiscoverScreen from "@/screens/DiscoverScreen";
+import MarketsScreen from "@/screens/MarketsScreen";
 import type { TokenInfo } from "@/lib/chartData";
 import { fetchTrending } from "@/lib/chartData";
 
@@ -522,6 +522,12 @@ export default function FeedPage() {
   const allChallenges = modeMarkets
     .map(marketToChallenge)
     .sort((a, b) => (b.lastBetAt ?? 0) - (a.lastBetAt ?? 0));
+
+  // Open + non-expired markets for the current mode, sorted by recent bet activity.
+  // Used by both the markets and sweep tabs (via MarketsScreen).
+  const liveMarketsForView = markets
+    .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
+    .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime());
   const tfFiltered    = allChallenges
     .filter(c => c.timeframe === selectedTf)
     .filter(c => statusFilter === "open" ? c.status === "open" : c.status !== "open");
@@ -1153,41 +1159,33 @@ export default function FeedPage() {
 
         {/* MARKETS TAB */}
         {!tokenProfileToken && mainTab === "markets" && (
-          <motion.div key="markets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex">
-            <div className="flex-1 overflow-hidden flex flex-col">
-            <MarketsView
-              dk={dk}
-              isTestnet={isTestnet}
-              liveMarkets={markets
-                .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
-                .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
-              }
-              paperMode={paperMode}
-              presets={tradePresets}
-              onSelectToken={(symbol, chain) => {
-                handleCoinClick(symbol, chain);
-              }}
-              onViewProfile={(u) => setProfileUser(u)}
-              onBet={handleAdd}
-              shakingIds={shakingIds}
-              calls={calls}
-              debates={debates}
-              onFadeCall={async (call, side, amount) => {
-                if (!user) { setAuthOpen(true); return null; }
-                if (!call.market_id) return "Cannot fade — market not found.";
-                if (call.status !== "open") return "This market is already closed.";
-                return handleAdd(call.market_id, side, amount, undefined, call.id);
-              }}
-              onFadeDebate={(marketId, side) => {
-                if (!user) { setAuthOpen(true); return; }
-                handleAdd(marketId, side, 25);
-              }}
-              onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
-              loggedIn={!!user}
-              onAuthRequired={() => setAuthOpen(true)}
-            />
-            </div>
-            <div className="hidden md:flex">
+          <MarketsScreen
+            variant="markets"
+            dk={dk}
+            isTestnet={isTestnet}
+            paperMode={paperMode}
+            liveMarkets={liveMarketsForView}
+            calls={calls}
+            debates={debates}
+            shakingIds={shakingIds}
+            presets={tradePresets}
+            loggedIn={!!user}
+            onAuthRequired={() => setAuthOpen(true)}
+            onSelectToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+            onViewProfile={(u) => setProfileUser(u)}
+            onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+            onBet={handleAdd}
+            onFadeCall={async (call, side, amount) => {
+              if (!user) { setAuthOpen(true); return null; }
+              if (!call.market_id) return "Cannot fade — market not found.";
+              if (call.status !== "open") return "This market is already closed.";
+              return handleAdd(call.market_id, side, amount, undefined, call.id);
+            }}
+            onFadeDebate={(marketId, side) => {
+              if (!user) { setAuthOpen(true); return; }
+              handleAdd(marketId, side, 25);
+            }}
+            rightSlot={
               <TapeSidebar challenges={allChallenges} onViewCoin={handleCoinClick} onViewToken={(symbol) => {
                 const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
                 if (rich) { handleCATradeResult(rich); return; }
@@ -1197,47 +1195,39 @@ export default function FeedPage() {
               tapeBorder={T.sidebarBorder} sidebarLabel={T.sidebarLabel} tapeColLabel={T.tapeColLabel}
               open={tapeOpen} onToggle={() => setTapeOpen(o => !o)}
               onViewProfile={(u) => setProfileUser(u)} paperMode={paperMode} />
-            </div>
-          </motion.div>
+            }
+          />
         )}
 
         {/* HOT X's TAB */}
         {!tokenProfileToken && mainTab === "sweep" && (
-          <motion.div key="sweep" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="flex-1 overflow-hidden flex">
-            <div className="flex-1 overflow-hidden flex flex-col">
-            <MarketsView
-              dk={dk}
-              isTestnet={isTestnet}
-              liveMarkets={markets
-                .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
-                .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime())
-              }
-              paperMode={paperMode}
-              presets={tradePresets}
-              defaultFilter="hot"
-              hideFilterBar
-              onSelectToken={(symbol, chain) => handleCoinClick(symbol, chain)}
-              onViewProfile={(u) => setProfileUser(u)}
-              onBet={handleAdd}
-              shakingIds={shakingIds}
-              calls={calls}
-              debates={debates}
-              onFadeCall={async (call, side, amount) => {
-                if (!user) { setAuthOpen(true); return null; }
-                if (!call.market_id) return "Cannot fade — market not found.";
-                if (call.status !== "open") return "This market is already closed.";
-                return handleAdd(call.market_id, side, amount, undefined, call.id);
-              }}
-              onFadeDebate={(marketId, side) => {
-                if (!user) { setAuthOpen(true); return; }
-                handleAdd(marketId, side, 25);
-              }}
-              onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
-              loggedIn={!!user}
-              onAuthRequired={() => setAuthOpen(true)}
-            />
-            </div>
-          </motion.div>
+          <MarketsScreen
+            variant="sweep"
+            dk={dk}
+            isTestnet={isTestnet}
+            paperMode={paperMode}
+            liveMarkets={liveMarketsForView}
+            calls={calls}
+            debates={debates}
+            shakingIds={shakingIds}
+            presets={tradePresets}
+            loggedIn={!!user}
+            onAuthRequired={() => setAuthOpen(true)}
+            onSelectToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+            onViewProfile={(u) => setProfileUser(u)}
+            onViewToken={(symbol, chain) => handleCoinClick(symbol, chain)}
+            onBet={handleAdd}
+            onFadeCall={async (call, side, amount) => {
+              if (!user) { setAuthOpen(true); return null; }
+              if (!call.market_id) return "Cannot fade — market not found.";
+              if (call.status !== "open") return "This market is already closed.";
+              return handleAdd(call.market_id, side, amount, undefined, call.id);
+            }}
+            onFadeDebate={(marketId, side) => {
+              if (!user) { setAuthOpen(true); return; }
+              handleAdd(marketId, side, 25);
+            }}
+          />
         )}
 
         {/* FEED TAB */}
