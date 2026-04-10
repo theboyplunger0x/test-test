@@ -44,6 +44,8 @@ export type User = {
   paper_balance_usd: string;
   testnet_balance_gen?: string;
   wallet_address?: string;
+  /** True if the user has ever connected a wallet (one-way flag, set on first link). */
+  has_connected_wallet?: boolean;
   created_at?: string;
   tier?: "" | "basic" | "pro" | "top" | "elite";
   x_username?: string;
@@ -287,7 +289,7 @@ export const api = {
     }),
 
   linkWallet: (wallet_address: string) =>
-    req<{ wallet_address: string }>("/auth/link-wallet", {
+    req<{ wallet_address: string; has_connected_wallet: boolean }>("/auth/link-wallet", {
       method: "POST",
       body: JSON.stringify({ wallet_address }),
     }),

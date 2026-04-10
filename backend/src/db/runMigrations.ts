@@ -272,6 +272,10 @@ CREATE TABLE IF NOT EXISTS escrow_bets (
 );
 CREATE INDEX IF NOT EXISTS idx_escrow_status ON escrow_bets(status);
 CREATE INDEX IF NOT EXISTS idx_escrow_contract ON escrow_bets(contract_address);
+
+-- v8: track whether the user has ever connected a wallet (for "Reconnect"
+-- vs "Add wallet" UX). Only flipped on; never reset (unless account delete).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS has_connected_wallet BOOLEAN NOT NULL DEFAULT false;
 `;
 
 export async function runMigrations() {

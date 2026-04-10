@@ -33,7 +33,7 @@ import BalanceSummary from "@/shell/BalanceSummary";
 import FundingCTA from "@/shell/FundingCTA";
 import HeaderSearch from "@/shell/HeaderSearch";
 import AccountDrawer from "@/account/AccountDrawer";
-import ConnectWalletModal from "@/account/ConnectWalletModal";
+import ConnectWalletModal, { type ConnectWalletMode } from "@/account/ConnectWalletModal";
 import FollowingScreen from "@/screens/FollowingScreen";
 import DiscoverScreen from "@/screens/DiscoverScreen";
 import type { TokenInfo } from "@/lib/chartData";
@@ -185,6 +185,9 @@ export default function FeedPage() {
   const [paperCreditAmt, setPaperCreditAmt]   = useState("100");
   const [paperCreditLoading, setPaperCreditLoading] = useState(false);
   const [connectWalletOpen, setConnectWalletOpen]   = useState(false);
+  // Mode for ConnectWalletModal: "reconnect" if user has linked a wallet before
+  // (server-side flag), "add" otherwise. Drives the modal copy and primary CTA.
+  const connectWalletMode: ConnectWalletMode = user?.has_connected_wallet ? "reconnect" : "add";
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
@@ -266,6 +269,18 @@ export default function FeedPage() {
     localStorage.removeItem("x_username_connected");
     setUser(u => u ? { ...u, x_username: xUsername } : null);
   }, [user]);
+
+  // Mirror the server-side `has_connected_wallet` flag locally as soon as a
+  // wallet is linked in this session, so the ConnectWalletModal flips from
+  // "Add a wallet" to "Reconnect" without needing a /auth/me refetch.
+  // Deps narrowed to the only field that matters — avoids re-runs on every
+  // unrelated `user` mutation (balance updates, x_username, etc.).
+  useEffect(() => {
+    if (walletAddr && user && !user.has_connected_wallet) {
+      setUser(u => u ? { ...u, has_connected_wallet: true } : null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletAddr, user?.has_connected_wallet]);
 
   // Poll unread notification count every 60s
   useEffect(() => {
@@ -1454,7 +1469,7 @@ export default function FeedPage() {
           <ConnectWalletModal
             onClose={() => setConnectWalletOpen(false)}
             dk={dk}
-            mode="add"
+            mode={connectWalletMode}
             onUseEmbedded={() => {
               setConnectWalletOpen(false);
               wallet.loginEmbedded();

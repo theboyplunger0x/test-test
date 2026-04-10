@@ -58,7 +58,7 @@ export async function authRoutes(app: FastifyInstance) {
     const { rows: [user] } = await db.query(
       `INSERT INTO users (username, password_hash, email)
        VALUES ($1, $2, $3)
-       RETURNING id, username, balance_usd, paper_balance_usd, created_at`,
+       RETURNING id, username, balance_usd, paper_balance_usd, wallet_address, has_connected_wallet, created_at`,
       [username.toLowerCase(), passwordHash, email ? email.toLowerCase() : null]
     );
 
@@ -79,8 +79,8 @@ export async function authRoutes(app: FastifyInstance) {
     const isEmail = username.includes("@");
     const { rows: [user] } = await db.query(
       isEmail
-        ? `SELECT id, username, password_hash, balance_usd, paper_balance_usd, tier, x_username, telegram_username, avatar_url, bio FROM users WHERE email = $1`
-        : `SELECT id, username, password_hash, balance_usd, paper_balance_usd, tier, x_username, telegram_username, avatar_url, bio FROM users WHERE username = $1`,
+        ? `SELECT id, username, password_hash, balance_usd, paper_balance_usd, wallet_address, has_connected_wallet, tier, x_username, telegram_username, avatar_url, bio FROM users WHERE email = $1`
+        : `SELECT id, username, password_hash, balance_usd, paper_balance_usd, wallet_address, has_connected_wallet, tier, x_username, telegram_username, avatar_url, bio FROM users WHERE username = $1`,
       [username.toLowerCase()]
     );
 
@@ -94,14 +94,14 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const token = await (app as any).jwt.sign({ userId: user.id, username: user.username });
-    return { token, user: { id: user.id, username: user.username, balance_usd: user.balance_usd, paper_balance_usd: user.paper_balance_usd, tier: user.tier ?? "", x_username: user.x_username, telegram_username: user.telegram_username, avatar_url: user.avatar_url, bio: user.bio } };
+    return { token, user: { id: user.id, username: user.username, balance_usd: user.balance_usd, paper_balance_usd: user.paper_balance_usd, wallet_address: user.wallet_address, has_connected_wallet: user.has_connected_wallet, tier: user.tier ?? "", x_username: user.x_username, telegram_username: user.telegram_username, avatar_url: user.avatar_url, bio: user.bio } };
   });
 
   // GET /auth/me
   app.get("/auth/me", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { rows: [user] } = await db.query(
-      `SELECT id, username, balance_usd, paper_balance_usd, testnet_balance_gen, wallet_address, tier, created_at, x_username, telegram_username, avatar_url, bio FROM users WHERE id = $1`, [userId]
+      `SELECT id, username, balance_usd, paper_balance_usd, testnet_balance_gen, wallet_address, has_connected_wallet, tier, created_at, x_username, telegram_username, avatar_url, bio FROM users WHERE id = $1`, [userId]
     );
     if (!user) return reply.status(404).send({ error: "User not found" });
     return user;
@@ -137,7 +137,8 @@ export async function authRoutes(app: FastifyInstance) {
     return { testnet_balance_gen: user.testnet_balance_gen };
   });
 
-  // POST /auth/link-wallet — link a wallet address to the account
+  // POST /auth/link-wallet — link a wallet address to the account.
+  // Also marks `has_connected_wallet = true` (one-way flag for "Reconnect" UX).
   app.post("/auth/link-wallet", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { wallet_address } = req.body as any;
@@ -145,10 +146,11 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "Invalid wallet address" });
     }
     const { rows: [user] } = await db.query(
-      `UPDATE users SET wallet_address = $1 WHERE id = $2 RETURNING wallet_address`,
+      `UPDATE users SET wallet_address = $1, has_connected_wallet = true
+       WHERE id = $2 RETURNING wallet_address, has_connected_wallet`,
       [wallet_address.toLowerCase(), userId]
     );
-    return { wallet_address: user.wallet_address };
+    return { wallet_address: user.wallet_address, has_connected_wallet: user.has_connected_wallet };
   });
 
   // GET /auth/google/callback
