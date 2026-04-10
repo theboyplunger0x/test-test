@@ -140,6 +140,16 @@ export default function FeedPage() {
   // Balance reads from user's linked wallet in DB (consistent per account).
   // Browser wallet only needed for signing txs.
   const vault = useVault(walletAddr, user?.wallet_address);
+
+  // Wallet connection state for Real mode UX
+  const primaryWallet = user?.wallet_address ?? null;
+  const walletState: "no_wallet" | "linked_connected" | "linked_disconnected" | "wrong_wallet" =
+    !primaryWallet ? "no_wallet" :
+    !walletAddr ? "linked_disconnected" :
+    walletAddr.toLowerCase() === primaryWallet.toLowerCase() ? "linked_connected" :
+    "wrong_wallet";
+  // Can the user sign on-chain txs right now?
+  const canSignOnChain = walletState === "linked_connected";
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
   const prevLastBetAt                   = useRef<Record<string, number>>({});
@@ -531,13 +541,15 @@ export default function FeedPage() {
     let signature: string | undefined;
     let sigWallet: string | undefined;
     if (isReal) {
+      if (walletState === "no_wallet") return "Link a wallet to bet in Real mode.";
+      if (walletState === "linked_disconnected") return "Reconnect your linked wallet to trade.";
+      if (walletState === "wrong_wallet") return `Switch to your linked wallet (${primaryWallet?.slice(0, 6)}...${primaryWallet?.slice(-4)}) to trade.`;
       const onchainId = onchainMarketIdOverride ?? markets.find(m => m.id === id)?.onchain_market_id;
-      if (!walletAddr) return "Connect a wallet to bet in Real mode.";
       if (onchainId == null) return "This market has no on-chain ID — cannot sign bet. Try creating a new market.";
       const sig = await vault.signBet(onchainId, side, amount);
       if (!sig) return "Signature rejected — bet not placed.";
       signature = sig;
-      sigWallet = walletAddr;
+      sigWallet = walletAddr ?? undefined;
     }
 
     try {
@@ -1002,6 +1014,21 @@ export default function FeedPage() {
             className={`text-[11px] font-bold transition-colors shrink-0 ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-700"}`}>
             Maybe later
           </button>
+        </div>
+      )}
+
+      {/* Wallet mismatch banner — connected wallet doesn't match linked wallet */}
+      {user && isReal && walletState === "wrong_wallet" && primaryWallet && (
+        <div className={`px-5 py-3 border-b flex items-center gap-3 ${dk ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-100"}`}>
+          <span className="text-[18px] shrink-0">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-[12px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
+              Connected wallet doesn't match your linked wallet
+            </p>
+            <p className={`text-[11px] font-bold mt-0.5 ${dk ? "text-white/50" : "text-gray-500"}`}>
+              Your FUD balance belongs to {primaryWallet.slice(0, 6)}...{primaryWallet.slice(-4)}. Switch to trade or withdraw.
+            </p>
+          </div>
         </div>
       )}
 

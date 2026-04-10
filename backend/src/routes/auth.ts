@@ -160,17 +160,25 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // POST /auth/link-wallet — link a wallet address to the account.
-  // Also marks `has_connected_wallet = true` (one-way flag for "Reconnect" UX).
+  // Enforces: one wallet per account, one account per wallet.
   app.post("/auth/link-wallet", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
     const { userId } = (req as any).user;
     const { wallet_address } = req.body as any;
     if (!wallet_address || !/^0x[a-fA-F0-9]{40}$/.test(wallet_address)) {
       return reply.status(400).send({ error: "Invalid wallet address" });
     }
+    const addr = wallet_address.toLowerCase();
+    // Check if this wallet is already linked to another account
+    const { rows: [existing] } = await db.query(
+      `SELECT id, username FROM users WHERE wallet_address = $1 AND id != $2`, [addr, userId]
+    );
+    if (existing) {
+      return reply.status(409).send({ error: "This wallet is already linked to another FUD account" });
+    }
     const { rows: [user] } = await db.query(
       `UPDATE users SET wallet_address = $1, has_connected_wallet = true
        WHERE id = $2 RETURNING wallet_address, has_connected_wallet`,
-      [wallet_address.toLowerCase(), userId]
+      [addr, userId]
     );
     return { wallet_address: user.wallet_address, has_connected_wallet: user.has_connected_wallet };
   });

@@ -277,7 +277,11 @@ CREATE INDEX IF NOT EXISTS idx_escrow_contract ON escrow_bets(contract_address);
 -- vs "Add wallet" UX). Only flipped on; never reset (unless account delete).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS has_connected_wallet BOOLEAN NOT NULL DEFAULT false;
 
--- v9: on-chain vault integration (FUDVault on Base Sepolia / Base mainnet)
+-- v9: enforce one wallet per account (no shared wallets between FUD accounts)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wallet_address_unique
+  ON users(wallet_address) WHERE wallet_address IS NOT NULL;
+
+-- v10: on-chain vault integration (FUDVault on Base Sepolia / Base mainnet)
 -- Links a DB market to its on-chain counterpart in the FUDVault contract.
 ALTER TABLE markets ADD COLUMN IF NOT EXISTS onchain_market_id BIGINT;
 -- Stores the tx hash of the on-chain bet for Real mode positions.
