@@ -192,6 +192,16 @@ export default function FeedPage() {
   // straight into the fund flow once the wallet shows up. This flag bridges
   // the two async steps (connect → walletAddr arrives → fund).
   const [pendingFundAfterConnect, setPendingFundAfterConnect] = useState(false);
+  // Tracks whether the inline onboarding banner for Real/Testnet has been
+  // dismissed. Persisted across sessions via localStorage. Initial state must
+  // be `true` (hidden) on both server and client to avoid SSR hydration
+  // mismatches; the real value is hydrated in the effect below.
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(true);
+  useEffect(() => {
+    if (localStorage.getItem("fud_seen_real_onboarding") !== "1") {
+      setOnboardingDismissed(false);
+    }
+  }, []);
   const [settingsOpen, setSettingsOpen]             = useState(false);
   const [profileUser, setProfileUser]               = useState<string | null>(null);
   const [tokenModalInfo, setTokenModalInfo]         = useState<TokenInfo | null>(null);
@@ -903,6 +913,38 @@ export default function FeedPage() {
           </motion.button>
         </div>
       </div>
+
+      {/* Onboarding banner — first time the user enters Real/Testnet without a wallet.
+          Non-blocking: educates and offers a Set up wallet shortcut without forcing it. */}
+      {user && !paperMode && !walletAddr && !onboardingDismissed && (
+        <div className={`px-5 py-3 border-b flex items-center gap-3 ${dk ? "bg-blue-500/10 border-blue-500/20" : "bg-blue-50 border-blue-100"}`}>
+          <span className="text-[18px] shrink-0">⚡</span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-[12px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
+              You'll need a wallet to trade in {isTestnet ? "Testnet" : "Real"} mode
+            </p>
+            <p className={`text-[11px] font-bold mt-0.5 ${dk ? "text-white/50" : "text-gray-500"}`}>
+              Set one up now or do it later when you're ready to deposit.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setPendingFundAfterConnect(false);
+              setConnectWalletOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-lg text-[11px] font-black bg-blue-500 hover:bg-blue-400 text-white transition-all shrink-0">
+            Set up wallet
+          </button>
+          <button
+            onClick={() => {
+              localStorage.setItem("fud_seen_real_onboarding", "1");
+              setOnboardingDismissed(true);
+            }}
+            className={`text-[11px] font-bold transition-colors shrink-0 ${dk ? "text-white/40 hover:text-white/70" : "text-gray-400 hover:text-gray-700"}`}>
+            Maybe later
+          </button>
+        </div>
+      )}
 
       {/* Ticker */}
       <LiveTicker challenges={allChallenges} dk={dk} onViewToken={(symbol) => {
