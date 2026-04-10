@@ -8,7 +8,7 @@ interface FundingModalProps {
   onClose: () => void;
   mainWalletAddress: string;
   vaultBalance: string;
-  /** The deposit address (operator wallet) where USDC should be sent */
+  /** The user's Main Wallet address — their personal deposit address */
   depositAddress: string;
 }
 
@@ -72,7 +72,7 @@ export default function FundingModal({
 
         {/* Deposit address */}
         <div className={`rounded-xl border p-4 mb-4 ${cardBg}`}>
-          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${label}`}>Send USDC to this address</p>
+          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${label}`}>Your FUD Wallet — send USDC here</p>
           <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg ${dk ? "bg-white/5" : "bg-gray-100"}`}>
             <span className={`text-[11px] font-mono flex-1 break-all ${dk ? "text-white/70" : "text-gray-700"}`}>
               {depositAddress}
@@ -105,7 +105,7 @@ export default function FundingModal({
           </div>
           <div className="flex items-start gap-2">
             <span className={`text-[12px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${dk ? "bg-white/10 text-white/50" : "bg-gray-100 text-gray-500"}`}>2</span>
-            <p className={`text-[11px] font-bold ${muted}`}>Your balance updates automatically (no gas needed)</p>
+            <p className={`text-[11px] font-bold ${muted}`}>Your balance updates automatically — no gas needed, we cover it</p>
           </div>
           <div className="flex items-start gap-2">
             <span className={`text-[12px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${dk ? "bg-white/10 text-white/50" : "bg-gray-100 text-gray-500"}`}>3</span>
