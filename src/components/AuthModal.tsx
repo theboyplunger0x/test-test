@@ -42,6 +42,8 @@ export default function AuthModal({
       if (daysSince > 30) { localStorage.removeItem("pending_referral"); return; }
       setReferralCode(code);
       setReferralFromUrl(true);
+      // If arriving via referral link, default to Register tab
+      setTab("register");
     } catch { /* ignore corrupt data */ }
   }, []);
 
