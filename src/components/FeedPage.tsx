@@ -491,20 +491,19 @@ export default function FeedPage() {
     setOpenMarketCoin(coin);
   }
 
-  async function handleAdd(id: string, side: "short" | "long", amount: number, message?: string, faded_position_id?: string): Promise<string | null> {
+  async function handleAdd(id: string, side: "short" | "long", amount: number, message?: string, faded_position_id?: string, onchainMarketIdOverride?: number): Promise<string | null> {
     if (!user) { setAuthOpen(true); return null; }
     // Mock challenges have simple numeric IDs; real markets have UUIDs
     const isRealMarket = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isRealMarket) return "Demo data — open a real market on any coin to trade.";
 
     // Real mode: sign bet on-chain via EIP-712 before sending to backend.
-    // The backend will forward the signature to the FUDVault contract.
     let signature: string | undefined;
     let sigWallet: string | undefined;
     if (isReal && walletAddr) {
-      // Find the on-chain market ID from our local markets state
-      const dbMarket = markets.find(m => m.id === id);
-      const onchainId = dbMarket?.onchain_market_id;
+      // Use override if provided (e.g. freshly created market not yet in state),
+      // otherwise look up from local markets state.
+      const onchainId = onchainMarketIdOverride ?? markets.find(m => m.id === id)?.onchain_market_id;
       if (onchainId != null) {
         const sig = await vault.signBet(onchainId, side, amount);
         if (!sig) return "Signature rejected — bet not placed.";
@@ -722,7 +721,9 @@ export default function FeedPage() {
       catch (err) { return err instanceof Error ? err.message : "Failed to create market"; }
     }
 
-    let err = await handleAdd(market.id, side, amount);
+    // Pass onchain_market_id explicitly — if market was just created, it won't
+    // be in the React state yet (closure captures the old `markets` array).
+    let err = await handleAdd(market.id, side, amount, undefined, undefined, market.onchain_market_id ?? undefined);
 
     // If market expired in the DB (race condition — common for short timeframes like 1m),
     // mark it resolved locally and create a fresh one
@@ -730,7 +731,7 @@ export default function FeedPage() {
       setMarkets(prev => prev.map(m => m.id === market!.id ? { ...m, status: "resolved" as const } : m));
       try {
         const fresh = await createFreshMarket();
-        err = await handleAdd(fresh.id, side, amount);
+        err = await handleAdd(fresh.id, side, amount, undefined, undefined, fresh.onchain_market_id ?? undefined);
       } catch (retryErr) {
         return retryErr instanceof Error ? retryErr.message : "Failed to create market";
       }
@@ -1581,7 +1582,7 @@ export default function FeedPage() {
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
-                <OrdersView dk={dk} balance={user?.balance_usd} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
+                <OrdersView dk={dk} balance={isReal ? vault.vaultBalance : user?.balance_usd} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
                   onViewToken={(symbol) => {
                     setOrdersOpen(false);
                     const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());
