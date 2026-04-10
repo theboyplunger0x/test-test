@@ -259,29 +259,19 @@ export default function AuthModal({
             </motion.div>
           )}
 
-          {/* ── MAIN AUTH VIEW ── */}
+          {/* ── MAIN AUTH VIEW — Privy-only ── */}
           {view === "auth" && (
             <motion.div key="auth" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
               {/* Logo */}
-              <div className="mb-5">
-                <span className="text-[18px] font-black tracking-tight">FUD.markets</span>
-                <p className={`text-[12px] mt-0.5 ${labelCls}`}>
-                  {tab === "login" ? "Welcome back." : "Create your account."}
+              <div className="mb-6">
+                <span className="text-[20px] font-black tracking-tight">Welcome to FUD</span>
+                <p className={`text-[12px] mt-1 ${labelCls}`}>
+                  Trade prediction markets on Base with USDC.
                 </p>
               </div>
 
-              {/* Tabs */}
-              <div className={`flex rounded-xl p-0.5 mb-5 ${tabGroup}`}>
-                {(["login", "register"] as Tab[]).map((t) => (
-                  <button key={t} onClick={() => switchTab(t)}
-                    className={`flex-1 py-2 rounded-[10px] text-[12px] font-black transition-all capitalize ${tab === t ? tabActive : tabInactive}`}>
-                    {t === "login" ? "Sign In" : "Register"}
-                  </button>
-                ))}
-              </div>
-
-              {/* Google button */}
-              <button onClick={handleGoogleLogin} className={googleCls}>
+              {/* Google */}
+              <button onClick={() => privyLogin()} className={googleCls}>
                 <svg width="18" height="18" viewBox="0 0 48 48">
                   <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                   <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -291,143 +281,43 @@ export default function AuthModal({
                 Continue with Google
               </button>
 
-              {/* Privy button — wallet + email + social */}
-              <button onClick={() => privyLogin()} className={`w-full mt-2 py-3 rounded-xl text-[13px] font-black flex items-center justify-center gap-2 transition-all ${dk ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-purple-500 hover:bg-purple-400 text-white"}`}>
-                <span>🔐</span>
-                Login with Wallet
-              </button>
-
               {/* Divider */}
               <div className={`flex items-center gap-3 my-4 ${dividerCls}`}>
                 <div className={`flex-1 h-px border-t ${dk ? "border-white/10" : "border-gray-200"}`} />
-                <span className="text-[11px] font-bold">or</span>
+                <span className="text-[11px] font-bold">OR</span>
                 <div className={`flex-1 h-px border-t ${dk ? "border-white/10" : "border-gray-200"}`} />
               </div>
 
-              {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <div>
-                  <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 block ${labelCls}`}>
-                    {tab === "login" ? "Username or Email" : "Username"}
-                  </label>
-                  <input
-                    type="text" autoFocus autoComplete="username"
-                    placeholder={tab === "login" ? "degen_lord or you@email.com" : "degen_lord"}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className={`w-full px-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${inputCls}`}
-                  />
-                </div>
+              {/* Email — triggers Privy email magic link */}
+              <button onClick={() => privyLogin()} className={`w-full py-3 rounded-xl text-[13px] font-black flex items-center justify-center gap-2 transition-all ${dk ? "bg-white/[0.06] hover:bg-white/10 text-white border border-white/10" : "bg-gray-50 hover:bg-gray-100 text-gray-900 border border-gray-200"}`}>
+                Continue with Email
+              </button>
 
-                {/* Email — required on register, hidden on login */}
-                <AnimatePresence>
-                  {tab === "register" && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} style={{ overflow: "hidden" }}>
-                      <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 block ${labelCls}`}>Email</label>
-                      <input
-                        type="email" autoComplete="email" required
-                        placeholder="you@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={`w-full px-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${inputCls}`}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+              {/* Wallet options */}
+              <button onClick={() => privyLogin()} className={`w-full mt-2 py-3 rounded-xl text-[13px] font-black flex items-center justify-center gap-2 transition-all ${dk ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-purple-500 hover:bg-purple-400 text-white"}`}>
+                Continue with Wallet
+              </button>
 
-                <div>
-                  <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 block ${labelCls}`}>Password</label>
-                  <input
-                    type="password"
-                    autoComplete={tab === "login" ? "current-password" : "new-password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={`w-full px-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${inputCls}`}
-                  />
-                  {tab === "login" && (
-                    <button type="button" onClick={openForgot}
-                      className={`text-[11px] font-bold mt-1.5 float-right transition-colors ${backCls}`}>
-                      Forgot password?
-                    </button>
-                  )}
-                </div>
-
-                {/* Confirm password — only on register */}
-                <AnimatePresence>
-                  {tab === "register" && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} style={{ overflow: "hidden" }}>
-                      <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 block ${labelCls}`}>Confirm Password</label>
-                      <input
-                        type="password" autoComplete="new-password"
-                        placeholder="••••••••"
-                        value={confirm}
-                        onChange={(e) => setConfirm(e.target.value)}
-                        className={`w-full px-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${inputCls} ${
-                          confirm && confirm !== password ? (dk ? "border-red-500/50" : "border-red-400") : ""
-                        }`}
-                      />
-                      {confirm && confirm !== password && (
-                        <p className={`text-[11px] font-bold mt-1 ${dk ? "text-red-400" : "text-red-500"}`}>
-                          Passwords don't match
-                        </p>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Referral code — only on register */}
-                <AnimatePresence>
-                  {tab === "register" && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} style={{ overflow: "hidden" }}>
-                      <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 block ${labelCls}`}>
-                        Referral Code <span className={`font-bold normal-case ${dk ? "text-white/20" : "text-gray-300"}`}>(optional)</span>
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text" autoComplete="off"
-                          placeholder="Enter code"
-                          value={referralCode}
-                          onChange={(e) => { setReferralCode(e.target.value.toUpperCase()); setReferralFromUrl(false); }}
-                          className={`flex-1 px-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${inputCls}`}
-                        />
-                        {referralCode && (
-                          <button type="button" onClick={() => { setReferralCode(""); setReferralFromUrl(false); localStorage.removeItem("pending_referral"); }}
-                            className={`text-[11px] font-bold px-2 shrink-0 transition-colors ${dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"}`}>
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      {referralFromUrl && (
-                        <p className={`text-[10px] font-bold mt-1 ${dk ? "text-emerald-400/60" : "text-emerald-600/60"}`}>Applied from invite link</p>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <AnimatePresence>
-                  {error && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      className={`text-[12px] font-bold px-3 py-2 rounded-xl ${errorCls}`}>
-                      {error}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-
-                <button
-                  type="submit"
-                  disabled={loading || !username || !password || (tab === "register" && (!email || !confirm || confirm !== password))}
-                  className={`${submitCls} disabled:opacity-40 disabled:cursor-not-allowed mt-1 clear-both`}
-                >
-                  {loading ? "…" : tab === "login" ? "Sign In" : "Create Account"}
-                </button>
-              </form>
-
-              {tab === "register" && (
-                <p className={`text-[11px] text-center mt-4 ${labelCls}`}>
-                  Deposit USDC after signing up to start betting.
+              {/* Referral hint */}
+              {referralFromUrl && referralCode && (
+                <p className={`text-[11px] font-bold text-center mt-3 ${dk ? "text-emerald-400/60" : "text-emerald-600/60"}`}>
+                  Referral code {referralCode} will be applied
                 </p>
               )}
+
+              {/* Error display */}
+              <AnimatePresence>
+                {error && (
+                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className={`text-[12px] font-bold px-3 py-2 rounded-xl mt-3 ${errorCls}`}>
+                    {error}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+
+              <p className={`text-[10px] text-center mt-5 ${labelCls}`}>
+                By continuing, you agree to the Terms. Confirm you're in a supported region.
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
