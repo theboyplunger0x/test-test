@@ -868,12 +868,13 @@ export default function FeedPage() {
                   if (paperMode) {
                     setPaperCreditOpen(true);
                   } else if (!walletAddr) {
-                    // Logged in but no wallet → focused modal with embedded/external choice.
-                    // Reset any stale chain intent from a prior abandoned attempt.
                     setPendingFundAfterConnect(false);
                     setConnectWalletOpen(true);
+                  } else if (isReal) {
+                    // Real mode → open wallet drawer with vault deposit UI.
+                    setSettingsOpen(true);
                   } else {
-                    // Has wallet → Privy fund flow.
+                    // Testnet → Privy fund flow.
                     wallet.fund();
                   }
                 }}
