@@ -1598,6 +1598,7 @@ export default function FeedPage() {
                 <OrdersView dk={dk} balance={isReal ? vault.vaultBalance : user?.balance_usd} useExternalBalance={isReal} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
                   rewardBalance={vault.rewardBalance}
                   onClaimOnChain={vault.claimRewardsOnChain}
+                  onOpenWalletDrawer={() => { setOrdersOpen(false); setSettingsInitialView("wallet"); setSettingsOpen(true); }}
                   onViewToken={(symbol) => {
                     setOrdersOpen(false);
                     const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());

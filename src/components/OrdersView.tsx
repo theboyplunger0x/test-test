@@ -457,7 +457,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
   );
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken, paperMode = false, useExternalBalance = false, rewardBalance, onClaimOnChain }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void; paperMode?: boolean; useExternalBalance?: boolean; /** On-chain reward balance (from useVault). */ rewardBalance?: string; /** Claim rewards on-chain — calls vault contract directly from user wallet. */ onClaimOnChain?: () => Promise<void>; }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken, paperMode = false, useExternalBalance = false, rewardBalance, onClaimOnChain, onOpenWalletDrawer }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void; paperMode?: boolean; useExternalBalance?: boolean; rewardBalance?: string; onClaimOnChain?: () => Promise<void>; /** Open the wallet drawer for vault deposit/withdraw. */ onOpenWalletDrawer?: () => void; }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -601,7 +601,9 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
         setBalance(parseFloat(data.balance) || 0);
       }
       setTimeout(() => setClaimDone(false), 3000);
-    } catch {}
+    } catch (e: any) {
+      alert(e.message ?? "Claim failed");
+    }
     setClaiming(false);
   }
 
@@ -701,7 +703,14 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
 
         {/* Withdraw button */}
         <button
-          onClick={() => setShowWithdraw(true)}
+          onClick={() => {
+            if (onOpenWalletDrawer && useExternalBalance) {
+              // Real mode: open wallet drawer with vault withdraw
+              onOpenWalletDrawer();
+            } else {
+              setShowWithdraw(true);
+            }
+          }}
           className={`w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-widest border transition-all ${
             dk
               ? "border-white/8 bg-white/[0.02] text-white/50 hover:bg-white/6 hover:text-white/80"
