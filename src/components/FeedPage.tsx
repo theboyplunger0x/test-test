@@ -848,6 +848,7 @@ export default function FeedPage() {
                 realBalance={Number(user.balance_usd)}
                 walletAddr={walletAddr}
                 genBalance={genBalance}
+                vaultBalance={vault.vaultBalance}
               />
 
               {/* Action button — routing lives here, button stays dumb. */}

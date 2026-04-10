@@ -9,6 +9,8 @@ interface BalanceSummaryProps {
   realBalance:  number;
   walletAddr:   string | null;
   genBalance:   number;
+  /** On-chain vault USDC balance — shown in Real mode instead of DB balance. */
+  vaultBalance?: string;
 }
 
 /**
@@ -24,6 +26,7 @@ export default function BalanceSummary({
   realBalance,
   walletAddr,
   genBalance,
+  vaultBalance,
 }: BalanceSummaryProps) {
   const paperMode = tradingMode === "paper";
   const isTestnet = tradingMode === "testnet";
@@ -41,12 +44,13 @@ export default function BalanceSummary({
     );
   }
 
-  // Real with wallet → USD balance + address
+  // Real with wallet → on-chain vault balance + address
   if (isReal && walletAddr) {
+    const displayBalance = vaultBalance ? parseFloat(vaultBalance) : 0;
     return (
       <div className="hidden sm:flex flex-col items-end gap-0.5">
         <span className={labelCls}>{walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}</span>
-        <span className="text-[13px] font-black tabular-nums text-emerald-400">${realBalance.toFixed(2)}</span>
+        <span className="text-[13px] font-black tabular-nums text-emerald-400">${displayBalance.toFixed(2)}</span>
       </div>
     );
   }
