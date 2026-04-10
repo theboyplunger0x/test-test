@@ -1582,7 +1582,7 @@ export default function FeedPage() {
                 <button onClick={() => setOrdersOpen(false)} className={`text-[18px] font-bold transition-colors ${T.drawerClose}`}>✕</button>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
-                <OrdersView dk={dk} balance={isReal ? vault.vaultBalance : user?.balance_usd} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
+                <OrdersView dk={dk} balance={isReal ? vault.vaultBalance : user?.balance_usd} useExternalBalance={isReal} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
                   onViewToken={(symbol) => {
                     setOrdersOpen(false);
                     const rich = trendingTokens.find(tk => tk.symbol.toUpperCase() === symbol.toUpperCase());

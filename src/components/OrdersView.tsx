@@ -457,7 +457,7 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
   );
 }
 
-export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken, paperMode = false }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void; paperMode?: boolean }) {
+export default function OrdersView({ dk, balance: balanceProp, notificationsEnabled, xUsername, telegramUsername, onDisconnectX, onDisconnectTelegram, onTelegramConnect, onViewOwnProfile, onUserUpdate, onViewToken, paperMode = false, useExternalBalance = false }: { dk: boolean; balance?: string; notificationsEnabled?: boolean; xUsername?: string; telegramUsername?: string; onDisconnectX?: () => void; onDisconnectTelegram?: () => void; onTelegramConnect?: () => void; onViewOwnProfile?: () => void; onUserUpdate?: () => void; onViewToken?: (symbol: string) => void; paperMode?: boolean; /** When true, don't overwrite balance from /portfolio — parent controls it (e.g. vault on-chain balance). */ useExternalBalance?: boolean }) {
   const [orders, setOrders]           = useState<Order[]>([]);
   const [balance, setBalance]         = useState<number>(parseFloat(balanceProp ?? "0") || 0);
   const [loading, setLoading]         = useState(true);
@@ -483,7 +483,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
     if (!token) { setLoading(false); return; }
     try {
       const data = await api.portfolio();
-      setBalance(parseFloat(data.balance) || 0);
+      if (!useExternalBalance) setBalance(parseFloat(data.balance) || 0);
       const newOrders = data.positions.map(positionToOrder);
       // Fire notifications for newly resolved positions
       if (notificationsEnabled) {
@@ -588,7 +588,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
       setReferral(updated);
       // also refresh balance
       const data = await api.portfolio();
-      setBalance(parseFloat(data.balance) || 0);
+      if (!useExternalBalance) setBalance(parseFloat(data.balance) || 0);
       setTimeout(() => setClaimDone(false), 3000);
     } catch {}
     setClaiming(false);
