@@ -16,6 +16,7 @@ export default function TradeModal({
   onClose,
   onSuccess,
   onViewToken,
+  onPlaceBet,
   paperMode = false,
   isTestnet = false,
   walletAddress,
@@ -25,6 +26,8 @@ export default function TradeModal({
   onClose: () => void;
   onSuccess: (market: Market) => void;
   onViewToken?: () => void;
+  /** If provided, used instead of api.placeBet — handles EIP-712 signing for Real mode. */
+  onPlaceBet?: (marketId: string, side: "long" | "short", amount: number, onchainMarketId?: number) => Promise<string | null>;
   paperMode?: boolean;
   isTestnet?: boolean;
   walletAddress?: string;
@@ -123,10 +126,20 @@ export default function TradeModal({
         });
       } else if (mode === "call") {
         const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode && !isTestnet, coin.ca, isTestnet);
-        await api.placeBet(market.id, side, amount);
+        if (onPlaceBet) {
+          const err = await onPlaceBet(market.id, side, amount, market.onchain_market_id ?? undefined);
+          if (err) throw new Error(err);
+        } else {
+          await api.placeBet(market.id, side, amount);
+        }
         onSuccess(market);
       } else if (mode === "market" && activeMarket) {
-        await api.placeBet(activeMarket.id, side, amount);
+        if (onPlaceBet) {
+          const err = await onPlaceBet(activeMarket.id, side, amount, activeMarket.onchain_market_id ?? undefined);
+          if (err) throw new Error(err);
+        } else {
+          await api.placeBet(activeMarket.id, side, amount);
+        }
         onSuccess(activeMarket);
       } else if (mode === "sweep") {
         await api.sweep({ symbol: coin.symbol, chain: coin.chain, timeframe: "5m", side, amount, is_paper: paperMode && !isTestnet, is_testnet: isTestnet });
