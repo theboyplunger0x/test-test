@@ -13,8 +13,11 @@ import {
   getUserNonce,
   getUserRewardBalance,
   getRewardReserve,
+  depositForOnChain,
+  withdrawBySigOnChain,
   VAULT_CONFIG,
 } from "../services/vaultService.js";
+import { parseUnits } from "viem";
 
 export async function vaultRoutes(app: FastifyInstance) {
 
@@ -57,6 +60,45 @@ export async function vaultRoutes(app: FastifyInstance) {
   app.get("/vault/reserve", async () => {
     const reserve = await getRewardReserve();
     return { reserve };
+  });
+
+  // POST /vault/deposit-for — operator deposits USDC on behalf of a Main Wallet
+  app.post("/vault/deposit-for", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const { account, amount } = req.body as any;
+    if (!account || !/^0x[a-fA-F0-9]{40}$/.test(account)) {
+      return reply.status(400).send({ error: "Invalid account address" });
+    }
+    if (!amount || amount <= 0) {
+      return reply.status(400).send({ error: "Amount must be > 0" });
+    }
+    try {
+      const amountRaw = parseUnits(amount.toString(), 6);
+      const txHash = await depositForOnChain(account as `0x${string}`, amountRaw);
+      return { txHash, account, amount };
+    } catch (e: any) {
+      return reply.status(500).send({ error: e.shortMessage ?? e.message ?? "Deposit failed" });
+    }
+  });
+
+  // POST /vault/withdraw-by-sig — gasless withdrawal signed by Main Wallet
+  app.post("/vault/withdraw-by-sig", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
+    const { account, to, amount, nonce, deadline, signature } = req.body as any;
+    if (!account || !to || !amount || !signature) {
+      return reply.status(400).send({ error: "Missing required fields" });
+    }
+    try {
+      const txHash = await withdrawBySigOnChain(
+        account as `0x${string}`,
+        to as `0x${string}`,
+        parseUnits(amount.toString(), 6),
+        BigInt(nonce),
+        BigInt(deadline),
+        signature as `0x${string}`
+      );
+      return { txHash, account, to, amount };
+    } catch (e: any) {
+      return reply.status(500).send({ error: e.shortMessage ?? e.message ?? "Withdrawal failed" });
+    }
   });
 
   // GET /vault/market/:id — read on-chain market state

@@ -17,7 +17,7 @@ const abi = JSON.parse(readFileSync(join(__dirname, "../abi/FUDVault.json"), "ut
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const VAULT_ADDRESS = (process.env.FUDVAULT_ADDRESS ?? "0xD167F62834c175F33cD359785CE662B0a3298E88") as Address;
+const VAULT_ADDRESS = (process.env.FUDVAULT_ADDRESS ?? "0x0A8a0e81B9fcCd8273AfF3D27741df4126c1Ce18") as Address;
 const OPERATOR_KEY  = process.env.FUDVAULT_OPERATOR_KEY ?? process.env.DEPLOYER_PRIVATE_KEY;
 const RPC_URL       = process.env.BASE_SEPOLIA_RPC ?? "https://sepolia.base.org";
 const CHAIN         = baseSepolia; // swap to `base` for mainnet
@@ -126,6 +126,44 @@ export async function cancelMarketOnChain(marketId: bigint): Promise<string> {
     args: [marketId],
   });
 
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/**
+ * Deposit USDC on behalf of a user's Main Wallet (gasless for user).
+ * Operator sends USDC from its balance and credits the account.
+ */
+export async function depositForOnChain(account: Address, amountRaw: bigint): Promise<string> {
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: VAULT_ADDRESS,
+    abi,
+    functionName: "depositFor",
+    args: [account, amountRaw],
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/**
+ * Execute gasless withdrawal signed by user's Main Wallet.
+ */
+export async function withdrawBySigOnChain(
+  account: Address,
+  to: Address,
+  amount: bigint,
+  nonce: bigint,
+  deadline: bigint,
+  signature: `0x${string}`
+): Promise<string> {
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: VAULT_ADDRESS,
+    abi,
+    functionName: "withdrawBySig",
+    args: [account, to, amount, nonce, deadline, signature],
+  });
   await publicClient.waitForTransactionReceipt({ hash });
   return hash;
 }

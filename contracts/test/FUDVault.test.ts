@@ -243,6 +243,112 @@ describe("FUDVault", function () {
 
   // ─── EIP-712 ────────────────────────────────────────────────────────────
 
+  // ─── depositFor ─────────────────────────────────────────────────────
+
+  it("depositFor credits account from operator's USDC", async function () {
+    // Operator has USDC and approves vault
+    await usdc.mint(operator.address, usd(1000));
+    await usdc.connect(operator).approve(await vault.getAddress(), ethers.MaxUint256);
+
+    await vault.connect(operator).depositFor(alice.address, usd(50));
+    expect(await vault.balances(alice.address)).to.equal(usd(50));
+  });
+
+  it("depositFor from any address (not just operator)", async function () {
+    // Bob sends USDC on behalf of Alice — depositFor is permissionless
+    await vault.connect(bob).depositFor(alice.address, usd(25));
+    expect(await vault.balances(alice.address)).to.equal(usd(25));
+  });
+
+  // ─── withdrawBySig ─────────────────────────────────────────────────
+
+  it("withdrawBySig sends USDC to destination, operator pays gas", async function () {
+    await vault.connect(alice).deposit(usd(100));
+
+    const domain = {
+      name: "FUDVault", version: "1",
+      chainId: (await ethers.provider.getNetwork()).chainId,
+      verifyingContract: await vault.getAddress(),
+    };
+    const types = {
+      Withdraw: [
+        { name: "account", type: "address" },
+        { name: "to", type: "address" },
+        { name: "amount", type: "uint256" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    };
+    const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 3600;
+    const sig = await alice.signTypedData(domain, types, {
+      account: alice.address,
+      to: bob.address,
+      amount: usd(40),
+      nonce: 0,
+      deadline,
+    });
+
+    const bobBefore = await usdc.balanceOf(bob.address);
+    await vault.connect(operator).withdrawBySig(alice.address, bob.address, usd(40), 0, deadline, sig);
+    const bobAfter = await usdc.balanceOf(bob.address);
+
+    expect(bobAfter - bobBefore).to.equal(usd(40));
+    expect(await vault.balances(alice.address)).to.equal(usd(60));
+  });
+
+  it("withdrawBySig reverts with expired deadline", async function () {
+    await vault.connect(alice).deposit(usd(100));
+    const pastDeadline = (await ethers.provider.getBlock("latest"))!.timestamp - 1;
+
+    const domain = {
+      name: "FUDVault", version: "1",
+      chainId: (await ethers.provider.getNetwork()).chainId,
+      verifyingContract: await vault.getAddress(),
+    };
+    const types = {
+      Withdraw: [
+        { name: "account", type: "address" }, { name: "to", type: "address" },
+        { name: "amount", type: "uint256" }, { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    };
+    const sig = await alice.signTypedData(domain, types, {
+      account: alice.address, to: bob.address, amount: usd(40), nonce: 0, deadline: pastDeadline,
+    });
+
+    await expect(
+      vault.connect(operator).withdrawBySig(alice.address, bob.address, usd(40), 0, pastDeadline, sig)
+    ).to.be.revertedWith("Signature expired");
+  });
+
+  it("withdrawBySig reverts with wrong signer", async function () {
+    await vault.connect(alice).deposit(usd(100));
+    const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 3600;
+
+    const domain = {
+      name: "FUDVault", version: "1",
+      chainId: (await ethers.provider.getNetwork()).chainId,
+      verifyingContract: await vault.getAddress(),
+    };
+    const types = {
+      Withdraw: [
+        { name: "account", type: "address" }, { name: "to", type: "address" },
+        { name: "amount", type: "uint256" }, { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    };
+    // Bob signs but we claim it's alice's account
+    const sig = await bob.signTypedData(domain, types, {
+      account: alice.address, to: bob.address, amount: usd(40), nonce: 0, deadline,
+    });
+
+    await expect(
+      vault.connect(operator).withdrawBySig(alice.address, bob.address, usd(40), 0, deadline, sig)
+    ).to.be.revertedWith("Invalid signature");
+  });
+
+  // ─── EIP-712 ────────────────────────────────────────────────────────
+
   it("revert on invalid signature", async function () {
     await vault.connect(alice).deposit(usd(100));
     const closesAt = (await ethers.provider.getBlock("latest"))!.timestamp + 3600;

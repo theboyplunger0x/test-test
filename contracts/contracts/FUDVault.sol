@@ -74,12 +74,17 @@ contract FUDVault is Ownable, ReentrancyGuard, Pausable {
     bytes32 public constant BET_TYPEHASH = keccak256(
         "Bet(uint256 marketId,address user,uint8 side,uint256 amount,uint256 nonce)"
     );
+    bytes32 public constant WITHDRAW_TYPEHASH = keccak256(
+        "Withdraw(address account,address to,uint256 amount,uint256 nonce,uint256 deadline)"
+    );
     mapping(address => uint256) public nonces;
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
     event Deposited(address indexed user, uint256 amount);
+    event DepositedFor(address indexed account, address indexed from, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
+    event WithdrawnBySig(address indexed account, address indexed to, uint256 amount);
     event MarketCreated(uint256 indexed marketId, uint256 closesAt, uint256 entryPrice);
     event BetPlaced(uint256 indexed marketId, address indexed user, Side side, uint256 amount);
     event MarketResolved(uint256 indexed marketId, Side winningSide, uint256 exitPrice, uint256 treasuryFee, uint256 rewardFee);
@@ -131,6 +136,62 @@ contract FUDVault is Ownable, ReentrancyGuard, Pausable {
         balances[msg.sender] -= amount;
         usdc.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
+    }
+
+    // ─── Operator: Deposit on behalf of user ────────────────────────────────────
+
+    /**
+     * @notice Deposit USDC on behalf of a user's Main Wallet. The USDC is
+     *         transferred from msg.sender (operator/relayer/funding processor)
+     *         and credited to the account's balance. The user never needs gas.
+     * @param account The Main Wallet address to credit
+     * @param amount USDC amount (6 decimals)
+     */
+    function depositFor(address account, uint256 amount) external nonReentrant whenNotPaused {
+        require(account != address(0), "Zero account");
+        require(amount > 0, "Amount must be > 0");
+        usdc.safeTransferFrom(msg.sender, address(this), amount);
+        balances[account] += amount;
+        emit DepositedFor(account, msg.sender, amount);
+    }
+
+    // ─── Gasless Withdraw (signed by Main Wallet, executed by operator) ───────
+
+    /**
+     * @notice Withdraw USDC from a user's vault balance to any destination.
+     *         The user signs an EIP-712 message with their Main Wallet;
+     *         the operator/relayer submits the tx and pays gas.
+     * @param account The Main Wallet that owns the balance
+     * @param to Destination address for USDC
+     * @param amount USDC amount (6 decimals)
+     * @param nonce Replay protection nonce
+     * @param deadline Unix timestamp after which the signature expires
+     * @param signature EIP-712 signature from the account
+     */
+    function withdrawBySig(
+        address account,
+        address to,
+        uint256 amount,
+        uint256 nonce,
+        uint256 deadline,
+        bytes calldata signature
+    ) external onlyOperator nonReentrant {
+        require(block.timestamp <= deadline, "Signature expired");
+        require(amount > 0, "Amount must be > 0");
+        require(balances[account] >= amount, "Insufficient balance");
+        require(nonces[account] == nonce, "Invalid nonce");
+
+        bytes32 structHash = keccak256(abi.encode(
+            WITHDRAW_TYPEHASH, account, to, amount, nonce, deadline
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        address signer = _recoverSigner(digest, signature);
+        require(signer == account, "Invalid signature");
+
+        nonces[account]++;
+        balances[account] -= amount;
+        usdc.safeTransfer(to, amount);
+        emit WithdrawnBySig(account, to, amount);
     }
 
     // ─── User: Claim Rewards ──────────────────────────────────────────────────
