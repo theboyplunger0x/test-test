@@ -172,7 +172,9 @@ export default function AuthModal({
         localStorage.setItem("token", result.token);
         onSuccess(result as unknown as AuthResponse);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Login failed");
+        const msg = err instanceof Error ? err.message : "Login failed";
+        console.error("[auth-bootstrap]", msg, err);
+        alert(`Auth error: ${msg}`);
         privyLogout().catch(() => {});
       }
     })();
@@ -192,10 +194,8 @@ export default function AuthModal({
     setError("");
   }
 
-  // ── render — no visible modal, Privy handles the UI ──────────────────────
-  // This component just triggers Privy login on mount and processes the result.
-  // The Privy modal appears on top. Once authenticated, the bootstrap useEffect
-  // creates/syncs the user and calls onSuccess. If the user closes Privy's modal,
-  // we close ours too.
+  // Privy handles the UI. This component is invisible but alive for the
+  // bootstrap useEffect to fire when privyAuthenticated flips to true.
+  // If something goes wrong, show an alert.
   return null;
 }
