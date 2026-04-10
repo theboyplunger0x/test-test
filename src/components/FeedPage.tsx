@@ -500,16 +500,17 @@ export default function FeedPage() {
     // Real mode: sign bet on-chain via EIP-712 before sending to backend.
     let signature: string | undefined;
     let sigWallet: string | undefined;
-    if (isReal && walletAddr) {
-      // Use override if provided (e.g. freshly created market not yet in state),
-      // otherwise look up from local markets state.
-      const onchainId = onchainMarketIdOverride ?? markets.find(m => m.id === id)?.onchain_market_id;
-      if (onchainId != null) {
-        const sig = await vault.signBet(onchainId, side, amount);
-        if (!sig) return "Signature rejected — bet not placed.";
-        signature = sig;
-        sigWallet = walletAddr;
-      }
+    const onchainId = onchainMarketIdOverride ?? markets.find(m => m.id === id)?.onchain_market_id;
+    // Debug: remove after E2E confirmed working
+    if (typeof window !== "undefined") {
+      (window as any).__lastBetDebug = { isReal, walletAddr: !!walletAddr, onchainId, onchainMarketIdOverride, marketId: id };
+      console.log("[bet-debug]", { isReal, walletAddr: walletAddr?.slice(0, 8), onchainId, override: onchainMarketIdOverride });
+    }
+    if (isReal && walletAddr && onchainId != null) {
+      const sig = await vault.signBet(onchainId, side, amount);
+      if (!sig) return "Signature rejected — bet not placed.";
+      signature = sig;
+      sigWallet = walletAddr;
     }
 
     try {
