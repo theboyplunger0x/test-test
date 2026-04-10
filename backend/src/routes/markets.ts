@@ -230,9 +230,8 @@ export async function marketRoutes(app: FastifyInstance) {
           // Store tx hash on position
           await db.query(`UPDATE positions SET onchain_tx = $1 WHERE id = $2`, [txHash, position.id]);
         } catch (e: any) {
-          console.error("[vault] On-chain bet failed:", e.message);
+          console.error("[vault] On-chain bet failed:", e.shortMessage ?? e.message, e.details ?? "");
           // DB bet already committed — on-chain is best-effort in MVP.
-          // The position exists in DB regardless; resolution handles both paths.
         }
       }
 

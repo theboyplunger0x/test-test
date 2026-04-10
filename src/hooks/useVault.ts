@@ -37,7 +37,8 @@ export function useVault(walletAddr: string | null) {
     api.vaultConfig().then(setConfig).catch(() => {});
   }, []);
 
-  // Poll vault balance when wallet is connected
+  // Poll vault balance when wallet is connected.
+  // Don't reset to "0" on error — keep the last known value to avoid flashing.
   useEffect(() => {
     if (!walletAddr) { setVaultBalance("0"); return; }
     const load = () => api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
