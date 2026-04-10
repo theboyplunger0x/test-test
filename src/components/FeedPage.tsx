@@ -485,7 +485,12 @@ export default function FeedPage() {
     // In Real mode, check vault balance (on-chain), not DB balance
     const realBalance = isReal ? parseFloat(vault.vaultBalance || "0") : Number(user.balance_usd);
     if (!paperMode && realBalance <= 0) {
-      setDepositOpen(true);
+      if (isReal) {
+        // Open wallet drawer where the vault deposit UI lives
+        setSettingsOpen(true);
+      } else {
+        setDepositOpen(true);
+      }
       return;
     }
     setOpenMarketCoin(coin);
