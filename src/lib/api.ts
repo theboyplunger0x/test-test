@@ -366,6 +366,17 @@ export const api = {
   vaultRewards: (address: string) =>
     req<{ address: string; rewards: string }>(`/vault/rewards/${address}`),
 
+  bootstrap: (data: {
+    privy_user_id: string;
+    auth_method?: string;
+    email?: string;
+    wallets?: { address: string; type: string; is_embedded?: boolean }[];
+    referral_code?: string;
+  }) => req<{ token: string; user: User; created: boolean; referral: { applied: boolean; code?: string | null } }>("/api/users/bootstrap", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }),
+
   getTokenFeed: (symbol: string) =>
     req<{ markets: any[]; positions: any[] }>(`/tokens/${symbol}/feed`),
 

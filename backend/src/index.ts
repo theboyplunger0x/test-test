@@ -19,6 +19,7 @@ import { followRoutes }         from "./routes/follows.js";
 import { notificationRoutes }   from "./routes/notifications.js";
 import { escrowRoutes }         from "./routes/escrow.js";
 import { vaultRoutes }          from "./routes/vault.js";
+import { bootstrapRoutes }      from "./routes/bootstrap.js";
 import { scheduleAllPendingMarkets, resolveExpiredMarkets, expireUnfilledOrders } from "./workers/resolver.js";
 import { pollDeposits }              from "./workers/depositPoller.js";
 import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
@@ -86,6 +87,7 @@ await app.register(followRoutes);
 await app.register(notificationRoutes);
 await app.register(escrowRoutes);
 await app.register(vaultRoutes);
+await app.register(bootstrapRoutes);
 
 // Health check
 app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString() }));

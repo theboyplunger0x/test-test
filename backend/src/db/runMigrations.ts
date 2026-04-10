@@ -281,7 +281,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS has_connected_wallet BOOLEAN NOT NULL
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wallet_address_unique
   ON users(wallet_address) WHERE wallet_address IS NOT NULL;
 
--- v10: on-chain vault integration (FUDVault on Base Sepolia / Base mainnet)
+-- v10: Privy-only auth — privy_user_id as primary identity
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privy_user_id TEXT UNIQUE;
+
+-- v11: on-chain vault integration (FUDVault on Base Sepolia / Base mainnet)
 -- Links a DB market to its on-chain counterpart in the FUDVault contract.
 ALTER TABLE markets ADD COLUMN IF NOT EXISTS onchain_market_id BIGINT;
 -- Stores the tx hash of the on-chain bet for Real mode positions.

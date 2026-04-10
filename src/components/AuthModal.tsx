@@ -116,51 +116,55 @@ export default function AuthModal({
   const { login: privyLogin, logout: privyLogout, authenticated: privyAuthenticated, user: privyUser, ready: privyReady } = usePrivy();
   const { wallets: privyWallets } = useWallets();
 
+  // When Privy authenticates, bootstrap user on our backend
   useEffect(() => {
     if (!privyReady || !privyAuthenticated || !privyUser) return;
-    // When Privy authenticates, create/login on our backend
     (async () => {
       try {
-        // Find best wallet: external first, then embedded, then primary
         const externalWallet = privyWallets.find(w => w.walletClientType !== "privy");
         const embeddedWallet = privyWallets.find(w => w.walletClientType === "privy");
-        const wallet = (externalWallet ?? embeddedWallet)?.address ?? privyUser.wallet?.address;
         const email = privyUser.email?.address;
-        // Use privy ID as unique username to avoid collisions
-        const privyId = privyUser.id.replace("did:privy:", "");
-        const username = wallet
-          ? `${wallet.slice(2, 8).toLowerCase()}`
-          : `p_${privyId.slice(0, 8)}`;
-        const password = `privy_${privyId}`;
 
-        // Try login first (returning user), then register (new user)
-        let result: AuthResponse;
+        // Build wallets array for bootstrap
+        const walletList: { address: string; type: string; is_embedded: boolean }[] = [];
+        if (embeddedWallet?.address) {
+          walletList.push({ address: embeddedWallet.address, type: "embedded", is_embedded: true });
+        }
+        if (externalWallet?.address) {
+          walletList.push({ address: externalWallet.address, type: "external", is_embedded: false });
+        }
+        // Fallback to Privy's reported wallet
+        if (walletList.length === 0 && privyUser.wallet?.address) {
+          walletList.push({ address: privyUser.wallet.address, type: "external", is_embedded: false });
+        }
+
+        // Read pending referral code
+        let refCode: string | undefined;
         try {
-          result = await api.login(username, password);
-        } catch {
-          try {
-            result = await api.register(username, password, email);
-          } catch {
-            // Username taken by someone else — use longer unique name
-            const fallback = `p_${privyId.slice(0, 12)}`;
-            try {
-              result = await api.login(fallback, password);
-            } catch {
-              result = await api.register(fallback, password, email);
-            }
+          const raw = localStorage.getItem("pending_referral");
+          if (raw) {
+            const { code, capturedAt } = JSON.parse(raw);
+            const days = (Date.now() - new Date(capturedAt).getTime()) / (1000 * 60 * 60 * 24);
+            if (days <= 30) refCode = code;
+            else localStorage.removeItem("pending_referral");
           }
-        }
+        } catch {}
 
-        // Link wallet if available
-        if (wallet) {
-          api.linkWallet(wallet).catch(() => {});
-        }
+        const result = await api.bootstrap({
+          privy_user_id: privyUser.id,
+          auth_method: privyUser.google ? "google" : privyUser.email ? "email" : "wallet",
+          email: email ?? undefined,
+          wallets: walletList.length > 0 ? walletList : undefined,
+          referral_code: refCode,
+        });
+
+        // Clear pending referral on success
+        if (result.referral?.applied) localStorage.removeItem("pending_referral");
 
         localStorage.setItem("token", result.token);
-        onSuccess(result);
+        onSuccess(result as unknown as AuthResponse);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Privy login failed");
-        // Clear Privy session so user can retry
+        setError(err instanceof Error ? err.message : "Login failed");
         privyLogout().catch(() => {});
       }
     })();
