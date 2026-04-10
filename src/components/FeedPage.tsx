@@ -1516,6 +1516,8 @@ export default function FeedPage() {
         user={user}
         wallet={wallet}
         notificationsEnabled={notificationsEnabled}
+        tradePresets={tradePresets}
+        onTradePresetsChange={setTradePresets}
         onToggleNotifications={toggleNotifications}
         onToggleDarkMode={() => setTheme(dk ? "light" : "dark")}
         onOpenReferrals={() => setReferralOpen(true)}
