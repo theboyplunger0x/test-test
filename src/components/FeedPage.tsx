@@ -1585,7 +1585,7 @@ export default function FeedPage() {
             onClose={() => setFundingOpen(false)}
             mainWalletAddress={primaryWallet}
             vaultBalance={vault.vaultBalance}
-            depositAddress={vault.config?.address ?? ""}
+            depositAddress={vault.config?.depositAddress ?? vault.config?.address ?? ""}
           />
         )}
       </AnimatePresence>

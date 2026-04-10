@@ -276,4 +276,5 @@ export const VAULT_CONFIG = {
   chainId: CHAIN.id,
   name: "FUDVault",
   version: "1",
+  depositAddress: getClients().account.address, // operator wallet = deposit address
 };

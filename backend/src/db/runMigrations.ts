@@ -284,7 +284,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wallet_address_unique
 -- v10: Privy-only auth — privy_user_id as primary identity
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privy_user_id TEXT UNIQUE;
 
--- v11: on-chain vault integration (FUDVault on Base Sepolia / Base mainnet)
+-- v11: deposit events for auto-crediting via depositFor
+CREATE TABLE IF NOT EXISTS deposit_events (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id                 UUID NOT NULL REFERENCES users(id),
+  from_address            TEXT,
+  to_main_wallet_address  TEXT NOT NULL,
+  token_address           TEXT NOT NULL,
+  amount                  NUMERIC(38, 6) NOT NULL,
+  tx_hash                 TEXT UNIQUE NOT NULL,
+  block_number            BIGINT NOT NULL,
+  status                  TEXT NOT NULL DEFAULT 'detected',
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_deposit_events_user ON deposit_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_deposit_events_tx ON deposit_events(tx_hash);
+
+-- v12: on-chain vault integration (FUDVault on Base Sepolia / Base mainnet)
 -- Links a DB market to its on-chain counterpart in the FUDVault contract.
 ALTER TABLE markets ADD COLUMN IF NOT EXISTS onchain_market_id BIGINT;
 -- Stores the tx hash of the on-chain bet for Real mode positions.

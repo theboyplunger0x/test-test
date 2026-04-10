@@ -12,6 +12,7 @@ interface VaultConfig {
   chainId: number;
   name: string;
   version: string;
+  depositAddress?: string;
 }
 
 /**

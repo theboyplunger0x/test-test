@@ -8,7 +8,7 @@ interface FundingModalProps {
   onClose: () => void;
   mainWalletAddress: string;
   vaultBalance: string;
-  /** The vault contract address where USDC should be sent */
+  /** The deposit address (operator wallet) where USDC should be sent */
   depositAddress: string;
 }
 

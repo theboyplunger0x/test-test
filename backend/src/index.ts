@@ -22,6 +22,7 @@ import { vaultRoutes }          from "./routes/vault.js";
 import { bootstrapRoutes }      from "./routes/bootstrap.js";
 import { scheduleAllPendingMarkets, resolveExpiredMarkets, expireUnfilledOrders } from "./workers/resolver.js";
 import { pollDeposits }              from "./workers/depositPoller.js";
+import { startDepositProcessor }     from "./workers/depositProcessor.js";
 import { processPendingWithdrawals } from "./workers/withdrawalProcessor.js";
 import { runMigrations }             from "./db/runMigrations.js";
 import { startBot, startXAgent }     from "./fud-bot/index.js";
@@ -104,9 +105,12 @@ setInterval(resolveExpiredMarkets, 60_000);
 // Expire unfilled orders, refund balance, and notify users
 setInterval(expireUnfilledOrders, 60_000);
 
-// Poll for incoming deposits every 30s
+// Poll for incoming deposits every 30s (legacy)
 setInterval(pollDeposits, 30_000);
 pollDeposits();
+
+// Auto-detect USDC deposits to operator wallet → creditFor to Main Wallet
+startDepositProcessor(15_000);
 
 // Process pending withdrawals every 60s
 setInterval(processPendingWithdrawals, 60_000);
