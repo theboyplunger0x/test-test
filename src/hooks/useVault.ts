@@ -127,10 +127,91 @@ export function useVault(walletAddr: string | null) {
     }
   }, [walletAddr, config, nonce]);
 
+  // USDC contract address on Base Sepolia
+  const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+
+  // ERC-20 ABI fragments for approve + deposit + withdraw
+  const ERC20_APPROVE_ABI = "function approve(address spender, uint256 amount) returns (bool)";
+  const VAULT_DEPOSIT_ABI = "function deposit(uint256 amount)";
+  const VAULT_WITHDRAW_ABI = "function withdraw(uint256 amount)";
+
+  /**
+   * Deposit USDC into the FUDVault contract.
+   * Steps: approve USDC → call vault.deposit().
+   * Both txs prompted to the user's wallet.
+   */
+  const depositToVault = useCallback(async (amountUsdc: number) => {
+    if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) throw new Error("No wallet found");
+
+    const amountRaw = "0x" + BigInt(Math.round(amountUsdc * 1_000_000)).toString(16);
+
+    // 1. Approve USDC spend
+    const iface = new (await import("ethers")).Interface([ERC20_APPROVE_ABI]);
+    const approveData = iface.encodeFunctionData("approve", [config.address, amountRaw]);
+    await ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: walletAddr,
+        to: USDC_ADDRESS,
+        data: approveData,
+      }],
+    });
+
+    // Small delay to let the approval propagate
+    await new Promise(r => setTimeout(r, 2000));
+
+    // 2. Deposit to vault
+    const vaultIface = new (await import("ethers")).Interface([VAULT_DEPOSIT_ABI]);
+    const depositData = vaultIface.encodeFunctionData("deposit", [amountRaw]);
+    await ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: walletAddr,
+        to: config.address,
+        data: depositData,
+      }],
+    });
+
+    // Refresh balance after a short delay
+    setTimeout(() => {
+      if (walletAddr) api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+    }, 5000);
+  }, [walletAddr, config]);
+
+  /**
+   * Withdraw USDC from the FUDVault contract back to wallet.
+   */
+  const withdrawFromVault = useCallback(async (amountUsdc: number) => {
+    if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) throw new Error("No wallet found");
+
+    const amountRaw = "0x" + BigInt(Math.round(amountUsdc * 1_000_000)).toString(16);
+
+    const vaultIface = new (await import("ethers")).Interface([VAULT_WITHDRAW_ABI]);
+    const withdrawData = vaultIface.encodeFunctionData("withdraw", [amountRaw]);
+    await ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: walletAddr,
+        to: config.address,
+        data: withdrawData,
+      }],
+    });
+
+    setTimeout(() => {
+      if (walletAddr) api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+    }, 5000);
+  }, [walletAddr, config]);
+
   return {
     config,
     vaultBalance,
     nonce,
     signBet,
+    depositToVault,
+    withdrawFromVault,
   };
 }

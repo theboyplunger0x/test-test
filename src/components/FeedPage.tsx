@@ -1539,6 +1539,8 @@ export default function FeedPage() {
         onOpenReferrals={() => setReferralOpen(true)}
         onLogout={handleLogout}
         vaultBalance={vault.vaultBalance}
+        onVaultDeposit={vault.depositToVault}
+        onVaultWithdraw={vault.withdrawFromVault}
       />
 
       {/* Portfolio drawer */}
