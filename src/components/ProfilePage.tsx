@@ -244,8 +244,8 @@ export default function ProfilePage({ username, dk, onClose, currentUser, curren
         ) : (
           <div className="px-5 py-5 space-y-4">
 
-            {/* Top cards row */}
-            <div className="flex gap-3">
+            {/* Top cards row — stacks on mobile, side-by-side on desktop */}
+            <div className="flex flex-col md:flex-row gap-3">
               {/* Profile card */}
               <div className={`flex-1 rounded-2xl border p-4 ${card}`}>
                 <div className="flex items-start gap-3 mb-4">
