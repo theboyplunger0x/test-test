@@ -244,6 +244,10 @@ export function useVault(walletAddr: string | null) {
     }, 5000);
   }, [walletAddr, config]);
 
+  const refreshBalance = useCallback(() => {
+    if (walletAddr) api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
+  }, [walletAddr]);
+
   return {
     config,
     vaultBalance,
@@ -251,5 +255,6 @@ export function useVault(walletAddr: string | null) {
     signBet,
     depositToVault,
     withdrawFromVault,
+    refreshBalance,
   };
 }

@@ -525,6 +525,10 @@ export default function FeedPage() {
         paper_balance_usd: result.new_paper_balance,
         ...(result.new_testnet_balance ? { testnet_balance_gen: result.new_testnet_balance } : {}),
       } : null);
+      // Real mode: refresh vault balance immediately after bet (don't wait for 15s poll)
+      if (isReal && walletAddr) {
+        vault.refreshBalance();
+      }
       return null;
     } catch (err: any) {
       return err.message ?? "Bet failed";
