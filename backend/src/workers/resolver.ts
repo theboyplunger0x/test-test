@@ -160,9 +160,14 @@ export async function resolveMarket(marketId: string) {
             const cashbackRate = CASHBACK_RATES[tier] ?? 0;
             if (cashbackRate > 0) {
               const cashback = rewardPoolFromPos * cashbackRate / 10000;
-              if (cashback > 0.001) { // min threshold
+              if (cashback > 0.001) {
                 rewardUsers.push(pos.wallet_address as `0x${string}`);
                 rewardAmounts.push(toUsdc(cashback));
+                // Record in DB for stats display
+                await db.query(
+                  `INSERT INTO cashback_rewards (user_id, market_id, reward_usd) VALUES ($1, $2, $3)`,
+                  [pos.user_id, market.id, cashback]
+                );
               }
             }
 
@@ -177,6 +182,11 @@ export async function resolveMarket(marketId: string) {
                 if (referralReward > 0.001) {
                   rewardUsers.push(referrer.wallet_address as `0x${string}`);
                   rewardAmounts.push(toUsdc(referralReward));
+                  // Record in DB for stats display
+                  await db.query(
+                    `INSERT INTO referral_rewards (referrer_id, referred_id, reward_usd) VALUES ($1, $2, $3)`,
+                    [pos.referred_by, pos.user_id, referralReward]
+                  );
                 }
               }
             }
