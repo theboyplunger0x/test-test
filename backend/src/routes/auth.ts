@@ -25,7 +25,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   // POST /auth/register — 10 attempts / 15 min per IP
   app.post("/auth/register", { config: { rateLimit: { max: 10, timeWindow: "15 minutes" } } }, async (req, reply) => {
-    const { username, password, email } = req.body as any;
+    const { username, password, email, referral_code } = req.body as any;
 
     if (!username || !password) {
       return reply.status(400).send({ error: "username and password required" });
@@ -53,17 +53,39 @@ export async function authRoutes(app: FastifyInstance) {
       }
     }
 
+    // Validate referral code if provided
+    let referredBy: string | null = null;
+    if (referral_code) {
+      const code = String(referral_code).trim().toUpperCase();
+      const { rows: [referrer] } = await db.query(
+        `SELECT id, username FROM users WHERE referral_code = $1`, [code]
+      );
+      if (!referrer) {
+        return reply.status(400).send({ error: "Invalid referral code" });
+      }
+      // Prevent self-referral by email match
+      if (email && referrer.username === username.toLowerCase()) {
+        return reply.status(400).send({ error: "You can't use your own referral code" });
+      }
+      referredBy = referrer.id;
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
+    const refCode = crypto.randomBytes(4).toString("hex").toUpperCase();
 
     const { rows: [user] } = await db.query(
-      `INSERT INTO users (username, password_hash, email)
-       VALUES ($1, $2, $3)
+      `INSERT INTO users (username, password_hash, email, referral_code, referred_by)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id, username, balance_usd, paper_balance_usd, wallet_address, has_connected_wallet, created_at`,
-      [username.toLowerCase(), passwordHash, email ? email.toLowerCase() : null]
+      [username.toLowerCase(), passwordHash, email ? email.toLowerCase() : null, refCode, referredBy]
     );
 
     const token = await (app as any).jwt.sign({ userId: user.id, username: user.username });
-    return reply.status(201).send({ token, user });
+    return reply.status(201).send({
+      token,
+      user,
+      referral: { applied: !!referredBy, code: referral_code?.trim()?.toUpperCase() ?? null },
+    });
   });
 
   // POST /auth/login

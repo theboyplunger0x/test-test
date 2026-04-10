@@ -255,10 +255,10 @@ export type CreateOrdersResult = {
 };
 
 export const api = {
-  register: (username: string, password: string, email?: string) =>
+  register: (username: string, password: string, email?: string, referral_code?: string) =>
     req<AuthResponse>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ username, password, email: email || undefined }),
+      body: JSON.stringify({ username, password, email: email || undefined, referral_code: referral_code || undefined }),
     }),
 
   login: (username: string, password: string) =>

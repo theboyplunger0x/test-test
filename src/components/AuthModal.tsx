@@ -25,9 +25,25 @@ export default function AuthModal({
   const [password, setPassword] = useState("");
   const [confirm,    setConfirm]    = useState("");
   const [email,      setEmail]      = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [referralFromUrl, setReferralFromUrl] = useState(false);
   const [forgotInput, setForgotInput] = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+
+  // Load pending referral from localStorage (captured from ?ref= URL)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("pending_referral");
+      if (!raw) return;
+      const { code, capturedAt } = JSON.parse(raw);
+      // Expire after 30 days
+      const daysSince = (Date.now() - new Date(capturedAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSince > 30) { localStorage.removeItem("pending_referral"); return; }
+      setReferralCode(code);
+      setReferralFromUrl(true);
+    } catch { /* ignore corrupt data */ }
+  }, []);
 
   // ── styles ────────────────────────────────────────────────────────────────
   const bg        = dk ? "bg-[#111] border-white/10"        : "bg-white border-gray-200";
@@ -63,7 +79,9 @@ export default function AuthModal({
     try {
       const data = tab === "login"
         ? await api.login(username, password)
-        : await api.register(username, password, email);
+        : await api.register(username, password, email, referralCode.trim() || undefined);
+      // Clear pending referral on successful register
+      if (tab === "register") localStorage.removeItem("pending_referral");
       onSuccess(data);
     } catch (err: any) {
       setError(err.message);
@@ -347,6 +365,35 @@ export default function AuthModal({
                         <p className={`text-[11px] font-bold mt-1 ${dk ? "text-red-400" : "text-red-500"}`}>
                           Passwords don't match
                         </p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Referral code — only on register */}
+                <AnimatePresence>
+                  {tab === "register" && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} style={{ overflow: "hidden" }}>
+                      <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 block ${labelCls}`}>
+                        Referral Code <span className={`font-bold normal-case ${dk ? "text-white/20" : "text-gray-300"}`}>(optional)</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text" autoComplete="off"
+                          placeholder="Enter code"
+                          value={referralCode}
+                          onChange={(e) => { setReferralCode(e.target.value.toUpperCase()); setReferralFromUrl(false); }}
+                          className={`flex-1 px-3 py-2.5 rounded-xl text-[13px] font-bold outline-none transition-all ${inputCls}`}
+                        />
+                        {referralCode && (
+                          <button type="button" onClick={() => { setReferralCode(""); setReferralFromUrl(false); localStorage.removeItem("pending_referral"); }}
+                            className={`text-[11px] font-bold px-2 shrink-0 transition-colors ${dk ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"}`}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      {referralFromUrl && (
+                        <p className={`text-[10px] font-bold mt-1 ${dk ? "text-emerald-400/60" : "text-emerald-600/60"}`}>Applied from invite link</p>
                       )}
                     </motion.div>
                   )}

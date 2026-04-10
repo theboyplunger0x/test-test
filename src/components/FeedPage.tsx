@@ -252,7 +252,6 @@ export default function FeedPage() {
     const params = new URLSearchParams(window.location.search);
     const tgToken = params.get("tg_link");
     if (!tgToken) return;
-    // Clean URL immediately
     window.history.replaceState({}, "", window.location.pathname);
     const jwt = localStorage.getItem("token");
     if (jwt) {
@@ -261,6 +260,23 @@ export default function FeedPage() {
         .catch((e: any) => alert("❌ " + (e.message ?? "Error al vincular Telegram")));
     } else {
       localStorage.setItem("pending_tg_link", tgToken);
+      setAuthOpen(true);
+    }
+  }, []);
+
+  // Handle ?ref= param: capture referral code for registration
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (!ref) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    // Store with timestamp for 30-day expiration
+    localStorage.setItem("pending_referral", JSON.stringify({
+      code: ref.trim().toUpperCase(),
+      capturedAt: new Date().toISOString(),
+    }));
+    // If not logged in, open auth modal on register tab
+    if (!localStorage.getItem("token")) {
       setAuthOpen(true);
     }
   }, []);

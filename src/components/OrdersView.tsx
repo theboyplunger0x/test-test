@@ -660,7 +660,7 @@ export default function OrdersView({ dk, balance: balanceProp, notificationsEnab
           const claimable = offChain + onChain;
           const hasRewards = claimable > 0;
           const tierLabel = referral.tier === "elite" ? "Elite" : referral.tier === "top" ? "Top" : referral.tier === "pro" ? "Pro" : "Basic";
-          const rebate    = referral.tier === "elite" ? "25% fee rebate" : referral.tier === "top" ? "20% fee rebate" : referral.tier === "pro" ? "10% fee rebate" : "5% fee rebate";
+          const rebate    = referral.tier === "elite" ? "25% fee rebate" : referral.tier === "top" ? "20% fee rebate" : referral.tier === "pro" ? "10% fee rebate" : "0% fee rebate";
           return (
             <div className={`rounded-2xl border px-4 py-3 transition-all ${
               hasRewards
