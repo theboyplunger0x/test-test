@@ -172,6 +172,8 @@ export default function FeedPage() {
   const { theme, setTheme, dk } = useAppTheme();
   const [tapeOpen, setTapeOpen]         = useState(false);
   const [authOpen, setAuthOpen]         = useState(false);
+  // True from Sign In click until user is set — prevents "Sign In" flashing back
+  const [authLoading, setAuthLoading]   = useState(false);
   const [depositOpen, setDepositOpen]   = useState(false);
   const [openMarketCoin, setOpenMarketCoin] = useState<Coin | null>(null);
   const [caSearchOpen, setCASearchOpen]     = useState(false);
@@ -493,6 +495,7 @@ export default function FeedPage() {
     localStorage.setItem("token", data.token);
     setUser(data.user);
     setAuthOpen(false);
+    setAuthLoading(false);
   }
 
   function handleLogout() {
@@ -955,10 +958,10 @@ export default function FeedPage() {
               </motion.button>
             </>
           ) : (
-            <motion.button whileTap={{ scale: 0.94 }} onClick={() => setAuthOpen(true)}
-              disabled={authOpen}
-              className={`flex items-center gap-2 border text-[12px] font-black px-4 py-2 rounded-xl border-transparent transition-all ${authOpen ? "bg-blue-500/50 text-white/50 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
-              {authOpen ? "Connecting..." : "Sign In"}
+            <motion.button whileTap={{ scale: 0.94 }} onClick={() => { setAuthOpen(true); setAuthLoading(true); }}
+              disabled={authOpen || authLoading}
+              className={`flex items-center gap-2 border text-[12px] font-black px-4 py-2 rounded-xl border-transparent transition-all ${(authOpen || authLoading) ? "bg-blue-500/50 text-white/50 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-400 text-white"}`}>
+              {(authOpen || authLoading) ? "Connecting..." : "Sign In"}
             </motion.button>
           )}
 
@@ -1459,7 +1462,7 @@ export default function FeedPage() {
 
       {/* Modals */}
       <AnimatePresence>
-        {authOpen    && <AuthModal dk={dk} onSuccess={handleAuthSuccess} onClose={() => setAuthOpen(false)} />}
+        {authOpen    && <AuthModal dk={dk} onSuccess={handleAuthSuccess} onClose={() => { setAuthOpen(false); setAuthLoading(false); }} />}
       </AnimatePresence>
       <AnimatePresence>
         {depositOpen && <DepositModal dk={dk} onClose={() => setDepositOpen(false)} onDeposited={handleDeposited} />}

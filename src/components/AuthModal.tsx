@@ -174,7 +174,7 @@ export default function AuthModal({
       } catch (err: unknown) {
         console.error("[auth-bootstrap]", err);
         privyLogout().catch(() => {});
-        onClose();
+        onClose(); // this clears authOpen + authLoading via handleAuthClose
       }
     })();
   }, [privyReady, privyAuthenticated, privyUser, privyWallets]);
