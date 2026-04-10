@@ -125,7 +125,7 @@ export async function resolveMarket(marketId: string) {
       (async () => {
         try {
           const { resolveMarketOnChain, accrueRewardsOnChain } = await import("../services/vaultService.js");
-          const { parseUnits } = await import("viem");
+          const toUsdc = (usd: number) => BigInt(Math.round(usd * 1_000_000));
 
           // 1. Resolve market on-chain
           const txHash = await resolveMarketOnChain(BigInt(market.onchain_market_id), exitPrice);
@@ -162,7 +162,7 @@ export async function resolveMarket(marketId: string) {
               const cashback = rewardPoolFromPos * cashbackRate / 10000;
               if (cashback > 0.001) { // min threshold
                 rewardUsers.push(pos.wallet_address as `0x${string}`);
-                rewardAmounts.push(parseUnits(cashback.toFixed(6), 6));
+                rewardAmounts.push(toUsdc(cashback));
               }
             }
 
@@ -176,7 +176,7 @@ export async function resolveMarket(marketId: string) {
                 const referralReward = rewardPoolFromPos * refRate / 10000;
                 if (referralReward > 0.001) {
                   rewardUsers.push(referrer.wallet_address as `0x${string}`);
-                  rewardAmounts.push(parseUnits(referralReward.toFixed(6), 6));
+                  rewardAmounts.push(toUsdc(referralReward));
                 }
               }
             }
@@ -190,7 +190,7 @@ export async function resolveMarket(marketId: string) {
             console.log(`[resolver] Accrued ${rewardUsers.length} rewards on-chain TX: ${accrueTx}`);
           }
         } catch (err: any) {
-          console.error(`[resolver] On-chain resolve/rewards failed for market ${market.id}:`, err.shortMessage ?? err.message);
+          console.error(`[resolver] On-chain resolve/rewards failed for market ${market.id}:`, err.shortMessage ?? err.message, err.stack?.split("\n").slice(0, 3).join(" "));
         }
       })();
     }
