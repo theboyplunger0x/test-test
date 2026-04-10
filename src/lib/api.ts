@@ -366,6 +366,12 @@ export const api = {
   vaultRewards: (address: string) =>
     req<{ address: string; rewards: string }>(`/vault/rewards/${address}`),
 
+  updateUsername: (username: string) =>
+    req<{ username: string }>("/api/users/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ username }),
+    }),
+
   bootstrap: (data: {
     privy_user_id: string;
     auth_method?: string;

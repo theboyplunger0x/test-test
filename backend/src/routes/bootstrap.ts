@@ -12,6 +12,25 @@ import crypto from "crypto";
 
 export async function bootstrapRoutes(app: FastifyInstance) {
 
+  // PATCH /api/users/profile — update username (rate limited)
+  app.patch("/api/users/profile", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 5, timeWindow: "24 hours" } } }, async (req, reply) => {
+    const { userId } = (req as any).user;
+    const { username } = req.body as any;
+    if (!username || typeof username !== "string") {
+      return reply.status(400).send({ error: "Username required" });
+    }
+    const clean = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (clean.length < 3) return reply.status(400).send({ error: "Username must be at least 3 characters" });
+    if (clean.length > 20) return reply.status(400).send({ error: "Username must be 20 characters or less" });
+    // Check uniqueness
+    const { rows: [taken] } = await db.query(
+      `SELECT id FROM users WHERE username = $1 AND id != $2`, [clean, userId]
+    );
+    if (taken) return reply.status(409).send({ error: "Username already taken" });
+    await db.query(`UPDATE users SET username = $1 WHERE id = $2`, [clean, userId]);
+    return { username: clean };
+  });
+
   app.post("/api/users/bootstrap", async (req, reply) => {
     const {
       privy_user_id,

@@ -141,14 +141,18 @@ export default function FeedPage() {
   // Browser wallet only needed for signing txs.
   const vault = useVault(walletAddr, user?.wallet_address);
 
-  // Wallet connection state for Real mode UX
+  // Wallet connection state for Real mode UX.
+  // If the primary wallet is a Privy embedded wallet, MetaMask mismatch is irrelevant
+  // because the embedded wallet signs via Privy's iframe, not window.ethereum.
   const primaryWallet = user?.wallet_address ?? null;
+  const isEmbeddedPrimary = wallet.isEmbeddedWallet ||
+    (primaryWallet && wallet.privyAuthenticated && !walletAddr);
   const walletState: "no_wallet" | "linked_connected" | "linked_disconnected" | "wrong_wallet" =
     !primaryWallet ? "no_wallet" :
+    isEmbeddedPrimary ? "linked_connected" : // embedded wallets are always "connected" via Privy
     !walletAddr ? "linked_disconnected" :
     walletAddr.toLowerCase() === primaryWallet.toLowerCase() ? "linked_connected" :
     "wrong_wallet";
-  // Can the user sign on-chain txs right now?
   const canSignOnChain = walletState === "linked_connected";
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
@@ -1009,16 +1013,16 @@ export default function FeedPage() {
         </div>
       )}
 
-      {/* Wallet mismatch banner — connected wallet doesn't match linked wallet */}
-      {user && isReal && walletState === "wrong_wallet" && primaryWallet && (
+      {/* Wallet mismatch banner — only for EXTERNAL trading wallets (not embedded) */}
+      {user && isReal && walletState === "wrong_wallet" && primaryWallet && !isEmbeddedPrimary && (
         <div className={`px-5 py-3 border-b flex items-center gap-3 ${dk ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-100"}`}>
           <span className="text-[18px] shrink-0">⚠️</span>
           <div className="flex-1 min-w-0">
             <p className={`text-[12px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
-              Connected wallet doesn't match your linked wallet
+              Wrong MetaMask wallet selected
             </p>
             <p className={`text-[11px] font-bold mt-0.5 ${dk ? "text-white/50" : "text-gray-500"}`}>
-              Your FUD balance belongs to {primaryWallet.slice(0, 6)}...{primaryWallet.slice(-4)}. Switch to trade or withdraw.
+              Switch MetaMask to {primaryWallet.slice(0, 6)}...{primaryWallet.slice(-4)} to trade or withdraw.
             </p>
           </div>
         </div>

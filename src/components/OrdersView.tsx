@@ -339,6 +339,9 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
   const [bio, setBio]                     = useState("");
   const [editingBio, setEditingBio]       = useState(false);
   const [bioInput, setBioInput]           = useState("");
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameInput, setUsernameInput]   = useState("");
+  const [usernameError, setUsernameError]   = useState("");
   const [saving, setSaving]               = useState(false);
   const fileInputRef                      = useRef<HTMLInputElement>(null);
 
@@ -420,9 +423,40 @@ function ProfileHeader({ dk, onViewProfile, onUserUpdate }: { dk: boolean; onVie
 
       {/* Username + tier */}
       <div className="flex items-center gap-1.5 mb-2">
-        <button onClick={onViewProfile} className={`text-[15px] font-black ${strong} cursor-pointer hover:opacity-70 transition-opacity`}>{username}</button>
+        {editingUsername ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={usernameInput}
+              onChange={e => { setUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")); setUsernameError(""); }}
+              maxLength={20}
+              className={`text-[15px] font-black px-2 py-1 rounded-lg outline-none w-[160px] ${dk ? "bg-white/10 text-white" : "bg-gray-100 text-gray-900"}`}
+              onKeyDown={async e => {
+                if (e.key === "Enter") {
+                  try {
+                    const res = await api.updateUsername(usernameInput);
+                    setUsername(res.username);
+                    setEditingUsername(false);
+                    onUserUpdate?.();
+                  } catch (err: any) { setUsernameError(err.message); }
+                }
+                if (e.key === "Escape") setEditingUsername(false);
+              }}
+            />
+            <button onClick={() => setEditingUsername(false)} className={`text-[11px] font-bold ${muted}`}>✕</button>
+          </div>
+        ) : (
+          <button onClick={onViewProfile} className={`text-[15px] font-black ${strong} cursor-pointer hover:opacity-70 transition-opacity`}>{username}</button>
+        )}
+        {!editingUsername && (
+          <button onClick={() => { setUsernameInput(username); setUsernameError(""); setEditingUsername(true); }}
+            className={`text-[10px] font-bold ${muted} hover:opacity-60 transition-opacity`}>
+            ✏️
+          </button>
+        )}
         {tier && <TierBadge tier={tier} tgUsername={tgUsername} />}
       </div>
+      {usernameError && <p className={`text-[10px] font-bold mb-1 ${dk ? "text-red-400" : "text-red-500"}`}>{usernameError}</p>}
 
       {/* Bio */}
       {editingBio ? (
