@@ -177,6 +177,7 @@ export type Market = {
   opener_avatar?: string;
   opener_tier?: string;
   last_bet_at?: string;
+  onchain_market_id?: number | null;
 };
 
 // ── Order Book types ──────────────────────────────────────────────────────────

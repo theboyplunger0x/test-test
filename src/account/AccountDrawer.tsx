@@ -22,6 +22,8 @@ interface AccountDrawerProps {
   onToggleDarkMode: () => void;
   onOpenReferrals: () => void;
   onLogout:    () => void;
+  /** On-chain vault USDC balance (from useVault). */
+  vaultBalance?: string;
 }
 
 /**
@@ -46,6 +48,7 @@ export default function AccountDrawer({
   onToggleDarkMode,
   onOpenReferrals,
   onLogout,
+  vaultBalance,
 }: AccountDrawerProps) {
   const [accountView, setAccountView] = useState<"main" | "wallet">("main");
 
@@ -260,6 +263,24 @@ export default function AccountDrawer({
                             </button>
                           </div>
                         </div>
+
+                        {/* On-chain Vault Balance (Real mode) */}
+                        {vaultBalance && parseFloat(vaultBalance) >= 0 && (
+                          <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Vault Balance (USDC)</p>
+                            <div className={`flex items-center justify-between px-3 py-3 rounded-lg ${dk ? "bg-white/5" : "bg-gray-100"}`}>
+                              <span className={`text-[16px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
+                                ${parseFloat(vaultBalance).toFixed(2)}
+                              </span>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${dk ? "bg-blue-500/20 text-blue-300" : "bg-blue-50 text-blue-600"}`}>
+                                On-chain
+                              </span>
+                            </div>
+                            <p className={`text-[10px] mt-1.5 ${dk ? "text-white/25" : "text-gray-400"}`}>
+                              Deposit USDC to the FUDVault contract to bet in Real mode. Withdraw anytime.
+                            </p>
+                          </div>
+                        )}
 
                         {/* Funds */}
                         {privyAuthenticated && (

@@ -29,6 +29,7 @@ import { api, User, AuthResponse, Market } from "@/lib/api";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { usePrivyWallet } from "@/hooks/usePrivyWallet";
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { useVault } from "@/hooks/useVault";
 import BottomNav from "@/shell/BottomNav";
 import TradingModeToggle from "@/shell/TradingModeToggle";
 import BalanceSummary from "@/shell/BalanceSummary";
@@ -133,6 +134,7 @@ function tierBadge(tier?: string, telegramUsername?: string) {
 export default function FeedPage() {
   const wallet = usePrivyWallet({ autoDetect: true });
   const { walletAddr, setWalletAddr, genBalance, privyAuthenticated } = wallet;
+  const vault = useVault(walletAddr);
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
   const prevLastBetAt                   = useRef<Record<string, number>>({});
@@ -492,8 +494,25 @@ export default function FeedPage() {
     // Mock challenges have simple numeric IDs; real markets have UUIDs
     const isRealMarket = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isRealMarket) return "Demo data — open a real market on any coin to trade.";
+
+    // Real mode: sign bet on-chain via EIP-712 before sending to backend.
+    // The backend will forward the signature to the FUDVault contract.
+    let signature: string | undefined;
+    let sigWallet: string | undefined;
+    if (isReal && walletAddr) {
+      // Find the on-chain market ID from our local markets state
+      const dbMarket = markets.find(m => m.id === id);
+      const onchainId = dbMarket?.onchain_market_id;
+      if (onchainId != null) {
+        const sig = await vault.signBet(onchainId, side, amount);
+        if (!sig) return "Signature rejected — bet not placed.";
+        signature = sig;
+        sigWallet = walletAddr;
+      }
+    }
+
     try {
-      const result = await api.placeBet(id, side, amount, paperMode, message, faded_position_id);
+      const result = await api.placeBet(id, side, amount, paperMode, message, faded_position_id, signature, sigWallet);
       setMarkets(prev => prev.map(m =>
         m.id === id ? {
           ...m,
@@ -1519,6 +1538,7 @@ export default function FeedPage() {
         onToggleDarkMode={() => setTheme(dk ? "light" : "dark")}
         onOpenReferrals={() => setReferralOpen(true)}
         onLogout={handleLogout}
+        vaultBalance={vault.vaultBalance}
       />
 
       {/* Portfolio drawer */}
