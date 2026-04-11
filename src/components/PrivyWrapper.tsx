@@ -20,7 +20,7 @@ export default function PrivyWrapper({ children }: { children: React.ReactNode }
         supportedChains: [baseSepolia, base],
         embeddedWallets: {
           ethereum: {
-            createOnLogin: "users-without-wallets",
+            createOnLogin: "all-users",
           },
         },
         loginMethods: ["email", "wallet", "google"],
