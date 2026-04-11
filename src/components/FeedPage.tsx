@@ -970,7 +970,7 @@ export default function FeedPage() {
 
       {/* Onboarding banner — first time the user enters Real/Testnet without a wallet.
           Non-blocking: educates and offers a Set up wallet shortcut without forcing it. */}
-      {user && !paperMode && !walletAddr && !onboardingDismissed && (
+      {user && !primaryWallet && !onboardingDismissed && (
         <div className={`px-5 py-3 border-b flex items-center gap-3 ${dk ? "bg-blue-500/10 border-blue-500/20" : "bg-blue-50 border-blue-100"}`}>
           <span className="text-[18px] shrink-0">⚡</span>
           <div className="flex-1 min-w-0">
