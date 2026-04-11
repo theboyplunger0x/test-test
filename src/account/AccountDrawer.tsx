@@ -280,24 +280,7 @@ export default function AccountDrawer({
                           </div>
                         )}
 
-                        {/* Funds */}
-                        {privyAuthenticated && (
-                          <div>
-                            <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Funds</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => wallet.fund()}
-                                className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-emerald-500 hover:bg-emerald-400 text-white transition-all">
-                                + Add funds
-                              </button>
-                              <button onClick={() => wallet.exportKey()}
-                                className={`px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
-                                Export key
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Manage */}
+                        {/* Manage — settings only */}
                         <div>
                           <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Manage</p>
                           <button onClick={() => wallet.exportKey()}
