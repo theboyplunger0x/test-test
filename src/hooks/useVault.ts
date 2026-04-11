@@ -89,16 +89,31 @@ export function useVault(
     const signerAddr = balanceAddr; // Main Wallet address
     if (!signerAddr || !config) return null;
 
-    // Get the signing provider — prefer Privy embedded, fallback to MetaMask
+    // Get the signing provider — Privy embedded wallet (no MetaMask needed)
     let provider: any = null;
     if (getEmbeddedProvider) {
-      try { provider = await getEmbeddedProvider(); } catch {}
+      try {
+        provider = await getEmbeddedProvider();
+      } catch (e) {
+        console.error("[vault] Failed to get embedded provider:", e);
+      }
+    }
+    // Fallback to window.ethereum only if embedded unavailable
+    if (!provider) {
+      console.warn("[vault] No embedded provider, trying window.ethereum");
+      provider = (window as any).ethereum;
+      if (provider) {
+        try { await ensureBaseSepoliaChain(provider); } catch (e) {
+          console.error("[vault] Chain switch failed:", e);
+          return null;
+        }
+      }
     }
     if (!provider) {
-      provider = (window as any).ethereum;
-      if (provider) await ensureBaseSepoliaChain(provider);
+      console.error("[vault] No signing provider available");
+      return null;
     }
-    if (!provider) return null;
+    console.log("[vault] Signing with provider, signer:", signerAddr?.slice(0, 10));
 
     const domain = {
       name: config.name,

@@ -59,12 +59,38 @@ export function usePrivyWallet() {
 
   /**
    * Get the Privy embedded wallet's ethereum provider for signing.
-   * This is the Main Wallet provider — used for EIP-712 signatures.
+   * Ensures the wallet is on Base Sepolia (84532) before returning.
    */
   const getEmbeddedProvider = useCallback(async () => {
     const embedded = privyWallets.find(w => w.walletClientType === "privy");
-    if (!embedded) return null;
-    return await embedded.getEthereumProvider();
+    if (!embedded) {
+      console.warn("[privy] No embedded wallet found in privyWallets:", privyWallets.map(w => w.walletClientType));
+      return null;
+    }
+    const provider = await embedded.getEthereumProvider();
+    // Switch to Base Sepolia if needed
+    try {
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x14a34" }], // 84532 = Base Sepolia
+      });
+    } catch (e: any) {
+      // Chain might not exist yet — try adding it
+      if (e.code === 4902) {
+        await provider.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: "0x14a34",
+            chainName: "Base Sepolia",
+            nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+            rpcUrls: ["https://sepolia.base.org"],
+            blockExplorerUrls: ["https://sepolia.basescan.org"],
+          }],
+        });
+      }
+      // Ignore other errors (already on correct chain, etc.)
+    }
+    return provider;
   }, [privyWallets]);
 
   return {
