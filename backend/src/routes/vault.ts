@@ -26,14 +26,31 @@ export async function vaultRoutes(app: FastifyInstance) {
     return VAULT_CONFIG;
   });
 
-  // GET /vault/balance/:address — user's on-chain vault balance
+  // GET /vault/balance/:address — user's USDC balance (Main Wallet + vault combined)
   app.get("/vault/balance/:address", async (req, reply) => {
     const { address } = req.params as any;
     if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
       return reply.status(400).send({ error: "Invalid address" });
     }
-    const balance = await getUserBalance(address as `0x${string}`);
-    return { address, balance };
+    // Read both vault balance AND USDC wallet balance
+    const vaultBalance = await getUserBalance(address as `0x${string}`);
+    // Also read USDC directly in the Main Wallet (deposited but not yet in vault)
+    let walletUsdcBalance = "0";
+    try {
+      const { createPublicClient, http, formatUnits } = await import("viem");
+      const { baseSepolia } = await import("viem/chains");
+      const client = createPublicClient({ chain: baseSepolia, transport: http(process.env.BASE_SEPOLIA_RPC ?? "https://sepolia.base.org") });
+      const raw = await client.readContract({
+        address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as `0x${string}`,
+        abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }],
+        functionName: "balanceOf",
+        args: [address as `0x${string}`],
+      }) as bigint;
+      walletUsdcBalance = formatUnits(raw, 6);
+    } catch {}
+    // Total = vault balance + USDC sitting in Main Wallet
+    const total = (parseFloat(vaultBalance) + parseFloat(walletUsdcBalance)).toFixed(6);
+    return { address, balance: total, vaultBalance, walletUsdcBalance };
   });
 
   // GET /vault/nonce/:address — user's current nonce for signing bets
