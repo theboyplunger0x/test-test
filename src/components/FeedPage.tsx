@@ -140,18 +140,11 @@ export default function FeedPage() {
   // Signing uses Privy embedded wallet (no MetaMask popup needed).
   const vault = useVault(walletAddr, user?.wallet_address, wallet.getEmbeddedProvider);
 
-  // Wallet connection state for Real mode UX.
-  // If the primary wallet is a Privy embedded wallet, MetaMask mismatch is irrelevant
-  // because the embedded wallet signs via Privy's iframe, not window.ethereum.
+  // Wallet connection state — simplified for Main Wallet architecture.
+  // If the user has a primaryWallet (from DB), they can always sign via Privy embedded.
+  // No dependency on browser wallet (MetaMask) state.
   const primaryWallet = user?.wallet_address ?? null;
-  const isEmbeddedPrimary = wallet.isEmbeddedWallet ||
-    (primaryWallet && wallet.privyAuthenticated && !walletAddr);
-  const walletState: "no_wallet" | "linked_connected" | "linked_disconnected" | "wrong_wallet" =
-    !primaryWallet ? "no_wallet" :
-    isEmbeddedPrimary ? "linked_connected" : // embedded wallets are always "connected" via Privy
-    !walletAddr ? "linked_disconnected" :
-    walletAddr.toLowerCase() === primaryWallet.toLowerCase() ? "linked_connected" :
-    "wrong_wallet";
+  const walletState: "no_wallet" | "linked_connected" = !primaryWallet ? "no_wallet" : "linked_connected";
   const canSignOnChain = walletState === "linked_connected";
   const [markets, setMarkets]           = useState<Market[]>([]);
   const [shakingIds, setShakingIds]     = useState<Set<string>>(new Set());
@@ -535,9 +528,7 @@ export default function FeedPage() {
     let signature: string | undefined;
     let sigWallet: string | undefined;
     if (isReal) {
-      if (walletState === "no_wallet") return "Link a wallet to bet in Real mode.";
-      if (walletState === "linked_disconnected") return "Reconnect your linked wallet to trade.";
-      if (walletState === "wrong_wallet") return `Switch to your linked wallet (${primaryWallet?.slice(0, 6)}...${primaryWallet?.slice(-4)}) to trade.`;
+      if (!primaryWallet) return "Set up your account to trade.";
       const onchainId = onchainMarketIdOverride ?? markets.find(m => m.id === id)?.onchain_market_id;
       if (onchainId == null) return "This market has no on-chain ID — cannot sign bet. Try creating a new market.";
       const sig = await vault.signBet(onchainId, side, amount);
@@ -731,7 +722,7 @@ export default function FeedPage() {
     if (parseFloat(vault.vaultBalance || "0") < amount) return "Insufficient balance.";
     // Pre-validate: can we sign? Don't create market if signing will fail.
     if (walletState === "no_wallet") return "Link a wallet to trade.";
-    if (walletState === "linked_disconnected" && !isEmbeddedPrimary) return "Reconnect your wallet to trade.";
+    if (!primaryWallet) return "Set up your account to trade.";
     if (!vault.config) return "Vault not ready — try again in a moment.";
     const sym = selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol ?? chartModalInfo?.symbol ?? tokenModalInfo?.symbol;
     if (!sym) return "No coin selected.";
@@ -1000,20 +991,7 @@ export default function FeedPage() {
         </div>
       )}
 
-      {/* Wallet mismatch banner — only for EXTERNAL trading wallets (not embedded) */}
-      {user && isReal && walletState === "wrong_wallet" && primaryWallet && !isEmbeddedPrimary && (
-        <div className={`px-5 py-3 border-b flex items-center gap-3 ${dk ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-100"}`}>
-          <span className="text-[18px] shrink-0">⚠️</span>
-          <div className="flex-1 min-w-0">
-            <p className={`text-[12px] font-black ${dk ? "text-white" : "text-gray-900"}`}>
-              Wrong MetaMask wallet selected
-            </p>
-            <p className={`text-[11px] font-bold mt-0.5 ${dk ? "text-white/50" : "text-gray-500"}`}>
-              Switch MetaMask to {primaryWallet.slice(0, 6)}...{primaryWallet.slice(-4)} to trade or withdraw.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* No wallet mismatch banner needed — Main Wallet architecture means one stable wallet per account */}
 
       {/* Ticker */}
       <LiveTicker challenges={allChallenges} dk={dk} onViewToken={(symbol) => {

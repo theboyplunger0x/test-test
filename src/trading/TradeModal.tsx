@@ -73,7 +73,7 @@ export default function TradeModal({
     setError("");
     try {
       if (mode === "call") {
-        const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), paperMode && !isTestnet, coin.ca, isTestnet);
+        const market = await api.createMarket(coin.symbol, coin.chain, tf, tagline.trim(), false, coin.ca, false);
         if (onPlaceBet) {
           const err = await onPlaceBet(market.id, side, amount, market.onchain_market_id ?? undefined);
           if (err) throw new Error(err);
