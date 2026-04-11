@@ -23,7 +23,7 @@ const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address;
 const client = createPublicClient({ chain: baseSepolia, transport: http(RPC_URL) });
 
 // ─── Anti-abuse parameters ───────────────────────────────────────────────────
-const MIN_AUTO_CREDIT_USDC = 5;          // Ignore deposits < $5
+const MIN_AUTO_CREDIT_USDC = 1;          // Minimum $1 to avoid dust spam
 const MAX_DEPOSITS_PER_HOUR = 3;         // Per user
 const MAX_DEPOSITS_PER_DAY = 10;         // Per user
 const NEW_ACCOUNT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes

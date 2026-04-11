@@ -274,57 +274,8 @@ export default function AccountDrawer({
                                 On-chain
                               </span>
                             </div>
-                            {onVaultDeposit && onVaultWithdraw && (
-                              <div className="mt-2 space-y-2">
-                                <div className="flex gap-1.5">
-                                  <div className="relative flex-1">
-                                    <span className={`absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold ${dk ? "text-white/30" : "text-gray-400"}`}>$</span>
-                                    <input type="number" placeholder="amount" value={vaultAmt}
-                                      onChange={e => setVaultAmt(e.target.value)} min={0.01} step={0.01}
-                                      className={`w-full pl-5 pr-2 py-2 rounded-lg text-[12px] font-bold outline-none transition-all ${
-                                        dk ? "bg-white/[0.06] border border-white/10 text-white placeholder:text-white/20 focus:border-white/30"
-                                           : "bg-gray-50 border border-gray-200 text-gray-900 focus:border-gray-400"
-                                      }`} />
-                                  </div>
-                                  <button
-                                    disabled={vaultLoading || !vaultAmt || Number(vaultAmt) <= 0}
-                                    onClick={async () => {
-                                      setVaultLoading(true);
-                                      try { await onVaultDeposit(Number(vaultAmt)); setVaultAmt(""); }
-                                      catch (e: any) { alert(e.message ?? "Deposit failed"); }
-                                      finally { setVaultLoading(false); }
-                                    }}
-                                    className="px-3 py-2 rounded-lg text-[11px] font-black bg-emerald-500 hover:bg-emerald-400 text-white transition-all disabled:opacity-40 shrink-0">
-                                    {vaultLoading ? "…" : "Deposit"}
-                                  </button>
-                                  <button
-                                    disabled={vaultLoading || !vaultAmt || Number(vaultAmt) <= 0 || Number(vaultAmt) > parseFloat(vaultBalance)}
-                                    onClick={async () => {
-                                      setVaultLoading(true);
-                                      try { await onVaultWithdraw(Number(vaultAmt)); setVaultAmt(""); }
-                                      catch (e: any) { alert(e.message ?? "Withdraw failed"); }
-                                      finally { setVaultLoading(false); }
-                                    }}
-                                    className={`px-3 py-2 rounded-lg text-[11px] font-black transition-all disabled:opacity-40 shrink-0 ${
-                                      dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"
-                                    }`}>
-                                    {vaultLoading ? "…" : "Withdraw"}
-                                  </button>
-                                </div>
-                                <div className="grid grid-cols-4 gap-1">
-                                  {[5, 10, 25, 50].map(a => (
-                                    <button key={a} onClick={() => setVaultAmt(String(a))}
-                                      className={`py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                                        vaultAmt === String(a)
-                                          ? "bg-blue-500 text-white"
-                                          : dk ? "bg-white/[0.06] text-white/40 hover:bg-white/10" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                      }`}>${a}</button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                             <p className={`text-[10px] mt-1.5 ${dk ? "text-white/25" : "text-gray-400"}`}>
-                              Deposit USDC to the FUDVault to bet in Real mode. Withdraw anytime.
+                              Send USDC on Base to your FUD Wallet to fund your balance.
                             </p>
                           </div>
                         )}
@@ -349,30 +300,13 @@ export default function AccountDrawer({
                         {/* Manage */}
                         <div>
                           <p className={`text-[10px] font-black uppercase tracking-widest pb-2 ${dk ? "text-white/30" : "text-gray-400"}`}>Manage</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => wallet.linkAnother()}
-                              className={`px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
-                              Link another
-                            </button>
-                            {isEmbeddedWallet ? (
-                              // Embedded wallet is bound to the user's identity — you don't
-                              // "disconnect" it, you end the session. It returns on re-login.
-                              <button onClick={() => wallet.logoutPrivy()}
-                                className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-amber-500/20 hover:bg-amber-500/40 text-amber-400 transition-all">
-                                Sign out of wallet
-                              </button>
-                            ) : (
-                              <button onClick={() => wallet.disconnect()}
-                                className="px-3 py-2.5 rounded-lg text-[11px] font-black bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-all">
-                                Disconnect
-                              </button>
-                            )}
-                          </div>
-                          {isEmbeddedWallet && (
-                            <p className={`text-[10px] mt-2 ${dk ? "text-white/30" : "text-gray-400"}`}>
-                              Your embedded wallet stays linked to your account. Sign back in any time to recover it.
-                            </p>
-                          )}
+                          <button onClick={() => wallet.exportKey()}
+                            className={`w-full px-3 py-2.5 rounded-lg text-[11px] font-black transition-all ${dk ? "bg-white/10 hover:bg-white/20 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900"}`}>
+                            Export private key
+                          </button>
+                          <p className={`text-[10px] mt-2 ${dk ? "text-white/30" : "text-gray-400"}`}>
+                            Your FUD Wallet is linked to your account. Export the key to use it from another wallet app.
+                          </p>
                         </div>
                       </>
                     ) : (
