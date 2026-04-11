@@ -543,7 +543,9 @@ export default function FeedPage() {
       const sig = await vault.signBet(onchainId, side, amount);
       if (!sig) return "Signature rejected — bet not placed.";
       signature = sig;
-      sigWallet = walletAddr ?? undefined;
+      // Use the Main Wallet (primaryWallet) for the on-chain bet, not the browser wallet.
+      // For embedded wallets, walletAddr may be null but primaryWallet is always set.
+      sigWallet = primaryWallet ?? walletAddr ?? undefined;
     }
 
     try {
@@ -572,7 +574,7 @@ export default function FeedPage() {
   }
 
   // Filter markets by mode
-  const modeMarkets   = markets.filter(m => isTestnet ? !!m.is_testnet : !!m.is_paper === paperMode);
+  const modeMarkets   = markets.filter(m => !m.is_paper && !m.is_testnet);
   const allChallenges = modeMarkets
     .map(marketToChallenge)
     .sort((a, b) => (b.lastBetAt ?? 0) - (a.lastBetAt ?? 0));
@@ -580,7 +582,7 @@ export default function FeedPage() {
   // Open + non-expired markets for the current mode, sorted by recent bet activity.
   // Used by both the markets and sweep tabs (via MarketsScreen).
   const liveMarketsForView = markets
-    .filter(m => m.status === "open" && !!m.is_paper === paperMode && new Date(m.closes_at).getTime() > Date.now())
+    .filter(m => m.status === "open" && !m.is_paper && !m.is_testnet && new Date(m.closes_at).getTime() > Date.now())
     .sort((a, b) => new Date(b.last_bet_at ?? b.created_at).getTime() - new Date(a.last_bet_at ?? a.created_at).getTime());
   const tfFiltered    = allChallenges
     .filter(c => c.timeframe === selectedTf)
@@ -653,7 +655,6 @@ export default function FeedPage() {
     let market = markets.find(m =>
       m.symbol.toUpperCase() === token.symbol.toUpperCase() &&
       m.timeframe === timeframe && m.status === "open" &&
-      (m.is_paper === true) === paperMode &&
       new Date(m.closes_at).getTime() > Date.now()
     );
     if (!market) {
@@ -727,7 +728,11 @@ export default function FeedPage() {
     taglineInput?: string,
   ): Promise<string | null> {
     if (!user) { setAuthOpen(true); return "Please log in first."; }
-    if (!paperMode && !isTestnet && (isReal ? parseFloat(vault.vaultBalance || "0") : Number(user.balance_usd)) < amount) return "Insufficient balance.";
+    if (parseFloat(vault.vaultBalance || "0") < amount) return "Insufficient balance.";
+    // Pre-validate: can we sign? Don't create market if signing will fail.
+    if (walletState === "no_wallet") return "Link a wallet to trade.";
+    if (walletState === "linked_disconnected" && !isEmbeddedPrimary) return "Reconnect your wallet to trade.";
+    if (!vault.config) return "Vault not ready — try again in a moment.";
     const sym = selectedCoin ?? chartSymbol ?? tokenProfileToken?.symbol ?? chartModalInfo?.symbol ?? tokenModalInfo?.symbol;
     if (!sym) return "No coin selected.";
 
@@ -740,7 +745,7 @@ export default function FeedPage() {
 
     async function createFreshMarket() {
       const ca = selectedTokenInfo?.address ?? chartModalInfo?.address ?? tokenModalInfo?.address;
-      const created = await api.createMarket(sym!, ch, timeframe, autoTagline, paperMode && !isTestnet, ca, isTestnet);
+      const created = await api.createMarket(sym!, ch, timeframe, autoTagline, false, ca, false);
       if (!created) throw new Error("Failed to create market");
       setMarkets(prev => [created, ...prev]);
       return created;
@@ -750,7 +755,6 @@ export default function FeedPage() {
       m.symbol.toUpperCase() === sym.toUpperCase() &&
       m.timeframe === timeframe &&
       m.status === "open" &&
-      (m.is_paper === true) === paperMode &&
       new Date(m.closes_at).getTime() > Date.now()
     );
 
