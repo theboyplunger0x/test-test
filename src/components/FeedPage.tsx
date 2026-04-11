@@ -137,8 +137,8 @@ export default function FeedPage() {
   const wallet = usePrivyWallet();
   const { walletAddr, setWalletAddr, privyAuthenticated } = wallet;
   // Balance reads from user's Main Wallet in DB.
-  // Signing uses Privy embedded wallet (no MetaMask popup needed).
-  const vault = useVault(walletAddr, user?.wallet_address, wallet.getEmbeddedProvider);
+  // Signing uses Privy's native useSignTypedData (no MetaMask, no popup).
+  const vault = useVault(user?.wallet_address);
 
   // Wallet connection state — simplified for Main Wallet architecture.
   // If the user has a primaryWallet (from DB), they can always sign via Privy embedded.
@@ -1486,7 +1486,7 @@ export default function FeedPage() {
       </AnimatePresence>
       <AnimatePresence>
         {referralOpen && <ReferralModal dk={dk} isLoggedIn={!!user} onClose={() => setReferralOpen(false)} onSignIn={() => setAuthOpen(true)}
-          rewardBalance={vault.rewardBalance} onClaimOnChain={vault.claimRewardsOnChain} />}
+          rewardBalance={vault.rewardBalance}  />}
       </AnimatePresence>
 
       {/* Funding Modal — send USDC to fund account */}
@@ -1511,8 +1511,8 @@ export default function FeedPage() {
             vaultBalance={vault.vaultBalance}
             rewardBalance={vault.rewardBalance}
             walletAddr={walletAddr}
-            onWithdraw={async (amt) => { await vault.withdrawFromVault(amt); vault.refreshBalance(); }}
-            onClaimRewards={async () => { await vault.claimRewardsOnChain(); vault.refreshBalance(); }}
+            onWithdraw={async () => { /* TODO: gasless withdraw via backend withdrawBySig */ alert("Withdraw coming soon — use the backend API for now."); }}
+            onClaimRewards={async () => { /* TODO: gasless claim via backend */ alert("Claim coming soon."); }}
           />
         )}
       </AnimatePresence>
@@ -1535,8 +1535,8 @@ export default function FeedPage() {
         onOpenReferrals={() => setReferralOpen(true)}
         onLogout={handleLogout}
         vaultBalance={vault.vaultBalance}
-        onVaultDeposit={vault.depositToVault}
-        onVaultWithdraw={vault.withdrawFromVault}
+        
+        
       />
 
       {/* Portfolio drawer */}
@@ -1564,7 +1564,7 @@ export default function FeedPage() {
               <div className="flex-1 overflow-hidden flex flex-col">
                 <OrdersView dk={dk} balance={isReal ? vault.vaultBalance : user?.balance_usd} useExternalBalance={isReal} notificationsEnabled={notificationsEnabled} paperMode={paperMode}
                   rewardBalance={vault.rewardBalance}
-                  onClaimOnChain={vault.claimRewardsOnChain}
+                  
                   onOpenWalletDrawer={() => setWithdrawVaultOpen(true)}
                   onViewToken={(symbol) => {
                     setOrdersOpen(false);

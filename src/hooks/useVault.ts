@@ -1,12 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSignTypedData, usePrivy, useWallets } from "@privy-io/react-auth";
 import { api } from "@/lib/api";
 
-/**
- * Vault config from backend — describes the FUDVault contract on-chain.
- * Used to build EIP-712 domain for bet signing.
- */
 interface VaultConfig {
   address: string;
   chainId: number;
@@ -18,40 +15,34 @@ interface VaultConfig {
 /**
  * Hook for interacting with the FUDVault on-chain contract.
  *
- * Provides:
- * - Vault config (address, chainId, EIP-712 domain)
- * - On-chain USDC balance in the vault
- * - Nonce for EIP-712 signing
- * - signBet() — prompts the user's wallet to sign an EIP-712 bet message
+ * Uses Privy's native useSignTypedData for EIP-712 signing —
+ * works with embedded wallets without MetaMask or popups.
  *
- * The actual deposit/withdraw is done directly by the user calling the
- * contract from their wallet (via Privy or MetaMask). This hook only
- * handles the read operations and bet signing.
+ * @param userWalletAddr — the user's Main Wallet from DB (for reading balance)
  */
-/**
- * @param walletAddr — connected browser wallet (legacy, for deposit/withdraw direct txs)
- * @param userWalletAddr — the user's Main Wallet from DB (for reading balance + signing)
- * @param getEmbeddedProvider — function to get the Privy embedded wallet's ethereum provider
- */
-export function useVault(
-  walletAddr: string | null,
-  userWalletAddr?: string | null,
-  getEmbeddedProvider?: () => Promise<any> | null,
-) {
-  // For reading balances, prefer the user's linked wallet (consistent per account)
-  // For signing txs, use the connected browser wallet
-  const balanceAddr = userWalletAddr || walletAddr;
+export function useVault(userWalletAddr?: string | null) {
+  const balanceAddr = userWalletAddr ?? null;
+
   const [config, setConfig] = useState<VaultConfig | null>(null);
   const [vaultBalance, setVaultBalance] = useState<string>("0");
   const [rewardBalance, setRewardBalance] = useState<string>("0");
   const [nonce, setNonce] = useState<string>("0");
+
+  // Privy hooks for signing
+  const { ready: privyReady, authenticated } = usePrivy();
+  const { ready: walletsReady, wallets } = useWallets();
+  const { signTypedData } = useSignTypedData();
+
+  // Find the embedded wallet
+  const embeddedWallet = wallets.find(w => w.walletClientType === "privy") ?? null;
+  const canSign = privyReady && walletsReady && authenticated && !!embeddedWallet;
 
   // Load vault config once
   useEffect(() => {
     api.vaultConfig().then(setConfig).catch(() => {});
   }, []);
 
-  // Poll vault balance + reward balance using the user's linked wallet.
+  // Poll vault balance + reward balance using the user's Main Wallet.
   useEffect(() => {
     if (!balanceAddr) { setVaultBalance("0"); setRewardBalance("0"); return; }
     const load = () => {
@@ -65,70 +56,45 @@ export function useVault(
 
   // Fetch nonce when wallet changes
   useEffect(() => {
-    if (!walletAddr) { setNonce("0"); return; }
-    api.vaultNonce(walletAddr).then(r => setNonce(r.nonce)).catch(() => {});
-  }, [walletAddr]);
+    if (!balanceAddr) { setNonce("0"); return; }
+    api.vaultNonce(balanceAddr).then(r => setNonce(r.nonce)).catch(() => {});
+  }, [balanceAddr]);
 
   /**
-   * Sign a bet using EIP-712 via the user's connected wallet.
-   * Returns the signature hex string, or null if the user rejected.
-   *
-   * The signed message is then sent to POST /markets/:id/bet along with
-   * the `signature` and `wallet_address` fields.
-   */
-  /**
-   * Sign a bet using EIP-712 via the user's Main Wallet.
-   * Prefers Privy embedded wallet provider (gasless, no popup).
-   * Falls back to window.ethereum (MetaMask) if embedded not available.
+   * Sign a bet using Privy's native useSignTypedData.
+   * Works with embedded wallets — no MetaMask, no popups, invisible to user.
    */
   const signBet = useCallback(async (
     marketId: number,
     side: "long" | "short",
     amountUsdc: number,
   ): Promise<string | null> => {
-    const signerAddr = balanceAddr; // Main Wallet address
-    if (!signerAddr || !config) return null;
-
-    // Get the signing provider — Privy embedded wallet (no MetaMask needed)
-    let provider: any = null;
-    if (getEmbeddedProvider) {
-      try {
-        provider = await getEmbeddedProvider();
-      } catch (e) {
-        console.error("[vault] Failed to get embedded provider:", e);
-      }
-    }
-    // Fallback to window.ethereum only if embedded unavailable
-    if (!provider) {
-      console.warn("[vault] No embedded provider, trying window.ethereum");
-      provider = (window as any).ethereum;
-      if (provider) {
-        try { await ensureBaseSepoliaChain(provider); } catch (e) {
-          console.error("[vault] Chain switch failed:", e);
-          return null;
-        }
-      }
-    }
-    if (!provider) {
-      console.error("[vault] No signing provider available");
+    const signerAddr = balanceAddr;
+    if (!signerAddr || !config) {
+      console.error("[vault] Cannot sign: no signer address or config");
       return null;
     }
-    console.log("[vault] Signing with provider, signer:", signerAddr?.slice(0, 10));
+
+    if (!canSign) {
+      console.error("[vault] Cannot sign: Privy not ready or no embedded wallet", {
+        privyReady, walletsReady, authenticated,
+        embeddedWallet: !!embeddedWallet,
+        walletTypes: wallets.map(w => w.walletClientType),
+      });
+      return null;
+    }
+
+    const amountRaw = BigInt(Math.round(amountUsdc * 1_000_000)).toString();
+    const sideEnum = side === "long" ? 0 : 1;
 
     const domain = {
       name: config.name,
       version: config.version,
       chainId: config.chainId,
-      verifyingContract: config.address,
+      verifyingContract: config.address as `0x${string}`,
     };
 
     const types = {
-      EIP712Domain: [
-        { name: "name", type: "string" },
-        { name: "version", type: "string" },
-        { name: "chainId", type: "uint256" },
-        { name: "verifyingContract", type: "address" },
-      ],
       Bet: [
         { name: "marketId", type: "uint256" },
         { name: "user", type: "address" },
@@ -138,177 +104,35 @@ export function useVault(
       ],
     };
 
-    const amountRaw = BigInt(Math.round(amountUsdc * 1_000_000)).toString();
-    const sideEnum = side === "long" ? 0 : 1;
-
     const message = {
-      marketId: marketId.toString(),
-      user: signerAddr,
-      side: sideEnum.toString(),
-      amount: amountRaw,
-      nonce: nonce,
+      marketId: BigInt(marketId),
+      user: signerAddr as `0x${string}`,
+      side: sideEnum,
+      amount: BigInt(amountRaw),
+      nonce: BigInt(nonce),
     };
 
     try {
-      const msgParams = JSON.stringify({
+      console.log("[vault] Signing bet with Privy embedded wallet...");
+      const { signature } = await signTypedData({
+        domain,
         types,
         primaryType: "Bet",
-        domain,
         message,
+      }, {
+        address: signerAddr,
       });
 
-      const signature: string = await provider.request({
-        method: "eth_signTypedData_v4",
-        params: [signerAddr, msgParams],
-      });
-
+      // Increment local nonce optimistically
       setNonce(n => (BigInt(n) + BigInt(1)).toString());
+
+      console.log("[vault] Signature obtained:", signature.slice(0, 20) + "...");
       return signature;
-    } catch {
+    } catch (e) {
+      console.error("[vault] Privy signTypedData failed:", e);
       return null;
     }
-  }, [balanceAddr, config, nonce, getEmbeddedProvider]);
-
-  // USDC contract address on Base Sepolia
-  const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-  // Base Sepolia chainId
-  const BASE_SEPOLIA_CHAIN_ID = 84532;
-
-  // ERC-20 ABI fragments for approve + deposit + withdraw
-  const ERC20_APPROVE_ABI = "function approve(address spender, uint256 amount) returns (bool)";
-  const VAULT_DEPOSIT_ABI = "function deposit(uint256 amount)";
-  const VAULT_WITHDRAW_ABI = "function withdraw(uint256 amount)";
-
-  /** Ensure the wallet is on Base Sepolia before sending a tx. */
-  async function ensureBaseSepoliaChain(ethereum: any) {
-    const chainIdHex = await ethereum.request({ method: "eth_chainId" });
-    const currentChain = parseInt(chainIdHex, 16);
-    if (currentChain === BASE_SEPOLIA_CHAIN_ID) return;
-    try {
-      await ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x" + BASE_SEPOLIA_CHAIN_ID.toString(16) }],
-      });
-    } catch (switchError: any) {
-      // Chain not added — add it
-      if (switchError.code === 4902) {
-        await ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: "0x" + BASE_SEPOLIA_CHAIN_ID.toString(16),
-            chainName: "Base Sepolia",
-            nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-            rpcUrls: ["https://sepolia.base.org"],
-            blockExplorerUrls: ["https://sepolia.basescan.org"],
-          }],
-        });
-      } else {
-        throw switchError;
-      }
-    }
-  }
-
-  /**
-   * Deposit USDC into the FUDVault contract.
-   * Steps: approve USDC → call vault.deposit().
-   * Both txs prompted to the user's wallet.
-   */
-  const depositToVault = useCallback(async (amountUsdc: number) => {
-    if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) throw new Error("No wallet found");
-
-    await ensureBaseSepoliaChain(ethereum);
-
-    const amountRaw = "0x" + BigInt(Math.round(amountUsdc * 1_000_000)).toString(16);
-
-    // 1. Approve USDC spend
-    const iface = new (await import("ethers")).Interface([ERC20_APPROVE_ABI]);
-    const approveData = iface.encodeFunctionData("approve", [config.address, amountRaw]);
-    await ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: walletAddr,
-        to: USDC_ADDRESS,
-        data: approveData,
-      }],
-    });
-
-    // Small delay to let the approval propagate
-    await new Promise(r => setTimeout(r, 2000));
-
-    // 2. Deposit to vault
-    const vaultIface = new (await import("ethers")).Interface([VAULT_DEPOSIT_ABI]);
-    const depositData = vaultIface.encodeFunctionData("deposit", [amountRaw]);
-    await ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: walletAddr,
-        to: config.address,
-        data: depositData,
-      }],
-    });
-
-    // Refresh balance after a short delay
-    setTimeout(() => {
-      if (walletAddr) api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
-    }, 5000);
-  }, [walletAddr, config]);
-
-  /**
-   * Withdraw USDC from the FUDVault contract back to wallet.
-   */
-  const withdrawFromVault = useCallback(async (amountUsdc: number) => {
-    if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) throw new Error("No wallet found");
-
-    await ensureBaseSepoliaChain(ethereum);
-
-    const amountRaw = "0x" + BigInt(Math.round(amountUsdc * 1_000_000)).toString(16);
-
-    const vaultIface = new (await import("ethers")).Interface([VAULT_WITHDRAW_ABI]);
-    const withdrawData = vaultIface.encodeFunctionData("withdraw", [amountRaw]);
-    await ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: walletAddr,
-        to: config.address,
-        data: withdrawData,
-      }],
-    });
-
-    setTimeout(() => {
-      if (walletAddr) api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
-    }, 5000);
-  }, [walletAddr, config]);
-
-  /**
-   * Claim all accrued rewards from the vault contract to the user's wallet.
-   * This is a direct user tx (not operator-mediated).
-   */
-  const claimRewardsOnChain = useCallback(async () => {
-    if (!walletAddr || !config) throw new Error("Wallet or vault not ready");
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) throw new Error("No wallet found");
-
-    await ensureBaseSepoliaChain(ethereum);
-
-    const vaultIface = new (await import("ethers")).Interface(["function claimRewards()"]);
-    const data = vaultIface.encodeFunctionData("claimRewards", []);
-    await ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{ from: walletAddr, to: config.address, data }],
-    });
-
-    // Refresh balances after claim
-    setTimeout(() => {
-      if (walletAddr) {
-        api.vaultBalance(walletAddr).then(r => setVaultBalance(r.balance)).catch(() => {});
-        api.vaultRewards(walletAddr).then(r => setRewardBalance(r.rewards)).catch(() => {});
-      }
-    }, 5000);
-  }, [walletAddr, config]);
+  }, [balanceAddr, config, nonce, canSign, signTypedData, wallets]);
 
   const refreshBalance = useCallback(() => {
     const addr = balanceAddr;
@@ -322,10 +146,8 @@ export function useVault(
     vaultBalance,
     rewardBalance,
     nonce,
+    canSign,
     signBet,
-    depositToVault,
-    withdrawFromVault,
-    claimRewardsOnChain,
     refreshBalance,
   };
 }
