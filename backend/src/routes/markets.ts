@@ -30,20 +30,16 @@ export async function marketRoutes(app: FastifyInstance) {
 
   // GET /markets/debates — contested markets with top callers on each side
   app.get("/markets/debates", async (req, reply) => {
-    const { paper } = req.query as any;
-    const isPaper = paper === "true";
     // Find open markets where both pools > 0 and ratio between 30/70
     const { rows: markets } = await db.query(
       `SELECT m.*, u.username AS opener_username, u.avatar_url AS opener_avatar, u.tier AS opener_tier
        FROM markets m
        JOIN users u ON m.opener_id = u.id
        WHERE m.status = 'open'
-         AND m.is_paper = $1
          AND m.long_pool > 0 AND m.short_pool > 0
          AND LEAST(m.long_pool, m.short_pool) / GREATEST(m.long_pool, m.short_pool) >= 0.3
        ORDER BY (m.long_pool + m.short_pool) DESC
-       LIMIT 20`,
-      [isPaper]
+       LIMIT 20`
     );
     // For each market, get the top caller on each side (highest amount with a message)
     const debates = [];
@@ -80,7 +76,7 @@ export async function marketRoutes(app: FastifyInstance) {
 
   // POST /markets — open a new market (authenticated)
   app.post("/markets", { preHandler: [(app as any).authenticate] }, async (req, reply) => {
-    const { symbol, chain, timeframe, tagline, paper = false, testnet = false, ca } = req.body as any;
+    const { symbol, chain, timeframe, tagline, ca } = req.body as any;
     const user = (req as any).user;
 
     if (!VALID_TIMEFRAMES.includes(timeframe)) {
@@ -122,26 +118,20 @@ export async function marketRoutes(app: FastifyInstance) {
 
     const closesAt = nextWindowClose(timeframe as Timeframe);
 
-    const isPaper = !!paper;
-    const isTestnet = !!testnet;
-    const isRealMode = !isPaper && !isTestnet;
-
-    // Create on-chain market for Real mode (fire-and-forget with fallback)
+    // Create on-chain market (fire-and-forget with fallback)
     let onchainMarketId: bigint | null = null;
-    if (isRealMode) {
-      try {
-        const closesAtUnix = Math.floor(closesAt.getTime() / 1000);
-        onchainMarketId = await createMarketOnChain(closesAtUnix, entryPrice);
-      } catch (e: any) {
-        console.error("[vault] Failed to create on-chain market:", e.message);
-        // Continue with DB-only — on-chain is best-effort in MVP
-      }
+    try {
+      const closesAtUnix = Math.floor(closesAt.getTime() / 1000);
+      onchainMarketId = await createMarketOnChain(closesAtUnix, entryPrice);
+    } catch (e: any) {
+      console.error("[vault] Failed to create on-chain market:", e.message);
+      // Continue with DB-only — on-chain is best-effort in MVP
     }
 
     const { rows } = await db.query(
       `INSERT INTO markets (symbol, chain, timeframe, entry_price, tagline, opener_id, closes_at, is_paper, is_testnet, ca, onchain_market_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, isPaper, isTestnet, ca ?? null, onchainMarketId !== null ? Number(onchainMarketId) : null]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, $8, $9) RETURNING *`,
+      [symbol.toUpperCase(), chain, timeframe, entryPrice, tagline ?? "", user.userId, closesAt, ca ?? null, onchainMarketId !== null ? Number(onchainMarketId) : null]
     );
     const newMarket = rows[0];
     scheduleResolution(newMarket.id, new Date(newMarket.closes_at));
@@ -171,11 +161,7 @@ export async function marketRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Market has expired" });
       }
 
-      // Use market's is_paper/is_testnet to pick balance column — clients can't override this
-      const isPaper        = !!market.is_paper;
-      const isTestnet      = !!market.is_testnet;
-
-      const isRealOnChain = !isPaper && !isTestnet && market.onchain_market_id != null;
+      const isRealOnChain = market.onchain_market_id != null;
 
       // Real mode with on-chain market: signature is MANDATORY, not optional.
       // Without a valid signature, the contract can't execute the bet.
@@ -185,22 +171,19 @@ export async function marketRoutes(app: FastifyInstance) {
       }
 
       let userRow: any;
-      if (isTestnet || isRealOnChain) {
-        // Testnet: GEN moves via MetaMask, don't check/deduct DB balance.
+      if (isRealOnChain) {
         // Real on-chain: balance lives in FUDVault contract, not in DB.
         const { rows: [u] } = await client.query(
-          `SELECT balance_usd, paper_balance_usd, testnet_balance_gen FROM users WHERE id = $1`, [user.userId]
+          `SELECT balance_usd FROM users WHERE id = $1`, [user.userId]
         );
         userRow = u;
       } else {
-        const balanceCol     = isPaper ? "paper_balance_usd" : "balance_usd";
-        const insufficientMsg = isPaper ? "Insufficient paper balance" : "Insufficient balance";
         const { rows: [u] } = await client.query(
-          `UPDATE users SET ${balanceCol} = ${balanceCol} - $1
-           WHERE id = $2 AND ${balanceCol} >= $1 RETURNING balance_usd, paper_balance_usd, testnet_balance_gen`,
+          `UPDATE users SET balance_usd = balance_usd - $1
+           WHERE id = $2 AND balance_usd >= $1 RETURNING balance_usd`,
           [amount, user.userId]
         );
-        if (!u) return reply.status(400).send({ error: insufficientMsg });
+        if (!u) return reply.status(400).send({ error: "Insufficient balance" });
         userRow = u;
       }
 
@@ -236,17 +219,17 @@ export async function marketRoutes(app: FastifyInstance) {
 
       // Record position
       const { rows: [position] } = await client.query(
-        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message, faded_position_id, onchain_tx) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [user.userId, id, side, amount, isPaper, isTestnet, message?.trim() || null, faded_position_id || null, onchainTx]
+        `INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message, faded_position_id, onchain_tx) VALUES ($1, $2, $3, $4, false, false, $5, $6, $7) RETURNING *`,
+        [user.userId, id, side, amount, message?.trim() || null, faded_position_id || null, onchainTx]
       );
 
       await client.query("COMMIT");
 
-      // Fire-and-forget tier check for real bets
-      if (!isPaper) checkAndUpgradeTier(user.userId).catch(() => {});
+      // Fire-and-forget tier check
+      checkAndUpgradeTier(user.userId).catch(() => {});
 
       // Fire-and-forget: notify followers who subscribed to this user's trades
-      if (!isPaper) {
+      {
         (async () => {
           try {
             const { rows: followers } = await db.query(
@@ -274,9 +257,7 @@ export async function marketRoutes(app: FastifyInstance) {
 
       return reply.status(201).send({
         position,
-        new_balance:       userRow.balance_usd,
-        new_paper_balance: userRow.paper_balance_usd,
-        new_testnet_balance: userRow.testnet_balance_gen,
+        new_balance: userRow.balance_usd,
       });
     } catch (err) {
       await client.query("ROLLBACK");
@@ -316,7 +297,7 @@ export async function marketRoutes(app: FastifyInstance) {
         [exitPrice, winnerSide, id]
       );
 
-      // Credit winning positions — respect is_paper on each position
+      // Credit winning positions
       const { rows: winners } = await client.query(
         `SELECT * FROM positions WHERE market_id = $1 AND side = $2`, [id, winnerSide]
       );
@@ -325,9 +306,8 @@ export async function marketRoutes(app: FastifyInstance) {
         await client.query(
           `UPDATE positions SET payout = $1 WHERE id = $2`, [payout, pos.id]
         );
-        const col = pos.is_paper ? "paper_balance_usd" : "balance_usd";
         await client.query(
-          `UPDATE users SET ${col} = ${col} + $1 WHERE id = $2`, [payout, pos.user_id]
+          `UPDATE users SET balance_usd = balance_usd + $1 WHERE id = $2`, [payout, pos.user_id]
         );
       }
 
@@ -401,8 +381,7 @@ export async function marketRoutes(app: FastifyInstance) {
   // GET /positions/symbol/:symbol — bid history for a token (open + recent closed)
   app.get("/positions/symbol/:symbol", async (req, reply) => {
     const { symbol } = req.params as any;
-    const { paper, username } = req.query as any;
-    const isPaper = paper === "true";
+    const { username } = req.query as any;
 
     if (username) {
       // caller × token view
@@ -433,18 +412,16 @@ export async function marketRoutes(app: FastifyInstance) {
        FROM positions p
        JOIN users u ON p.user_id = u.id
        JOIN markets m ON p.market_id = m.id
-       WHERE m.symbol ILIKE $1 AND p.is_paper = $2
+       WHERE m.symbol ILIKE $1
        ORDER BY p.placed_at DESC
        LIMIT 80`,
-      [symbol, isPaper]
+      [symbol]
     );
     return rows;
   });
 
   // GET /positions/recent — latest positions with messages for the tape
   app.get("/positions/recent", async (req, reply) => {
-    const { paper } = req.query as any;
-    const isPaper = paper === "true";
     const { rows } = await db.query(
       `SELECT p.id, p.side, p.amount, p.message, p.placed_at, p.is_paper,
               u.username, u.avatar_url, u.tier,
@@ -456,10 +433,8 @@ export async function marketRoutes(app: FastifyInstance) {
        JOIN markets m ON p.market_id = m.id
        WHERE p.placed_at > NOW() - INTERVAL '24 hours'
          AND p.message IS NOT NULL AND p.message != ''
-         AND p.is_paper = $1
        ORDER BY p.placed_at DESC
-       LIMIT 60`,
-      [isPaper]
+       LIMIT 60`
     );
     return rows;
   });

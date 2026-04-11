@@ -15,9 +15,8 @@ export async function orderRoutes(app: FastifyInstance) {
     const { symbol, chain } = req.query as any;
     if (!symbol) return reply.status(400).send({ error: "symbol required" });
 
-    const isPaper = (req.query as any).paper === "true";
-    const params: any[] = [symbol.toUpperCase(), isPaper];
-    let paramIdx = 3;
+    const params: any[] = [symbol.toUpperCase()];
+    let paramIdx = 2;
     const chainClause = chain ? `AND UPPER(o.chain) = UPPER($${paramIdx++})` : "";
     if (chain) params.push(chain);
 
@@ -28,7 +27,6 @@ export async function orderRoutes(app: FastifyInstance) {
       FROM orders o
       JOIN users u ON u.id = o.user_id
       WHERE UPPER(o.symbol) = $1
-        AND o.is_paper = $2
         ${chainClause}
         AND o.status IN ('pending', 'partially_filled')
         AND (o.expires_at IS NULL OR o.expires_at > NOW())
@@ -127,10 +125,8 @@ export async function orderRoutes(app: FastifyInstance) {
       }
     }
 
-    const isPaper     = items[0].is_paper ?? false;
-    const isTestnet   = items[0].is_testnet ?? false;
     const totalAmount = items.reduce((s: number, i: any) => s + parseFloat(i.amount), 0);
-    const balanceCol  = isTestnet ? "testnet_balance_gen" : isPaper ? "paper_balance_usd" : "balance_usd";
+    const balanceCol  = "balance_usd";
 
     const client = await db.connect();
     try {
@@ -164,7 +160,7 @@ export async function orderRoutes(app: FastifyInstance) {
           INSERT INTO orders
             (user_id, symbol, chain, ca, timeframe, side, amount, remaining_amount, reserved_amount,
              is_paper, is_testnet, auto_reopen, expires_at, tagline)
-          VALUES ($1, UPPER($2), UPPER($3), $4, $5, $6, $7, $7, $7, $8, $9, $10, $11, $12)
+          VALUES ($1, UPPER($2), UPPER($3), $4, $5, $6, $7, $7, $7, false, false, $8, $9, $10)
           RETURNING *
         `, [
           user.userId,
@@ -174,8 +170,6 @@ export async function orderRoutes(app: FastifyInstance) {
           item.timeframe,
           item.side,
           amt,
-          isPaper,
-          isTestnet,
           item.auto_reopen ?? false,
           item.expires_at  ?? null,
           item.tagline     ?? "",
@@ -184,15 +178,13 @@ export async function orderRoutes(app: FastifyInstance) {
       }
 
       const { rows: [updated] } = await client.query(
-        `SELECT balance_usd, paper_balance_usd, testnet_balance_gen FROM users WHERE id = $1`, [user.userId]
+        `SELECT balance_usd FROM users WHERE id = $1`, [user.userId]
       );
 
       await client.query("COMMIT");
       return reply.status(201).send({
-        orders:            created,
-        new_balance:       updated.balance_usd,
-        new_paper_balance: updated.paper_balance_usd,
-        new_testnet_balance: updated.testnet_balance_gen,
+        orders:      created,
+        new_balance: updated.balance_usd,
       });
     } catch (err) {
       await client.query("ROLLBACK");
@@ -242,24 +234,21 @@ export async function orderRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Not your order" });
       }
 
-      const balanceCol = order.is_testnet ? "testnet_balance_gen" : order.is_paper ? "paper_balance_usd" : "balance_usd";
       await client.query(
-        `UPDATE users SET ${balanceCol} = ${balanceCol} + $1 WHERE id = $2`,
+        `UPDATE users SET balance_usd = balance_usd + $1 WHERE id = $2`,
         [order.reserved_amount, user.userId]
       );
       await client.query(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [id]);
 
       const { rows: [updated] } = await client.query(
-        `SELECT balance_usd, paper_balance_usd, testnet_balance_gen FROM users WHERE id = $1`, [user.userId]
+        `SELECT balance_usd FROM users WHERE id = $1`, [user.userId]
       );
 
       await client.query("COMMIT");
       return {
-        ok:                true,
-        refunded:          order.reserved_amount,
-        new_balance:       updated.balance_usd,
-        new_paper_balance: updated.paper_balance_usd,
-        new_testnet_balance: updated.testnet_balance_gen,
+        ok:          true,
+        refunded:    order.reserved_amount,
+        new_balance: updated.balance_usd,
       };
     } catch (err) {
       await client.query("ROLLBACK");
@@ -285,8 +274,6 @@ export async function orderRoutes(app: FastifyInstance) {
       symbol, chain, timeframe,
       side: takerSide,
       amount: rawAmount,
-      is_paper = false,
-      is_testnet = false,
       message: takerMessage,
     } = req.body as any;
 
@@ -303,8 +290,7 @@ export async function orderRoutes(app: FastifyInstance) {
     const takerWants = parseFloat(rawAmount);
     if (takerWants <= 0) return reply.status(400).send({ error: "amount must be > 0" });
 
-    const makerSide  = takerSide === "long" ? "short" : "long";
-    const balanceCol = is_testnet ? "testnet_balance_gen" : is_paper ? "paper_balance_usd" : "balance_usd";
+    const makerSide = takerSide === "long" ? "short" : "long";
 
     const client = await db.connect();
     try {
@@ -312,11 +298,11 @@ export async function orderRoutes(app: FastifyInstance) {
 
       // Lock taker balance
       const { rows: [takerRow] } = await client.query(
-        `SELECT ${balanceCol} FROM users WHERE id = $1 FOR UPDATE`, [taker.userId]
+        `SELECT balance_usd FROM users WHERE id = $1 FOR UPDATE`, [taker.userId]
       );
       if (!takerRow) { await client.query("ROLLBACK"); return reply.status(404).send({ error: "User not found" }); }
 
-      const takerBalance = parseFloat(takerRow[balanceCol]);
+      const takerBalance = parseFloat(takerRow.balance_usd);
       const takerAmount  = Math.min(takerWants, takerBalance);
       if (takerAmount <= 0) {
         await client.query("ROLLBACK");
@@ -332,12 +318,11 @@ export async function orderRoutes(app: FastifyInstance) {
           AND o.timeframe     = $3
           AND o.side          = $4
           AND o.status       IN ('pending', 'partially_filled')
-          AND o.is_paper      = $5
-          AND o.user_id      != $6
+          AND o.user_id      != $5
           AND (o.expires_at IS NULL OR o.expires_at > NOW())
         ORDER BY o.created_at ASC
         FOR UPDATE
-      `, [symbol, chain, timeframe, makerSide, is_paper, taker.userId]);
+      `, [symbol, chain, timeframe, makerSide, taker.userId]);
 
       if (makerOrders.length === 0) {
         await client.query("ROLLBACK");
@@ -375,25 +360,25 @@ export async function orderRoutes(app: FastifyInstance) {
         INSERT INTO markets
           (symbol, chain, timeframe, entry_price, tagline, opener_id,
            short_pool, long_pool, closes_at, is_paper, is_testnet, sweep_id)
-        VALUES (UPPER($1), UPPER($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES (UPPER($1), UPPER($2), $3, $4, $5, $6, $7, $8, $9, false, false, $10)
         RETURNING *
       `, [
         symbol, chain, timeframe, entryPrice,
         `${symbol.toUpperCase()} order book — ${takerSide.toUpperCase()} sweep`,
         taker.userId,
         shortPool, longPool,
-        closesAt, is_paper, is_testnet, sweepId,
+        closesAt, sweepId,
       ]);
 
       // Deduct taker balance + create taker position
       await client.query(
-        `UPDATE users SET ${balanceCol} = ${balanceCol} - $1 WHERE id = $2`,
+        `UPDATE users SET balance_usd = balance_usd - $1 WHERE id = $2`,
         [fillAmount, taker.userId]
       );
       await client.query(`
         INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [taker.userId, market.id, takerSide, fillAmount, is_paper, is_testnet, takerMessage?.trim() || null]);
+        VALUES ($1, $2, $3, $4, false, false, $5)
+      `, [taker.userId, market.id, takerSide, fillAmount, takerMessage?.trim() || null]);
 
       // Process maker orders — ALL go into the market (mark filled, create positions + fills)
       let remaining = fillAmount;
@@ -410,8 +395,8 @@ export async function orderRoutes(app: FastifyInstance) {
         // Insert maker position for their full remaining amount (use order tagline as message)
         await client.query(`
           INSERT INTO positions (user_id, market_id, side, amount, is_paper, is_testnet, message)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [order.user_id, market.id, makerSide, orderAmt, is_paper, is_testnet, order.tagline?.trim() || null]);
+          VALUES ($1, $2, $3, $4, false, false, $5)
+        `, [order.user_id, market.id, makerSide, orderAmt, order.tagline?.trim() || null]);
 
         // Record the fill (tracks which makers are in this sweep)
         await client.query(`
@@ -437,7 +422,7 @@ export async function orderRoutes(app: FastifyInstance) {
       const makerMultiplier = parseFloat(calcMultiplier(makerPoolTotal, fillAmount).toFixed(4));
 
       const { rows: [updated] } = await db.query(
-        `SELECT balance_usd, paper_balance_usd, testnet_balance_gen FROM users WHERE id = $1`, [taker.userId]
+        `SELECT balance_usd FROM users WHERE id = $1`, [taker.userId]
       );
 
       // Fire-and-forget: notify each maker their order was filled
@@ -473,8 +458,6 @@ export async function orderRoutes(app: FastifyInstance) {
         taker_multiplier:  takerMultiplier,
         maker_multiplier:  makerMultiplier,
         new_balance:       updated.balance_usd,
-        new_paper_balance: updated.paper_balance_usd,
-        new_testnet_balance: updated.testnet_balance_gen,
       });
     } catch (err) {
       await client.query("ROLLBACK");
