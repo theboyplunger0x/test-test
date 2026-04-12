@@ -742,13 +742,14 @@ export default function FeedPage() {
       return created;
     }
 
-    let market = markets.find(m =>
+    const existingMarket = markets.find(m =>
       m.symbol.toUpperCase() === sym.toUpperCase() &&
       m.timeframe === timeframe &&
       m.status === "open" &&
       new Date(m.closes_at).getTime() > Date.now()
     );
 
+    let market = existingMarket;
     if (!market) {
       try { market = await createFreshMarket(); }
       catch (err) { return err instanceof Error ? err.message : "Failed to create market"; }
@@ -756,7 +757,13 @@ export default function FeedPage() {
 
     // Pass onchain_market_id explicitly — if market was just created, it won't
     // be in the React state yet (closure captures the old `markets` array).
+    const wasNewMarket = !existingMarket;
     let err = await handleAdd(market.id, side, amount, undefined, undefined, market.onchain_market_id ?? undefined);
+
+    // If bet failed and we just created a fresh market, hide it (ghost prevention)
+    if (err && wasNewMarket) {
+      setMarkets(prev => prev.filter(m => m.id !== market!.id));
+    }
 
     // If market expired in the DB (race condition — common for short timeframes like 1m),
     // mark it resolved locally and create a fresh one
@@ -765,6 +772,9 @@ export default function FeedPage() {
       try {
         const fresh = await createFreshMarket();
         err = await handleAdd(fresh.id, side, amount, undefined, undefined, fresh.onchain_market_id ?? undefined);
+        if (err) {
+          setMarkets(prev => prev.filter(m => m.id !== fresh.id));
+        }
       } catch (retryErr) {
         return retryErr instanceof Error ? retryErr.message : "Failed to create market";
       }

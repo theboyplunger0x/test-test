@@ -105,11 +105,11 @@ export function useVault(userWalletAddr?: string | null) {
     };
 
     const message = {
-      marketId: BigInt(marketId),
+      marketId: marketId,
       user: signerAddr as `0x${string}`,
       side: sideEnum,
-      amount: BigInt(amountRaw),
-      nonce: BigInt(nonce),
+      amount: amountRaw,
+      nonce: nonce,
     };
 
     try {
