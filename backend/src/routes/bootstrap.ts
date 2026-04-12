@@ -32,6 +32,7 @@ export async function bootstrapRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/users/bootstrap", async (req, reply) => {
+    try {
     const {
       privy_user_id,
       auth_method,
@@ -176,5 +177,9 @@ export async function bootstrapRoutes(app: FastifyInstance) {
         code: referral_code?.trim()?.toUpperCase() ?? null,
       },
     });
+    } catch (e: any) {
+      console.error("[bootstrap] ERROR:", e.message, e.stack?.split("\n").slice(0, 3).join(" "));
+      return reply.status(500).send({ error: e.message ?? "Bootstrap failed" });
+    }
   });
 }
